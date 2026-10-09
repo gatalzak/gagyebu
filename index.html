@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#131315">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="가계부">
+  <title>클로드 가계부</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="month-nav">
+        <button class="icon-btn" id="prev" aria-label="이전 달">‹</button>
+        <span id="month-title"></span>
+        <button class="icon-btn" id="next" aria-label="다음 달">›</button>
+      </div>
+      <div class="top-actions">
+        <button class="ghost-btn" id="open-assets">나의 자산</button>
+        <button class="ghost-btn" id="open-debts">나의 부채</button>
+        <button class="ghost-btn" id="open-backup">백업/복원</button>
+      </div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="home">현황</button>
+      <button role="tab" data-tab="list">내역</button>
+      <button role="tab" data-tab="calendar">달력</button>
+      <button role="tab" data-tab="monthly">월별</button>
+    </nav>
+
+    <button id="sync-bar" class="sync-bar" hidden></button>
+    <main id="view"></main>
+  </div>
+
+  <button class="fab" id="fab" aria-label="내역 추가">+</button>
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
