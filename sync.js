@@ -42,7 +42,7 @@ function token() {
 function authorize(prompt) {
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
-    redirect_uri: location.origin + location.pathname,
+    redirect_uri: location.origin + location.pathname.replace(/index\.html$/, ""), // 구글에 등록한 주소와 정확히 같아야 함
     response_type: "token",
     scope: SCOPE,
     include_granted_scopes: "true",
