@@ -184,8 +184,7 @@ function openModal({ title, headExtra = "", body, cls = "" }) {
       </div>
     </div>`;
   const root = $("#modal-root");
-  root.querySelector("[data-close]").onclick = closeModal;
-  root.querySelector("[data-overlay]").onclick = (e) => { if (e.target.dataset.overlay !== undefined) closeModal(); };
+  root.querySelector("[data-close]").onclick = closeModal; // 창 밖 여백을 눌러도 닫히지 않고, ✕(또는 창 안의 닫기·취소)로만 닫힌다
   return root.querySelector(".panel");
 }
 function closeModal() {
