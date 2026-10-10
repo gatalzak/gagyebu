@@ -280,6 +280,12 @@ function openTxDialog(existing, presetDate) {
         <div class="field"><label>지출 종류</label>
           <div class="seg" data-role="etype">${EXPENSE_TYPES.map((k) => `<button data-v="${k}" class="${k === draft.expenseType ? "on" : ""}">${k}지출</button>`).join("")}</div>
         </div>` : ""}
+        <div class="field"><label>날짜 · 시간</label>
+          <div class="money-line">
+            <input class="input" type="date" name="date" value="${draft.date}">
+            <input class="input time-input" type="time" name="time" value="${draft.time || ""}">
+          </div>
+        </div>
         <div class="field"><label>금액</label>
           <div class="money-line">
             <select class="input cur-select" name="currency">${CURRENCIES.map((c) => `<option value="${c}" ${c === draft.currency ? "selected" : ""}>${c === "KRW" ? "원" : c}</option>`).join("")}</select>
@@ -288,12 +294,6 @@ function openTxDialog(existing, presetDate) {
         </div>
         <div class="field" data-krw-field ${foreign ? "" : "hidden"}><label>원화 금액 <span class="muted" data-rate></span></label>
           <input class="input amount-input" name="krw" inputmode="numeric" autocomplete="off" placeholder="0" value="${fmtAmount(Math.round(draft.krw || 0))}">
-        </div>
-        <div class="field"><label>날짜 · 시간</label>
-          <div class="money-line">
-            <input class="input" type="date" name="date" value="${draft.date}">
-            <input class="input time-input" type="time" name="time" value="${draft.time || ""}">
-          </div>
         </div>
         <div class="field"><label>카테고리</label>
           <select class="input" name="category">${CATEGORIES[draft.kind].map((c) => `<option ${c === draft.category ? "selected" : ""}>${c}</option>`).join("")}</select>
