@@ -1,5 +1,5 @@
 import { loadState, saveState, mergeInto, uid, nowISO } from "./store.js";
-import { CURRENCIES, CURRENCY_NAMES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates, ratesDate } from "./fx.js";
+import { CURRENCIES, CURRENCY_NAMES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates, ratesDate, decimals } from "./fx.js";
 import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, refreshIfNeeded, syncNow } from "./sync.js";
 
 // ---------------- 기본 목록 ----------------
@@ -153,7 +153,8 @@ function txRow(t) {
             <div class="left">
               <div>${esc(t.content || t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
               ${(() => {
-                const sub = [t.time, t.content && esc(t.category), t.party && esc(t.party), t.memo && esc(t.memo)].filter(Boolean).join(" · ");
+                const toAsset = t.assetDelta && S.assets[t.assetDelta.assetId];
+                const sub = [t.time, t.content && esc(t.category), t.party && esc(t.party), toAsset && `→ ${esc(toAsset.name)}`, t.memo && esc(t.memo)].filter(Boolean).join(" · ");
                 return sub ? `<div class="memo">${sub}</div>` : "";
               })()}
             </div>
@@ -263,6 +264,38 @@ function bindAmount(input) {
 /** 금액칸 단위 표시: 원화는 '원', 외화는 통화 코드 */
 const unitLabel = (cur) => (cur === "KRW" ? "원" : cur);
 
+// ---------------- 수입 → 자산 입금 ----------------
+// 수입을 저장하면 고른 자산 잔액이 늘어난다. 실제로 더한 값(자산 통화 기준)을 내역의 assetDelta에 기록해 두고,
+// 내역을 고치거나 지우면 그 값을 그대로 빼서 되돌린다(그사이 환율이 바뀌어도 정확히 되돌아감).
+
+/** 내역 금액을 자산 통화로 바꾼다. 환율을 몰라 바꿀 수 없으면 null. */
+function amountInCurrency(rec, cur) {
+  if (cur === rec.currency) return rec.amount;
+  const krw = rec.currency === "KRW" ? rec.amount : rec.krw;
+  if (cur === "KRW") return krw;
+  const r = rateKRW(cur);
+  return r ? krw / r : null;
+}
+const roundFor = (n, cur) => { const f = 10 ** decimals(cur); return Math.round(n * f) / f; };
+
+/** 자산 잔액을 amount만큼 더한다(빼려면 음수). 자산이 지워졌으면 아무것도 하지 않는다. */
+function adjustAsset(id, amount, now) {
+  const a = S.assets[id];
+  if (!a || a.deleted) return;
+  const cur = a.currency || "KRW";
+  S.assets[id] = { ...a, amount: roundFor(a.amount + amount, cur), updatedAt: now };
+}
+
+/** 입금 자산 선택 목록: 종류별로 묶고 현재 잔액을 함께 보여 준다 */
+function assetOptions(selected) {
+  const assets = Object.values(S.assets).filter((a) => !a.deleted).sort(makeOrder(ASSET_TYPES));
+  const groups = ASSET_TYPES.filter((t) => assets.some((a) => a.type === t));
+  return `<option value="">선택 안 함</option>` + groups.map((t) => `
+    <optgroup label="${t}">${assets.filter((a) => a.type === t).map((a) =>
+      `<option value="${a.id}" ${a.id === selected ? "selected" : ""}>${esc(a.name)} · ${formatMoney(a.amount, a.currency || "KRW")}</option>`).join("")}
+    </optgroup>`).join("");
+}
+
 // 내역 추가/수정
 // 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
 // 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
@@ -272,6 +305,7 @@ function openTxDialog(existing, presetDate) {
     : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
+  if (existing) draft.assetId = existing.assetDelta?.assetId || "";
 
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
@@ -307,6 +341,11 @@ function openTxDialog(existing, presetDate) {
             <span class="amount-unit">원</span>
           </div>
         </div>
+        ${draft.kind === "수입" ? `
+        <div class="field"><label>입금 자산</label>
+          <select class="input" name="asset">${assetOptions(draft.assetId)}</select>
+          <div class="fx-hint" data-asset-hint></div>
+        </div>` : ""}
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
         <div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
         <div class="field"><label>카테고리</label>
@@ -345,12 +384,29 @@ function openTxDialog(existing, presetDate) {
       draft.content = $p("[name=content]").value;
       draft.party = $p("[name=party]").value;
       draft.memo = $p("[name=memo]").value;
+      if ($p("[name=asset]")) draft.assetId = $p("[name=asset]").value;
     };
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); });
     curSel.onchange = () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); };
     bindAmount(krwIn);
     krwIn.addEventListener("input", () => (krwTouched = true));
     refreshKRW();
+    const assetSel = $p("[name=asset]");
+    const refreshAssetHint = () => {
+      if (!assetSel) return;
+      const a = S.assets[assetSel.value];
+      const hint = $p("[data-asset-hint]");
+      if (!a) { hint.textContent = ""; return; }
+      const cur = curOf(a);
+      const add = amountInCurrency({ currency: curSel.value, amount: parseMoney(amt.value, curSel.value), krw: parseAmount(krwIn.value) }, cur);
+      hint.textContent = add === null ? "환율 정보가 없어 이 자산에 반영할 수 없어요" : add ? `저장하면 ${a.name} 잔액이 +${formatMoney(roundFor(add, cur), cur)} 늘어나요` : "";
+    };
+    if (assetSel) {
+      assetSel.onchange = refreshAssetHint;
+      [amt, krwIn].forEach((el) => el.addEventListener("input", refreshAssetHint));
+      curSel.addEventListener("change", refreshAssetHint);
+      refreshAssetHint();
+    }
 
     panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { read(); draft.kind = b.dataset.v; draw(); }));
     panel.querySelectorAll("[data-role=etype] button").forEach((b) => (b.onclick = () => { read(); draft.expenseType = b.dataset.v; draw(); }));
@@ -378,19 +434,33 @@ function openTxDialog(existing, presetDate) {
         updatedAt: now,
         deleted: false,
       };
+      let delta = null;
+      if (rec.kind === "수입" && draft.assetId) {
+        const a = S.assets[draft.assetId];
+        if (!a || a.deleted) return toast("선택한 자산을 찾을 수 없어요.");
+        const add = amountInCurrency(rec, curOf(a));
+        if (add === null) return toast("환율 정보가 없어 자산에 반영할 수 없어요.");
+        delta = { assetId: a.id, amount: roundFor(add, curOf(a)) };
+      }
+      if (existing?.assetDelta) adjustAsset(existing.assetDelta.assetId, -existing.assetDelta.amount, now);
+      if (delta) { adjustAsset(delta.assetId, delta.amount, now); rec.assetDelta = delta; }
       S.transactions[rec.id] = rec;
       closeModal();
       ui.month = rec.date.slice(0, 7);
       await commit();
-      toast(`${rec.kind} ${formatMoney(rec.amount, rec.currency)} ${existing ? "수정" : "추가"}했어요`);
+      const target = delta && S.assets[delta.assetId];
+      toast(`${rec.kind} ${formatMoney(rec.amount, rec.currency)} ${existing ? "수정" : "추가"}했어요` +
+        (target ? ` · ${target.name} +${formatMoney(delta.amount, curOf(target))}` : ""));
     };
     const del = $p("[data-act=delete]");
     if (del) del.onclick = async () => {
       if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
-      S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: nowISO() };
+      const now = nowISO();
+      if (existing.assetDelta) adjustAsset(existing.assetDelta.assetId, -existing.assetDelta.amount, now);
+      S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
       closeModal();
       await commit();
-      toast("삭제했어요");
+      toast(existing.assetDelta ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요");
     };
     if (!existing && !draft.amount) amt.focus();
   };
