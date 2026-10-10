@@ -477,12 +477,12 @@ const isShortDebt = (t) => !!shortDebtType(t);
 /** 지출(신용카드·마이너스통장 사용 제외) */
 const isPlainExpense = (t) => t.kind === "지출" && !isShortDebt(t);
 
-/** 단기부채 종류별 합계를 '신용 -1,000원 마통 -2,000원' 형태로 */
+/** 단기부채 종류별 합계를 한 줄씩: '<div>신용 -1,000원</div><div>마통 -2,000원</div>' (없는 종류는 생략) */
 function shortDebtTotals(items) {
   return Object.keys(SHORT_DEBT).map((type) => {
     const v = sum(items.filter((t) => shortDebtType(t) === type));
-    return v ? `<span class="cred">${SHORT_DEBT[type].short} ${signed(v, "-")}</span>` : "";
-  }).filter(Boolean).join(" ");
+    return v ? `<div><span class="cred">${SHORT_DEBT[type].short} ${signed(v, "-")}</span></div>` : "";
+  }).join("");
 }
 
 /** part: "summary" = 현황(이번달 현재·부채(단기)), "detail" = 현황(상세) */
@@ -634,7 +634,7 @@ function txRow(t, { withDate = false } = {}) {
           </button>`;
 }
 
-/** 날짜 머리줄: 왼쪽 [일] [요일] [년-월], 오른쪽 1줄 수입·지출 / 2줄 신용·마통 */
+/** 날짜 머리줄: 왼쪽 [일] [요일] [년-월], 오른쪽 1줄 수입·지출, 그 아래 신용·마통 등을 한 줄씩 */
 function dayHead(date, items) {
   const dt = new Date(date + "T00:00:00");
   const dow = "일월화수목금토"[dt.getDay()];
@@ -649,7 +649,7 @@ function dayHead(date, items) {
             <span class="dh-dow${dt.getDay() === 0 ? " sun" : dt.getDay() === 6 ? " sat" : ""}">${dow}요일</span>
             <span class="dh-ym">${date.slice(0, 7)}</span>
           </div>
-          <div class="dh-right">${line1 ? `<div>${line1}</div>` : ""}${line2 ? `<div>${line2}</div>` : ""}</div>
+          <div class="dh-right">${line1 ? `<div>${line1}</div>` : ""}${line2}</div>
         </div>`;
 }
 
@@ -694,7 +694,7 @@ function calendarView() {
   <section class="card">
     <div class="card-head cal-head"><span class="month-badge">${m}월</span><div class="cal-sum">
       <div><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span></div>
-      ${shortDebtTotals(tx) ? `<div>${shortDebtTotals(tx)}</div>` : ""}
+      ${shortDebtTotals(tx)}
     </div></div>
     <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
     <div class="cal-grid">${cells.join("")}</div>
@@ -706,13 +706,13 @@ function calendarView() {
   </section>` : ""}`;
 }
 
-/** 합계 두 줄: 1줄 수입·지출, 2줄 신용·마통 (없는 것은 생략) */
+/** 합계: 1줄 수입·지출, 그 아래 신용·마통 등 단기부채를 한 줄씩 (없는 것은 생략) */
 function totalsTwoLines(items) {
   const inc = sum(items.filter((t) => t.kind === "수입"));
   const exp = sum(items.filter(isPlainExpense));
   const line1 = [inc && `<span class="inc">${signed(inc, "+")}</span>`, exp && `<span class="exp">${signed(exp, "-")}</span>`].filter(Boolean).join(" ");
   const line2 = shortDebtTotals(items);
-  return `${line1 ? `<div>${line1}</div>` : ""}${line2 ? `<div>${line2}</div>` : ""}`;
+  return `${line1 ? `<div>${line1}</div>` : ""}${line2}`;
 }
 
 // 월별: 상단 연도 합계, 아래 달마다 합계와 수입·지출 비교 막대. 달을 누르면 그 달 현황으로 이동.
