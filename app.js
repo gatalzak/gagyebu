@@ -118,6 +118,14 @@ function homeView() {
   const fixed = exp.filter((t) => !isCardExpense(t) && t.expenseType === "고정");
   const variable = exp.filter((t) => !isCardExpense(t) && t.expenseType !== "고정");
 
+  // 카드별 사용액 (신용카드 사용 섹션의 하위 줄)
+  const byCard = {};
+  card.forEach((t) => { const id = deltaRef(t.assetDelta).id; byCard[id] = (byCard[id] || 0) + txKRW(t); });
+  const cardRows = Object.entries(byCard)
+    .sort((a, b) => b[1] - a[1])
+    .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || "신용카드")}</span><span class="exp">${signed(v, "-")}</span></div>`)
+    .join("");
+
   const segs = {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
@@ -138,10 +146,13 @@ function homeView() {
     <div class="card-head"><span>이번달 현재</span><span>${won(sum(inc) - sum(exp))}</span></div>
     <div class="row"><div class="row-main"><span>수입</span><span class="inc">${signed(sum(inc), "+")}</span></div></div>
     <div class="row">
-      <div class="row-main"><span>지출</span><span class="exp">${signed(sum(exp), "-")}</span></div>
+      <div class="row-main"><span>지출</span><span class="exp">${signed(sum(fixed) + sum(variable), "-")}</span></div>
       <div class="row-sub"><span>└ 고정지출</span><span class="exp">${signed(sum(fixed), "-")}</span></div>
       <div class="row-sub"><span>└ 변동지출</span><span class="exp">${signed(sum(variable), "-")}</span></div>
-      <div class="row-sub"><span>└ 신용카드 지출</span><span class="exp">${signed(sum(card), "-")}</span></div>
+    </div>
+    <div class="row">
+      <div class="row-main"><span>신용카드 사용</span><span class="exp">${signed(sum(card), "-")}</span></div>
+      ${cardRows}
     </div>
     <div class="row"><div class="row-main"><span>자산이동</span><span class="mov">${won(sum(mov))}</span></div></div>
   </section>
