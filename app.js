@@ -369,8 +369,47 @@ function renderSyncBar() {
   if (show) bar.textContent = SYNC_TEXT[sync.status];
 }
 
+// 백업 알림: 마지막 백업 파일 저장 후 BACKUP_DAYS일이 지나면(한 번도 안 했으면 바로) 위에 알림줄.
+// '나중에'를 누르면 BACKUP_SNOOZE_DAYS일 뒤에 다시. 기록은 기기별(meta)이다.
+const BACKUP_DAYS = 30, BACKUP_SNOOZE_DAYS = 7, DAY_MS = 86400000;
+function renderBackupBar() {
+  const bar = $("#backup-bar");
+  const now = Date.now();
+  const last = S.meta.lastBackup ? Date.parse(S.meta.lastBackup) : null;
+  const snoozed = S.meta.backupSnooze && Date.parse(S.meta.backupSnooze) > now;
+  const due = liveTx().length > 0 && !snoozed && (!last || now - last >= BACKUP_DAYS * DAY_MS);
+  bar.hidden = !due;
+  if (!due) return;
+  bar.innerHTML = `
+    <span>${last ? `백업한 지 ${Math.floor((now - last) / DAY_MS)}일 지났어요.` : "아직 백업한 적이 없어요."}</span>
+    <span class="bb-actions"><button data-backup-later>나중에</button><button class="bb-save" data-backup-now>지금 저장</button></span>`;
+  bar.querySelector("[data-backup-now]").onclick = () => exportBackup();
+  bar.querySelector("[data-backup-later]").onclick = async () => {
+    S.meta.backupSnooze = new Date(now + BACKUP_SNOOZE_DAYS * DAY_MS).toISOString();
+    await saveState(S);
+    renderBackupBar();
+    toast(`${BACKUP_SNOOZE_DAYS}일 뒤에 다시 알려 드릴게요`);
+  };
+}
+
+/** 지금 데이터를 json 파일로 내려받고, 마지막 백업 시각을 기록한다 */
+async function exportBackup() {
+  const blob = new Blob([JSON.stringify(S, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `클로드가계부_${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  S.meta.lastBackup = nowISO();
+  delete S.meta.backupSnooze;
+  await saveState(S);
+  renderBackupBar();
+  toast("백업 파일을 저장했어요");
+}
+
 function render() {
   renderSyncBar();
+  renderBackupBar();
   const [y, m] = ui.month.split("-");
   $("#month-title").textContent = `${y}년 ${Number(m)}월`;
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === ui.tab));
@@ -1679,7 +1718,8 @@ function openBackupDialog() {
       <div class="section-title" style="margin-top:4px">구글 드라이브 동기화</div>
       ${syncSection()}
       <div class="section-title">내보내기</div>
-      <button class="btn primary" data-export>백업 파일 저장</button>
+      <p class="note">마지막 백업: ${S.meta.lastBackup ? new Date(S.meta.lastBackup).toLocaleString("ko-KR") : "아직 없음"} · 30일마다 알려 드려요.</p>
+      <button class="btn primary" data-export style="margin-top:10px">백업 파일 저장</button>
       <div class="section-title">가져오기</div>
       <p class="note">백업 파일의 내역을 지금 데이터에 <b style="font-weight:400;color:#fff">합쳐요</b>. 같은 내역은 최신 것으로 바뀌고, 지금 데이터는 지워지지 않아요.</p>
       <input type="file" accept=".json,application/json" data-file hidden>
@@ -1697,14 +1737,7 @@ function openBackupDialog() {
     openBackupDialog();
     toast(sync.status === "ok" ? "동기화했어요" : SYNC_TEXT[sync.status]);
   });
-  panel.querySelector("[data-export]").onclick = () => {
-    const blob = new Blob([JSON.stringify(S, null, 1)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `클로드가계부_${todayStr()}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  panel.querySelector("[data-export]").onclick = async () => { await exportBackup(); openBackupDialog(); };
   const file = panel.querySelector("[data-file]");
   panel.querySelector("[data-import]").onclick = () => file.click();
   // 내역 초기화: 두 번 눌러야 실행. 삭제 표시로 남겨 다른 기기에도 반영된다.

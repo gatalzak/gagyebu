@@ -364,3 +364,11 @@ input[type="date"].input { color-scheme: dark; }
 .edit-add-btn { margin-top: 12px; min-height: 42px; border-style: dashed; font-size: 0.9rem; }
 .edit-add-btn.red-tone { color: #ff9fae; border-color: #5e2a35; }
 .edit-add-btn.green-tone { color: #9fe0b5; border-color: var(--green-line); }
+
+/* 백업 알림줄 */
+.backup-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -6px 0 12px; padding: 9px 12px; border-radius: 3px;
+  background: #2a2216; border: 1px solid #4a3a1c; color: var(--mov); font-size: 0.8rem; line-height: 1.5; }
+.backup-bar[hidden] { display: none; }
+.bb-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.bb-actions button { padding: 5px 8px; border-radius: 3px; font-size: 0.75rem; color: var(--muted); border: 1px solid #4a3a1c; white-space: nowrap; }
+.bb-actions .bb-save { color: #2a2216; background: var(--mov); border-color: var(--mov); }
