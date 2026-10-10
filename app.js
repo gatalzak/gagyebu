@@ -1,4 +1,5 @@
 import { loadState, saveState, mergeInto, uid, nowISO } from "./store.js";
+import { CURRENCIES, CURRENCY_NAMES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates, ratesDate } from "./fx.js";
 import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, refreshIfNeeded, syncNow } from "./sync.js";
 
 // ---------------- 기본 목록 ----------------
@@ -269,12 +270,45 @@ function openTxDialog(existing) {
 // 나의 자산
 const PENCIL = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>`;
 
+const curOf = (a) => a.currency || "KRW"; // 예전 자산은 통화 정보가 없으면 원화
+const currencyOptions = (sel) =>
+  CURRENCIES.map((c) => `<option value="${c}" ${c === sel ? "selected" : ""}>${c === "KRW" ? "원 (KRW)" : `${c} · ${CURRENCY_NAMES[c]}`}</option>`).join("");
+
+/** 원화 환산 합계. 환율을 모르는 외화가 있으면 missing에 개수를 센다. */
+function krwTotal(assets) {
+  let total = 0, missing = 0;
+  for (const a of assets) {
+    const v = toKRW(a.amount, curOf(a));
+    if (v === null) missing++;
+    else total += v;
+  }
+  return { total, missing };
+}
+
+/** 금액 입력칸: 통화에 맞게 쉼표/소수점 정리, 원화 환산 안내 갱신 */
+function bindMoney(input, getCur, hint) {
+  const update = () => {
+    const cur = getCur();
+    if (hint) {
+      const v = toKRW(parseMoney(input.value, cur), cur);
+      const r = rateKRW(cur);
+      const rate = r === null ? "" : r < 100 ? r.toFixed(2) : Math.round(r).toLocaleString("ko-KR"); // 엔·동처럼 작은 환율은 소수점까지
+      hint.textContent = cur === "KRW" ? "" : v === null ? "환율 정보를 아직 받지 못했어요" : `≈ ${won(v)} (1 ${cur} = ${rate}원)`;
+    }
+  };
+  input.addEventListener("input", () => { input.value = formatInput(input.value, getCur()); update(); });
+  return update;
+}
+
 function openAssetsDialog() {
   let mode = null;   // null: 목록 | "add": 등록 | "edit": 전체 편집
-  let drafts = null; // 전체 편집 중인 값 [{ id, type, name, amount, del }]
+  let drafts = null; // 전체 편집 중인 값 [{ id, type, name, currency, amount, del }]
 
   const sortedAssets = () =>
     liveAssets().sort((a, b) => ASSET_TYPES.indexOf(a.type) - ASSET_TYPES.indexOf(b.type) || a.createdAt.localeCompare(b.createdAt));
+
+  // 환율을 새로 받으면 목록의 원화 환산을 다시 그린다
+  refreshRates().then((updated) => { if (updated && mode === null && $("#modal-root").children.length) draw(); });
 
   // 목록(보기 전용): 종류별 한 덩어리, 안쪽은 줄로만 구분
   const draw = () => {
@@ -282,16 +316,25 @@ function openAssetsDialog() {
     if (mode === "edit") return drawEdit();
     const assets = sortedAssets();
     const groups = ASSET_TYPES.filter((t) => assets.some((a) => a.type === t));
+    const all = krwTotal(assets);
+    const hasForeign = assets.some((a) => curOf(a) !== "KRW");
     const body = assets.length
-      ? `<div class="asset-total"><span class="muted">총 자산</span><span>${won(sum(assets))}</span></div>` +
+      ? `<div class="asset-total"><span class="muted">총 자산</span><span>${all.missing ? "약 " : ""}${won(all.total)}</span></div>` +
         groups.map((t) => {
           const items = assets.filter((a) => a.type === t);
+          const g = krwTotal(items);
           return `
           <section class="asset-group">
-            <div class="asset-group-head"><span class="sector-badge">${t}</span><span class="sector-total">${won(sum(items))}</span></div>
-            ${items.map((a) => `<div class="asset-row"><span class="name">${esc(a.name)}</span><span class="amt">${won(a.amount)}</span></div>`).join("")}
+            <div class="asset-group-head"><span class="sector-badge">${t}</span><span class="sector-total">${won(g.total)}</span></div>
+            ${items.map((a) => {
+              const cur = curOf(a);
+              const krw = cur === "KRW" ? null : toKRW(a.amount, cur);
+              return `<div class="asset-row"><span class="name">${esc(a.name)}</span>
+                <span class="amt">${formatMoney(a.amount, cur)}${cur !== "KRW" ? `<span class="fx-sub">${krw === null ? "환율 없음" : `≈ ${won(krw)}`}</span>` : ""}</span></div>`;
+            }).join("")}
           </section>`;
-        }).join("")
+        }).join("") +
+        (hasForeign ? `<p class="note fx-note">외화는 ${ratesDate() ? `${ratesDate()} 환율` : "환율"}로 원화 환산해 합계에 넣었어요.${all.missing ? ` 환율을 받지 못한 ${all.missing}개는 합계에서 빠졌어요.` : ""}</p>` : "")
       : `<div class="empty">등록된 자산이 없어요.<br>오른쪽 위 '자산 등록'으로 추가해 보세요.</div>`;
     const panel = openModal({
       title: "나의 자산",
@@ -303,13 +346,13 @@ function openAssetsDialog() {
     panel.querySelector("[data-close-btn]").onclick = closeModal;
     const edit = panel.querySelector("[data-edit]");
     if (edit) edit.onclick = () => {
-      drafts = sortedAssets().map((a) => ({ id: a.id, type: a.type, name: a.name, amount: a.amount, del: false }));
+      drafts = sortedAssets().map((a) => ({ id: a.id, type: a.type, name: a.name, currency: curOf(a), amount: a.amount, del: false }));
       mode = "edit";
       draw();
     };
   };
 
-  // 전체 편집: 모든 자산의 종류·이름·금액을 한 번에 고치고, 삭제는 표시해 두었다가 저장할 때 반영
+  // 전체 편집: 모든 자산의 종류·이름·통화·금액을 한 번에 고치고, 삭제는 표시해 두었다가 저장할 때 반영
   const drawEdit = () => {
     const groups = ASSET_TYPES.filter((t) => drafts.some((d) => S.assets[d.id].type === t));
     const panel = openModal({
@@ -325,7 +368,8 @@ function openAssetsDialog() {
             </div>
             <div class="edit-line">
               <select class="input sm type" name="type" ${d.del ? "disabled" : ""}>${ASSET_TYPES.map((x) => `<option ${x === d.type ? "selected" : ""}>${x}</option>`).join("")}</select>
-              <input class="input sm amount-input" name="amount" inputmode="numeric" value="${fmtAmount(d.amount)}" placeholder="0" ${d.del ? "disabled" : ""}>
+              <select class="input sm cur" name="currency" ${d.del ? "disabled" : ""}>${CURRENCIES.map((c) => `<option ${c === d.currency ? "selected" : ""}>${c}</option>`).join("")}</select>
+              <input class="input sm amount-input" name="amount" inputmode="decimal" value="${toInput(d.amount, d.currency)}" placeholder="0" ${d.del ? "disabled" : ""}>
             </div>
           </div>`).join("")}
         </section>`).join("") +
@@ -336,9 +380,15 @@ function openAssetsDialog() {
       if (d.del) return;
       d.name = el.querySelector("[name=name]").value;
       d.type = el.querySelector("[name=type]").value;
-      d.amount = parseAmount(el.querySelector("[name=amount]").value);
+      d.currency = el.querySelector("[name=currency]").value;
+      d.amount = parseMoney(el.querySelector("[name=amount]").value, d.currency);
     });
-    panel.querySelectorAll("[name=amount]").forEach(bindAmount);
+    panel.querySelectorAll(".edit-item").forEach((el) => {
+      const cur = el.querySelector("[name=currency]");
+      const amt = el.querySelector("[name=amount]");
+      bindMoney(amt, () => cur.value);
+      cur.onchange = () => { amt.value = formatInput(amt.value, cur.value); };
+    });
     panel.querySelectorAll("[data-toggle-del]").forEach((b) => (b.onclick = () => {
       read();
       const d = drafts.find((x) => x.id === b.closest(".edit-item").dataset.id);
@@ -356,8 +406,8 @@ function openAssetsDialog() {
         if (d.del) {
           S.assets[d.id] = { ...a, deleted: true, updatedAt: now };
           changed++;
-        } else if (a.type !== d.type || a.name !== d.name.trim() || a.amount !== d.amount) {
-          S.assets[d.id] = { ...a, type: d.type, name: d.name.trim(), amount: d.amount, updatedAt: now };
+        } else if (a.type !== d.type || a.name !== d.name.trim() || curOf(a) !== d.currency || a.amount !== d.amount) {
+          S.assets[d.id] = { ...a, type: d.type, name: d.name.trim(), currency: d.currency, amount: d.amount, updatedAt: now };
           changed++;
         }
       }
@@ -372,7 +422,7 @@ function openAssetsDialog() {
     };
   };
 
-  // 새 자산 등록
+  // 새 자산 등록 (기본 원화, 외화 선택 가능)
   const drawAdd = () => {
     const panel = openModal({
       title: "자산 등록",
@@ -381,10 +431,15 @@ function openAssetsDialog() {
           <select class="input" name="type">${ASSET_TYPES.map((t) => `<option>${t}</option>`).join("")}</select>
         </div>
         <div class="field"><label>이름</label><input class="input" name="name" placeholder="예: 국민은행 통장"></div>
-        <div class="field"><label>금액(원)</label><input class="input amount-input" name="amount" inputmode="numeric" placeholder="0"></div>
+        <div class="field"><label>통화</label><select class="input" name="currency">${currencyOptions("KRW")}</select></div>
+        <div class="field"><label>금액</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
+          <div class="fx-hint" data-hint></div></div>
         <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
     });
-    bindAmount(panel.querySelector("[name=amount]"));
+    const cur = panel.querySelector("[name=currency]");
+    const amt = panel.querySelector("[name=amount]");
+    const updateHint = bindMoney(amt, () => cur.value, panel.querySelector("[data-hint]"));
+    cur.onchange = () => { amt.value = formatInput(amt.value, cur.value); updateHint(); };
     panel.querySelector("[data-cancel]").onclick = () => { mode = null; draw(); };
     panel.querySelector("[data-save]").onclick = async () => {
       const name = panel.querySelector("[name=name]").value.trim();
@@ -394,7 +449,8 @@ function openAssetsDialog() {
         id: uid(),
         type: panel.querySelector("[name=type]").value,
         name,
-        amount: parseAmount(panel.querySelector("[name=amount]").value),
+        currency: cur.value,
+        amount: parseMoney(amt.value, cur.value),
         createdAt: now,
         updatedAt: now,
         deleted: false,
