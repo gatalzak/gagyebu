@@ -457,26 +457,15 @@ function homeView(part = "summary") {
       })
       .join("");
   };
-  // 묶음 나누기: 단기부채는 신용카드 / 마이너스통장, 자산이동은 출금 자산별. 묶음 제목(뱃지·소계) 아래에 카테고리 섹션
-  const groupTitle = (label, badge, list) => `
-      <div class="group-title"><span class="cat-badge ${badge}">${esc(label)}</span><span class="${cls}">${signed(sum(list), sign)}</span></div>`;
-  let groups = null;
-  if (ui.seg === "단기부채") {
-    groups = Object.entries(SHORT_DEBT).map(([type, info]) => ({ key: type, label: info.title.replace(" 사용", ""), badge: "b-cred", list: selTx.filter((t) => shortDebtType(t) === type) }));
-  } else if (ui.seg === "자산이동") {
-    const byFrom = new Map();
-    selTx.forEach((t) => {
-      const out = t.deltas?.find((d) => d.col === "assets" && d.amount < 0);
-      const id = out?.id || "";
-      if (!byFrom.has(id)) byFrom.set(id, []);
-      byFrom.get(id).push(t);
-    });
-    groups = [...byFrom.entries()]
-      .map(([id, list]) => ({ key: id || "none", label: id ? S.assets[id]?.name || "삭제된 자산" : "출금 자산 없음", badge: "b-mov", list }))
-      .sort((a, b) => (a.key === "none") - (b.key === "none") || sum(b.list) - sum(a.list)); // 큰 순서, '출금 자산 없음'은 맨 뒤
-  }
-  const catSections = groups
-    ? groups.filter((g) => g.list.length).map((g) => groupTitle(g.label, g.badge, g.list) + buildCatSections(g.list, g.key)).join("")
+  // 단기부채는 신용카드 / 마이너스통장으로 나눠서, 각 묶음 제목(뱃지·소계) 아래에 카테고리 섹션
+  const catSections = ui.seg === "단기부채"
+    ? Object.entries(SHORT_DEBT).map(([type, info]) => {
+        const list = selTx.filter((t) => shortDebtType(t) === type);
+        if (!list.length) return "";
+        return `
+      <div class="group-title"><span class="cat-badge b-cred">${info.title.replace(" 사용", "")}</span><span class="cred">${signed(sum(list), "-")}</span></div>
+      ${buildCatSections(list, type)}`;
+      }).join("")
     : buildCatSections(selTx);
 
   // 자산이동의 하위 항목: 내역의 카테고리별 합계(큰 순서)
