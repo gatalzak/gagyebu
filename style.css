@@ -388,3 +388,10 @@ input[type="date"].input { color-scheme: dark; }
 /* 현황: 수입·지출·자산이동·단기 부채 제목 앞 아이콘 */
 .home-label { display: inline-flex; align-items: center; gap: 7px; }
 .home-label > span { display: inline-flex; }
+
+/* 현황(상세) 간격: 카테고리 섹션끼리 일정하게 14px, 합계 바 바로 다음은 28px로 넓게 구분 */
+.detail-cat { margin-top: 14px; }
+.total-bar + .detail-cat { margin-top: 28px; }
+.group-title { margin: 36px 2px 0; }
+.total-bar + .group-title { margin-top: 28px; }
+.group-title + .detail-cat { margin-top: 12px; }
