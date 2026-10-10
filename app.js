@@ -179,7 +179,8 @@ function renameSubcat(id, to, now) {
  * 다 끝나면 onClose()로 원래 창(내역 추가)으로 돌아간다.
  */
 function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "고정", onClose = closeModal } = {}) {
-  let kind = startKind;
+  const CAT_KINDS = ["수입", "지출"]; // 자산이동은 카테고리 없이 출금 → 입금 자산으로 구분하므로 편집 대상에서 뺀다
+  let kind = CAT_KINDS.includes(startKind) ? startKind : "지출";
   let etab = startEtype; // 지출일 때 보고 있는 탭: 고정 | 변동
 
   const drawList = () => {
@@ -187,7 +188,7 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
     const panel = openModal({
       title: "카테고리 편집",
       body: `
-        <div class="seg" data-role="kind">${KINDS.map((k) => `<button data-v="${k}" class="${k === kind ? "on" : ""}">${k}</button>`).join("")}</div>
+        <div class="seg" data-role="kind">${CAT_KINDS.map((k) => `<button data-v="${k}" class="${k === kind ? "on" : ""}">${k}</button>`).join("")}</div>
         ${kind === "지출" ? `<div class="tabs sub-tabs" data-role="etab">${["고정", "변동"].map((k) => `<button data-v="${k}" class="${k === etab ? "active" : ""}">${k}지출</button>`).join("")}</div>` : ""}
         ${[kind === "지출" ? etab : null].map((et) => {
           const list = cats.filter((c) => !et || catEtype(c) === et);
