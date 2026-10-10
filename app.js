@@ -427,11 +427,28 @@ function homeView(part = "summary") {
   };
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
   const [selTx, cls, sign] = segs[ui.seg];
+  // 카테고리마다 섹션 하나: 머리줄(카테고리·합계, 색 유지) → 구분선 → 하위 카테고리별 금액(회색)
   const byCat = {};
-  selTx.forEach((t) => (byCat[t.category] = (byCat[t.category] || 0) + txKRW(t)));
-  const catRows = Object.entries(byCat)
-    .sort((a, b) => b[1] - a[1])
-    .map(([c, v]) => `<div class="row-sub" style="padding:6px 4px 0"><span>${esc(c)}</span><span class="${cls}">${signed(v, sign)}</span></div>`)
+  selTx.forEach((t) => {
+    const c = (byCat[t.category] ||= { total: 0, subs: {} });
+    const v = txKRW(t);
+    c.total += v;
+    const sub = t.subcategory || "";
+    c.subs[sub] = (c.subs[sub] || 0) + v;
+  });
+  const catSections = Object.entries(byCat)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([c, { total, subs }]) => {
+      const named = Object.entries(subs).filter(([s]) => s).sort((a, b) => b[1] - a[1]);
+      const rest = subs[""] || 0;
+      // 하위 카테고리가 하나도 없으면 하위 줄을 생략, 섞여 있으면 하위 없는 금액을 '미분류'로
+      const rows = named.length ? named.concat(rest ? [["미분류", rest]] : []) : [];
+      return `
+      <section class="asset-group detail-cat">
+        <div class="asset-group-head"><span>${esc(c)}</span><span class="${cls}">${signed(total, sign)}</span></div>
+        ${rows.map(([s, v]) => `<div class="asset-row detail-sub"><span class="name">${esc(s)}</span><span class="amt">${signed(v, sign)}</span></div>`).join("")}
+      </section>`;
+    })
     .join("");
 
   // 자산이동의 하위 항목: 내역의 카테고리별 합계(큰 순서)
@@ -467,10 +484,8 @@ function homeView(part = "summary") {
     <div class="seg seg-5" data-role="detail-seg">
       ${Object.keys(segs).map((s) => `<button data-seg="${s}" class="${s === ui.seg ? "on" : ""}">${s}</button>`).join("")}
     </div>
-    <div class="row" style="margin-top:6px">
-      <div class="row-main"><span>합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
-      ${catRows}
-    </div>
+    <div class="total-bar"><span>합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
+    ${catSections || `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
   </section>`;
 }
 
