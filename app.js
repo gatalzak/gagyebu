@@ -336,6 +336,22 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
 
 /** 화면 표시용 '식비 › 외식' */
 const catLabel = (t) => (t.subcategory ? `${t.category} › ${t.subcategory}` : t.category);
+/** 자산이동 경로 '출금 자산 → 입금 자산'(상환은 '출금 자산 → 부채'). 연결된 자산이 없으면 "" (이스케이프 전 글자) */
+function moveRoute(t) {
+  const ds = t.deltas || [];
+  const out = ds.find((x) => x.col === "assets" && x.amount < 0);
+  const into = ds.find((x) => x.col === "assets" && x.amount > 0) || ds.find((x) => x.col === "debts");
+  if (!out && !into) return "";
+  const name = (x) => (x && S[x.col]?.[x.id]?.name) || "?";
+  return `${name(out)} → ${name(into)}`;
+}
+const MOVE_NONE = "자산 미지정";
+/** 자산이동 내역을 경로별로 묶어 [경로, 합계] (큰 순서) */
+function routeTotals(list) {
+  const by = {};
+  list.forEach((t) => { const r = moveRoute(t) || MOVE_NONE; by[r] = (by[r] || 0) + txKRW(t); });
+  return Object.entries(by).sort((a, b) => b[1] - a[1]);
+}
 
 async function commit() {
   await saveState(S);
@@ -489,13 +505,14 @@ function homeView(part = "summary") {
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
   const [selTx, cls, sign] = segs[ui.seg];
   // 카테고리마다 섹션 하나: 머리줄(카테고리·합계, 색 유지) → 구분선 → 하위 카테고리별 금액(회색)
-  const buildCatSections = (list, group = "") => {
+  // keyOf: 섹션을 나누는 기준(기본 카테고리, 자산이동은 경로). noSubs면 하위 줄 없음
+  const buildCatSections = (list, group = "", keyOf = (t) => t.category, noSubs = false) => {
     const byCat = {};
     list.forEach((t) => {
-      const c = (byCat[t.category] ||= { total: 0, subs: {} });
+      const c = (byCat[keyOf(t)] ||= { total: 0, subs: {} });
       const v = txKRW(t);
       c.total += v;
-      const sub = t.subcategory || "";
+      const sub = noSubs ? "" : t.subcategory || "";
       c.subs[sub] = (c.subs[sub] || 0) + v;
     });
     return Object.entries(byCat)
@@ -508,7 +525,7 @@ function homeView(part = "summary") {
         // 섹션을 누르면 그 카테고리 내역을 펼친다(다시 누르면 접힘)
         const key = `${ui.seg}|${group}|${c}`;
         const open = ui.openCat === key;
-        const items = open ? list.filter((t) => t.category === c).sort(txNewestFirst) : [];
+        const items = open ? list.filter((t) => keyOf(t) === c).sort(txNewestFirst) : [];
         return `
       <section class="asset-group detail-cat${open ? " open" : ""}" data-detail-cat="${esc(key)}">
         <div class="asset-group-head"><span>${esc(c)} <span class="cat-chev">${open ? "⌄" : "›"}</span></span><span class="${cls}">${signed(total, sign)}</span></div>
@@ -527,14 +544,12 @@ function homeView(part = "summary") {
       <div class="group-title"><span class="cat-badge b-cred">${info.label}</span></div>
       ${buildCatSections(list, type)}`;
       }).join("")
+    : ui.seg === "자산이동" ? buildCatSections(selTx, "", (t) => moveRoute(t) || MOVE_NONE, true)
     : buildCatSections(selTx);
 
-  // 자산이동의 하위 항목: 내역의 카테고리별 합계(큰 순서)
-  const movByCat = {};
-  mov.forEach((t) => (movByCat[t.category] = (movByCat[t.category] || 0) + txKRW(t)));
-  const movRows = Object.entries(movByCat)
-    .sort((a, b) => b[1] - a[1])
-    .map(([c, v]) => `<div class="row-sub"><span>└ ${esc(c)}</span><span>${won(v)}</span></div>`)
+  // 자산이동의 하위 항목: '출금 자산 → 입금 자산' 경로별 합계(큰 순서)
+  const movRows = routeTotals(mov)
+    .map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`)
     .join("");
 
   const summary = `
@@ -568,6 +583,7 @@ function homeView(part = "summary") {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${signed(v, "-")}</span></div>` : "";
       }).join("") : ""}
+      ${ui.seg === "자산이동" ? routeTotals(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
     </div>
     ${catSections || `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
   </section>`;
@@ -580,12 +596,8 @@ function txRow(t, { withDate = false } = {}) {
   const kindBadge = t.kind === "수입" ? "b-inc" : t.kind === "지출" ? "b-exp" : "b-mov";
   const d = deltaRef(t.assetDelta);
   const debt = d?.col === "debts" ? S.debts[d.id] : null;
-  const from = t.deltas && S.assets[t.deltas.find((x) => x.col === "assets")?.id];
   const isRepay = t.deltas?.some((x) => x.col === "debts");
-  const outA = !isRepay && t.deltas && S.assets[t.deltas.find((x) => x.amount < 0)?.id];
-  const inA = !isRepay && t.deltas && S.assets[t.deltas.find((x) => x.amount > 0)?.id];
-  const route = isRepay ? (from ? `${esc(from.name)}에서 상환` : "")
-    : outA || inA ? `${outA ? esc(outA.name) : "?"} → ${inA ? esc(inA.name) : "?"}` : "";
+  const route = esc(moveRoute(t)); // 자산이동: 출금 자산 → 입금 자산(상환은 → 부채)
   const when = withDate ? `${Number(t.date.slice(5, 7))}/${Number(t.date.slice(8, 10))} ${t.time || ""}`.trim() : t.time;
   const sub = [when, t.party ? esc(t.party) : ""].filter(Boolean).join(" · ");
   // 시간 아래 줄: 수입=입금 자산, 지출=출금 자산(신용카드·마통 등 부채는 '결제'), 자산이동=출금 → 입금
@@ -594,10 +606,10 @@ function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span></div>
+              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
-              ${via ? `<div class="memo">${via}</div>` : ""}
+              ${via ? `<div class="memo${t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
             </div>
             <span class="amt ${isShortDebt(t) ? "cred" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : ""}${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
@@ -1068,7 +1080,7 @@ function openTxDialog(existing, presetDate, preset = null) {
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
         ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
         ` : ""}
-        <div class="field"><label>카테고리 · 하위 카테고리</label>
+        ${draft.kind !== "자산이동" ? `<div class="field"><label>카테고리 · 하위 카테고리</label>
           <div class="money-line">
             <select class="input half" name="category">${catList.map((c) => `<option ${c === draft.category ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
             <select class="input half" name="subcategory">
@@ -1083,7 +1095,7 @@ function openTxDialog(existing, presetDate, preset = null) {
             <input class="input" name="newSubcat" placeholder="새 하위 카테고리 이름">
             <button class="btn subcat-add-btn" data-act="add-subcat">추가</button>
           </div>
-        </div>
+        </div>` : ""}
         ${draft.kind !== "자산이동" ? `<div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>` : ""}
         ${existing ? `<button class="btn fav-add-btn" data-act="add-fav">${STAR} 자주 쓰는 내역으로 등록</button>` : ""}
         <div class="btn-row">
@@ -1216,6 +1228,8 @@ function openTxDialog(existing, presetDate, preset = null) {
           deltas.push({ col: "assets", id: a.id, amount: sign * roundFor(v, curOf(a)) });
         }
         draft.party = "";
+        draft.category = ""; // 자산이동은 카테고리 없이 출금 → 입금 자산으로 구분
+        draft.subcategory = "";
         draft.memo = "";
       }
       const rec = {
@@ -1351,7 +1365,7 @@ function openFavorites({ onPick, onBack }) {
         <div class="fav-row">
           <button class="tx" data-fav="${f.id}">
             <div class="left">
-              <div class="badges">${f.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${cat ? `<span class="cat-badge ${badge}">${cat}</span>` : ""}</div>
+              <div class="badges">${f.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${cat && f.kind !== "자산이동" ? `<span class="cat-badge ${badge}">${cat}</span>` : ""}</div>
               ${f.content ? `<div class="tx-content">${esc(f.content)}</div>` : ""}
               ${[f.party ? esc(f.party) : "", via].filter(Boolean).map((x) => `<div class="memo">${x}</div>`).join("")}
             </div>

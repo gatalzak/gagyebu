@@ -372,3 +372,6 @@ input[type="date"].input { color-scheme: dark; }
 .bb-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .bb-actions button { padding: 5px 8px; border-radius: 3px; font-size: 0.75rem; color: var(--muted); border: 1px solid #4a3a1c; white-space: nowrap; }
 .bb-actions .bb-save { color: #2a2216; background: var(--mov); border-color: var(--mov); }
+
+/* 내역: 자산이동 경로(출금 → 입금) 강조 */
+.tx .memo.mov { color: var(--mov); }
