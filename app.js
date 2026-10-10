@@ -10,6 +10,21 @@ const CATEGORIES = {
   지출: ["식비", "카페/간식", "교통", "주거/통신", "생활용품", "쇼핑", "의료/건강", "문화/여가", "교육", "경조사", "보험", "기타"],
   자산이동: ["계좌이체", "저축", "투자", "카드대금", "부채상환", "현금인출", "기타"],
 };
+// 처음에 넣어 두는 하위 카테고리 (이용자가 더하거나 지울 수 있음)
+const DEFAULT_SUBCATS = {
+  지출: {
+    식비: ["외식", "배달", "장보기"],
+    "카페/간식": ["커피", "간식"],
+    교통: ["대중교통", "택시", "주유", "주차"],
+    "주거/통신": ["월세", "관리비", "통신비", "공과금"],
+    쇼핑: ["의류", "전자기기", "온라인쇼핑"],
+    "의료/건강": ["병원", "약국", "운동"],
+    "문화/여가": ["영화/공연", "여행", "구독서비스"],
+    교육: ["학원", "도서"],
+    경조사: ["축의금", "부의금", "선물"],
+  },
+  수입: { 월급: ["기본급", "상여금"], 부수입: ["중고거래", "프리랜스"] },
+};
 const ASSET_TYPES = ["현금", "은행", "증권", "부동산", "가상자산", "상품권", "기타"];
 const DEBT_TYPES = ["신용카드", "대출", "마이너스통장", "할부", "미납금", "개인(지인)", "기타"];
 const KIND_CLASS = { 수입: "inc", 지출: "exp", 자산이동: "mov" };
@@ -56,6 +71,39 @@ const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null }; // 
 
 const liveTx = () => Object.values(S.transactions).filter((t) => !t.deleted);
 const monthTx = () => liveTx().filter((t) => t.date.startsWith(ui.month));
+
+// ---------------- 하위 카테고리 ----------------
+// 기기 간 동기화되는 subcats 묶음에 { kind, category, name } 으로 저장한다.
+// 기본 하위 카테고리는 모든 기기에서 같은 id(def:…)로 만들어 동기화 때 겹치지 않고, 지운 것은 다시 생기지 않는다.
+const SEED_TIME = "2026-01-01T00:00:00.000Z";
+function seedSubcats() {
+  let added = 0;
+  for (const [kind, cats] of Object.entries(DEFAULT_SUBCATS)) {
+    for (const [category, names] of Object.entries(cats)) {
+      names.forEach((name, i) => {
+        const id = `def:${kind}:${category}:${name}`;
+        if (S.subcats[id]) return;
+        S.subcats[id] = { id, kind, category, name, order: i, createdAt: SEED_TIME, updatedAt: SEED_TIME, deleted: false };
+        added++;
+      });
+    }
+  }
+  return added;
+}
+/** 그 카테고리의 하위 카테고리 이름들 (정한 순서 → 만든 순서) */
+function subcatsFor(kind, category) {
+  return Object.values(S.subcats || {})
+    .filter((s) => !s.deleted && s.kind === kind && s.category === category)
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.createdAt.localeCompare(b.createdAt))
+    .map((s) => s.name);
+}
+function addSubcat(kind, category, name) {
+  const now = nowISO();
+  const id = uid();
+  S.subcats[id] = { id, kind, category, name, order: 999, createdAt: now, updatedAt: now, deleted: false };
+}
+/** 화면 표시용 '식비 › 외식' */
+const catLabel = (t) => (t.subcategory ? `${t.category} › ${t.subcategory}` : t.category);
 
 async function commit() {
   await saveState(S);
@@ -199,14 +247,14 @@ function txRow(t) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div>${esc(t.content || t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
+              <div>${esc(t.content || catLabel(t))}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
               ${(() => {
                 const d = deltaRef(t.assetDelta);
                 const linked = d && S[d.col]?.[d.id];
                 const how = d && (d.col === "debts" ? "결제" : d.amount >= 0 ? "입금" : "출금");
                 const from = t.deltas && S.assets[t.deltas.find((x) => x.col === "assets")?.id];
                 const repaid = t.deltas && from ? `${esc(from.name)}에서 상환` : "";
-                const sub = [t.time, t.content && esc(t.category), t.party && esc(t.party), linked && `${how} ${esc(linked.name)}`, repaid, t.memo && esc(t.memo)].filter(Boolean).join(" · ");
+                const sub = [t.time, t.content && esc(catLabel(t)), t.party && esc(t.party), linked && `${how} ${esc(linked.name)}`, repaid, t.memo && esc(t.memo)].filter(Boolean).join(" · ");
                 return sub ? `<div class="memo">${sub}</div>` : "";
               })()}
             </div>
@@ -584,8 +632,20 @@ function openTxDialog(existing, presetDate) {
         </div>` : ""}
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
         <div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
-        <div class="field"><label>카테고리</label>
-          <select class="input" name="category">${CATEGORIES[draft.kind].map((c) => `<option ${c === draft.category ? "selected" : ""}>${c}</option>`).join("")}</select>
+        <div class="field"><label>카테고리 · 하위 카테고리</label>
+          <div class="money-line">
+            <select class="input half" name="category">${CATEGORIES[draft.kind].map((c) => `<option ${c === draft.category ? "selected" : ""}>${c}</option>`).join("")}</select>
+            <select class="input half" name="subcategory">
+              <option value="">선택 안 함</option>
+              ${subcatsFor(draft.kind, draft.category).concat(draft.subcategory && !subcatsFor(draft.kind, draft.category).includes(draft.subcategory) ? [draft.subcategory] : [])
+                .map((s) => `<option ${s === draft.subcategory ? "selected" : ""}>${esc(s)}</option>`).join("")}
+              <option value="__add__">+ 직접 추가</option>
+            </select>
+          </div>
+          <div class="money-line subcat-add" data-subcat-add hidden>
+            <input class="input" name="newSubcat" placeholder="새 하위 카테고리 이름">
+            <button class="btn subcat-add-btn" data-act="add-subcat">추가</button>
+          </div>
         </div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>
         <div class="btn-row">
@@ -617,6 +677,8 @@ function openTxDialog(existing, presetDate) {
       draft.date = $p("[name=date]").value;
       draft.time = $p("[name=time]").value;
       draft.category = $p("[name=category]").value;
+      const sc = $p("[name=subcategory]").value;
+      draft.subcategory = sc === "__add__" ? draft.subcategory || "" : sc;
       draft.content = $p("[name=content]").value;
       draft.party = $p("[name=party]").value;
       draft.memo = $p("[name=memo]").value;
@@ -648,7 +710,26 @@ function openTxDialog(existing, presetDate) {
       refreshAssetHint();
     }
 
-    panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { read(); draft.kind = b.dataset.v; draw(); }));
+    panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { read(); draft.kind = b.dataset.v; draft.subcategory = ""; draw(); }));
+    $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draw(); };
+    $p("[name=subcategory]").onchange = (e) => {
+      const adding = e.target.value === "__add__";
+      $p("[data-subcat-add]").hidden = !adding;
+      if (adding) $p("[name=newSubcat]").focus();
+    };
+    $p("[data-act=add-subcat]").onclick = async () => {
+      const name = $p("[name=newSubcat]").value.trim();
+      if (!name) return toast("하위 카테고리 이름을 입력해 주세요.");
+      read();
+      if (!subcatsFor(draft.kind, draft.category).includes(name)) {
+        addSubcat(draft.kind, draft.category, name);
+        await saveState(S);
+        scheduleSync();
+      }
+      draft.subcategory = name;
+      draw();
+      toast(`'${draft.category} › ${name}' 추가했어요`);
+    };
     panel.querySelectorAll("[data-role=etype] button").forEach((b) => (b.onclick = () => { read(); draft.expenseType = b.dataset.v; draw(); }));
     $p("[data-act=save]").onclick = async () => {
       read();
@@ -664,6 +745,7 @@ function openTxDialog(existing, presetDate) {
         kind: draft.kind,
         expenseType: draft.kind === "지출" ? draft.expenseType : "",
         category: draft.category,
+        subcategory: draft.subcategory || "",
         currency: draft.currency,
         amount: draft.amount,
         ...(foreignNow ? { krw: draft.krw } : {}),
@@ -1146,6 +1228,7 @@ async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
+  if (seedSubcats()) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();

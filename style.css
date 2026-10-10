@@ -197,6 +197,11 @@ input[type="date"].input { color-scheme: dark; }
 .amount-wrap[data-long="true"] .amount-input { padding-right: 54px; }
 .amount-unit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 0.95rem; pointer-events: none; }
 .money-line .amount-input { flex: 1; min-width: 0; }
+.money-line .half { flex: 1; min-width: 0; }
+.subcat-add { margin-top: 6px; }
+.subcat-add[hidden] { display: none; }
+.subcat-add .input { flex: 1; min-width: 0; }
+.subcat-add .subcat-add-btn { flex: 0 0 64px; width: 64px; min-height: 44px; }
 .money-line input[type="date"] { flex: 1; min-width: 0; }
 .money-line .time-input { flex: 0 0 120px; color-scheme: dark; }
 .tx .amt { text-align: right; }
