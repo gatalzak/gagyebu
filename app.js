@@ -23,7 +23,9 @@ const todayStr = () => { const d = new Date(); return `${ym(d)}-${pad(d.getDate(
 const won = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
 const signed = (n, sign) => `${sign}${won(n)}`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const sum = (arr) => arr.reduce((a, t) => a + t.amount, 0);
+/** 내역의 원화 금액 (외화 내역은 입력 당시 원화로 저장한 krw) */
+const txKRW = (t) => (t.currency && t.currency !== "KRW" ? t.krw || 0 : t.amount);
+const sum = (arr) => arr.reduce((a, t) => a + txKRW(t), 0);
 const parseAmount = (s) => Number(String(s).replace(/[^\d]/g, "")) || 0;
 const fmtAmount = (n) => (n ? n.toLocaleString("ko-KR") : "");
 
@@ -111,7 +113,7 @@ function homeView() {
   };
   const [selTx, cls, sign] = segs[ui.seg];
   const byCat = {};
-  selTx.forEach((t) => (byCat[t.category] = (byCat[t.category] || 0) + t.amount));
+  selTx.forEach((t) => (byCat[t.category] = (byCat[t.category] || 0) + txKRW(t)));
   const catRows = Object.entries(byCat)
     .sort((a, b) => b[1] - a[1])
     .map(([c, v]) => `<div class="row-sub" style="padding:6px 4px 0"><span>${esc(c)}</span><span class="${cls}">${signed(v, sign)}</span></div>`)
@@ -160,7 +162,9 @@ function listView() {
               <div>${esc(t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
               ${t.memo ? `<div class="memo">${esc(t.memo)}</div>` : ""}
             </div>
-            <span class="amt ${KIND_CLASS[t.kind]}">${signed(t.amount, KIND_SIGN[t.kind])}</span>
+            <span class="amt ${KIND_CLASS[t.kind]}">${t.currency && t.currency !== "KRW"
+              ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
+              : signed(t.amount, KIND_SIGN[t.kind])}</span>
           </button>`).join("")}
       </section>`;
     })
@@ -195,14 +199,20 @@ function bindAmount(input) {
 }
 
 // 내역 추가/수정
+// 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
+// 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
 function openTxDialog(existing) {
   const draft = existing
-    ? { ...existing }
-    : { kind: "지출", expenseType: "변동", date: todayStr(), category: CATEGORIES["지출"][0], amount: 0, memo: "" };
+    ? { currency: "KRW", ...existing }
+    : { kind: "지출", expenseType: "변동", date: todayStr(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, memo: "" };
   let confirmDelete = false;
+  let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
+
+  refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
   const draw = () => {
     if (!CATEGORIES[draft.kind].includes(draft.category)) draft.category = CATEGORIES[draft.kind][0];
+    const foreign = draft.currency !== "KRW";
     const panel = openModal({
       title: existing ? "내역 수정" : "내역 추가",
       body: `
@@ -211,7 +221,15 @@ function openTxDialog(existing) {
         <div class="field"><label>지출 종류</label>
           <div class="seg" data-role="etype">${EXPENSE_TYPES.map((k) => `<button data-v="${k}" class="${k === draft.expenseType ? "on" : ""}">${k}지출</button>`).join("")}</div>
         </div>` : ""}
-        <div class="field"><label>금액(원)</label><input class="input amount-input" name="amount" inputmode="numeric" autocomplete="off" placeholder="0" value="${fmtAmount(draft.amount)}"></div>
+        <div class="field"><label>금액</label>
+          <div class="money-line">
+            <select class="input cur-select" name="currency">${CURRENCIES.map((c) => `<option value="${c}" ${c === draft.currency ? "selected" : ""}>${c === "KRW" ? "원" : c}</option>`).join("")}</select>
+            <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, draft.currency)}">
+          </div>
+        </div>
+        <div class="field" data-krw-field ${foreign ? "" : "hidden"}><label>원화 금액 <span class="muted" data-rate></span></label>
+          <input class="input amount-input" name="krw" inputmode="numeric" autocomplete="off" placeholder="0" value="${fmtAmount(Math.round(draft.krw || 0))}">
+        </div>
         <div class="field"><label>날짜</label><input class="input" type="date" name="date" value="${draft.date}"></div>
         <div class="field"><label>카테고리</label>
           <select class="input" name="category">${CATEGORIES[draft.kind].map((c) => `<option ${c === draft.category ? "selected" : ""}>${c}</option>`).join("")}</select>
@@ -222,18 +240,42 @@ function openTxDialog(existing) {
           <button class="btn primary" data-act="save">저장</button>
         </div>`,
     });
-    const read = () => {
-      draft.amount = parseAmount(panel.querySelector("[name=amount]").value);
-      draft.date = panel.querySelector("[name=date]").value;
-      draft.category = panel.querySelector("[name=category]").value;
-      draft.memo = panel.querySelector("[name=memo]").value;
+    const $p = (sel) => panel.querySelector(sel);
+    const curSel = $p("[name=currency]"), amt = $p("[name=amount]"), krwIn = $p("[name=krw]");
+
+    // 외화면 원화 금액 칸을 보여 주고, 직접 고치지 않았으면 환율로 채운다
+    const refreshKRW = () => {
+      const cur = curSel.value;
+      $p("[data-krw-field]").hidden = cur === "KRW";
+      if (cur === "KRW") return;
+      const r = rateKRW(cur);
+      $p("[data-rate]").textContent = r === null ? "(환율 정보 없음 · 직접 입력)" : `(1 ${cur} ≈ ${r < 100 ? r.toFixed(2) : Math.round(r).toLocaleString("ko-KR")}원)`;
+      if (!krwTouched) {
+        const v = toKRW(parseMoney(amt.value, cur), cur);
+        krwIn.value = v ? fmtAmount(Math.round(v)) : "";
+      }
     };
-    bindAmount(panel.querySelector("[name=amount]"));
+    const read = () => {
+      draft.currency = curSel.value;
+      draft.amount = parseMoney(amt.value, draft.currency);
+      draft.krw = parseAmount(krwIn.value);
+      draft.date = $p("[name=date]").value;
+      draft.category = $p("[name=category]").value;
+      draft.memo = $p("[name=memo]").value;
+    };
+    amt.addEventListener("input", () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); });
+    curSel.onchange = () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); };
+    bindAmount(krwIn);
+    krwIn.addEventListener("input", () => (krwTouched = true));
+    refreshKRW();
+
     panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { read(); draft.kind = b.dataset.v; draw(); }));
     panel.querySelectorAll("[data-role=etype] button").forEach((b) => (b.onclick = () => { read(); draft.expenseType = b.dataset.v; draw(); }));
-    panel.querySelector("[data-act=save]").onclick = async () => {
+    $p("[data-act=save]").onclick = async () => {
       read();
+      const foreignNow = draft.currency !== "KRW";
       if (draft.amount <= 0) return toast("금액을 입력해 주세요.");
+      if (foreignNow && draft.krw <= 0) return toast("원화 금액을 입력해 주세요.");
       if (!draft.date) return toast("날짜를 입력해 주세요.");
       const now = nowISO();
       const rec = {
@@ -242,7 +284,9 @@ function openTxDialog(existing) {
         kind: draft.kind,
         expenseType: draft.kind === "지출" ? draft.expenseType : "",
         category: draft.category,
+        currency: draft.currency,
         amount: draft.amount,
+        ...(foreignNow ? { krw: draft.krw } : {}),
         memo: draft.memo.trim(),
         createdAt: existing?.createdAt || now,
         updatedAt: now,
@@ -252,9 +296,9 @@ function openTxDialog(existing) {
       closeModal();
       ui.month = rec.date.slice(0, 7);
       await commit();
-      toast(`${rec.kind} ${won(rec.amount)} ${existing ? "수정" : "추가"}했어요`);
+      toast(`${rec.kind} ${formatMoney(rec.amount, rec.currency)} ${existing ? "수정" : "추가"}했어요`);
     };
-    const del = panel.querySelector("[data-act=delete]");
+    const del = $p("[data-act=delete]");
     if (del) del.onclick = async () => {
       if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: nowISO() };
@@ -262,7 +306,7 @@ function openTxDialog(existing) {
       await commit();
       toast("삭제했어요");
     };
-    if (!existing && !draft.amount) panel.querySelector("[name=amount]").focus();
+    if (!existing && !draft.amount) amt.focus();
   };
   draw();
 }
