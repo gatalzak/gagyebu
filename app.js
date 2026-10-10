@@ -8,7 +8,7 @@ const EXPENSE_TYPES = ["고정", "변동"]; // 화면 표시 순서(고정지출
 const CATEGORIES = {
   수입: ["월급", "부수입", "용돈", "이자/배당", "환급", "기타"],
   지출: ["식비", "카페/간식", "교통", "주거/통신", "생활용품", "쇼핑", "의료/건강", "문화/여가", "교육", "경조사", "보험", "기타"],
-  자산이동: ["계좌이체", "저축", "투자", "카드대금", "부채상환", "현금인출", "기타"],
+  자산이동: ["계좌이체", "ATM입금", "ATM출금"],
 };
 // 처음에 넣어 두는 하위 카테고리 (이용자가 더하거나 지울 수 있음)
 const DEFAULT_SUBCATS = {
@@ -104,6 +104,24 @@ function addSubcat(kind, category, name) {
 // 지출 카테고리는 고정지출/변동지출 중 하나에 속한다(etype). 예전 기본 카테고리는 이 목록으로 판단.
 const DEFAULT_FIXED = new Set(["주거/통신", "보험", "교육"]);
 const catEtype = (c) => c.etype || (DEFAULT_FIXED.has(c.name) ? "고정" : "변동");
+
+// 예전 기본 자산이동 카테고리: 이용자가 손대지 않았으면(만든 그대로) 정리한다.
+// 모든 기기에서 같은 시각으로 지워 동기화 때 다시 살아나지 않게 한다. 이미 입력한 내역의 카테고리 이름은 그대로 남는다.
+const RETIRED_CATS = { 자산이동: ["저축", "투자", "카드대금", "부채상환", "현금인출", "기타"] };
+const RETIRE_TIME = "2026-10-10T12:00:00.000Z";
+function retireOldCats() {
+  let n = 0;
+  for (const [kind, names] of Object.entries(RETIRED_CATS)) {
+    for (const name of names) {
+      const c = S.cats[`defcat:${kind}:${name}`];
+      if (c && !c.deleted && c.updatedAt === SEED_TIME) {
+        S.cats[c.id] = { ...c, deleted: true, updatedAt: RETIRE_TIME };
+        n++;
+      }
+    }
+  }
+  return n;
+}
 
 function seedCats() {
   let added = 0;
@@ -1513,7 +1531,7 @@ async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
-  if (seedCats() + seedSubcats()) await saveState(S);
+  if (seedCats() + retireOldCats() + seedSubcats()) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();
