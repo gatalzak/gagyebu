@@ -105,13 +105,17 @@ function addSubcat(kind, category, name) {
 // ---------------- 카테고리 ----------------
 // 카테고리도 기기 간 동기화되는 cats 묶음에 { kind, name, order } 로 저장한다(기본값은 고정 id defcat:…).
 // 내역·하위 카테고리는 카테고리를 '이름'으로 가리키므로, 이름을 바꾸면 그 이름을 쓰는 기록도 함께 바꾼다.
+// 지출 카테고리는 고정지출/변동지출 중 하나에 속한다(etype). 예전 기본 카테고리는 이 목록으로 판단.
+const DEFAULT_FIXED = new Set(["주거/통신", "보험", "교육"]);
+const catEtype = (c) => c.etype || (DEFAULT_FIXED.has(c.name) ? "고정" : "변동");
+
 function seedCats() {
   let added = 0;
   for (const [kind, names] of Object.entries(CATEGORIES)) {
     names.forEach((name, i) => {
       const id = `defcat:${kind}:${name}`;
       if (S.cats[id]) return;
-      S.cats[id] = { id, kind, name, order: i, createdAt: SEED_TIME, updatedAt: SEED_TIME, deleted: false };
+      S.cats[id] = { id, kind, name, order: i, ...(kind === "지출" ? { etype: DEFAULT_FIXED.has(name) ? "고정" : "변동" } : {}), createdAt: SEED_TIME, updatedAt: SEED_TIME, deleted: false };
       added++;
     });
   }
@@ -120,8 +124,8 @@ function seedCats() {
 const catRecords = (kind) => Object.values(S.cats || {})
   .filter((c) => !c.deleted && c.kind === kind)
   .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.createdAt.localeCompare(b.createdAt));
-/** 그 구분(수입/지출/자산이동)의 카테고리 이름들 */
-const catsFor = (kind) => catRecords(kind).map((c) => c.name);
+/** 그 구분(수입/지출/자산이동)의 카테고리 이름들. 지출은 etype(고정/변동)으로 거를 수 있다. */
+const catsFor = (kind, etype = null) => catRecords(kind).filter((c) => !etype || catEtype(c) === etype).map((c) => c.name);
 const subcatRecords = (kind, category) => Object.values(S.subcats || {})
   .filter((s) => !s.deleted && s.kind === kind && s.category === category)
   .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.createdAt.localeCompare(b.createdAt));
@@ -154,8 +158,11 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
       title: "카테고리 편집",
       body: `
         <div class="seg" data-role="kind">${KINDS.map((k) => `<button data-v="${k}" class="${k === kind ? "on" : ""}">${k}</button>`).join("")}</div>
-        <section class="asset-group">
-          ${cats.map((c) => {
+        ${(kind === "지출" ? [["고정", "고정지출"], ["변동", "변동지출"]] : [[null, null]]).map(([et, title]) => {
+          const list = cats.filter((c) => !et || catEtype(c) === et);
+          return `<section class="asset-group">
+          ${title ? `<div class="asset-group-head"><span>${title}</span></div>` : ""}
+          ${list.map((c) => {
             const subs = subcatRecords(kind, c.name).map((s) => s.name);
             return `<button class="asset-row cat-row" data-cat="${c.id}">
               <span class="name">${esc(c.name)}</span>
@@ -163,9 +170,11 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
               <span class="chev">›</span>
             </button>`;
           }).join("") || `<div class="asset-row asset-none">카테고리가 없습니다</div>`}
-        </section>
+          </section>`;
+        }).join("")}
         <div class="money-line subcat-add" style="margin-top:12px">
           <input class="input" name="newCat" placeholder="새 카테고리 이름">
+          ${kind === "지출" ? `<select class="input etype-select" name="newCatEtype"><option>변동</option><option>고정</option></select>` : ""}
           <button class="btn subcat-add-btn" data-act="add-cat">추가</button>
         </div>
         <button class="btn primary" data-act="done" style="margin-top:16px">완료</button>`,
@@ -179,11 +188,12 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
       if (catsFor(kind).includes(name)) return toast("이미 있는 카테고리예요.");
       const now = nowISO();
       const id = uid();
-      S.cats[id] = { id, kind, name, order: 999, createdAt: now, updatedAt: now, deleted: false };
+      const etype = kind === "지출" ? panel.querySelector("[name=newCatEtype]").value : null;
+      S.cats[id] = { id, kind, name, order: 999, ...(etype ? { etype } : {}), createdAt: now, updatedAt: now, deleted: false };
       await saveState(S);
       scheduleSync();
       drawList();
-      toast(`'${name}' 카테고리를 추가했어요`);
+      toast(`'${name}' 카테고리를 ${etype ? etype + "지출에 " : ""}추가했어요`);
     };
   };
 
@@ -192,6 +202,7 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
     const cat = S.cats[catId];
     const s = state || {
       name: cat.name,
+      etype: kind === "지출" ? catEtype(cat) : null,
       subs: subcatRecords(kind, cat.name).map((x) => ({ id: x.id, name: x.name, del: false })),
       confirmDelete: false,
     };
@@ -200,6 +211,9 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
       body: `
         <button class="back-link" data-act="back">‹ ${kind} 카테고리 목록</button>
         <div class="field"><label>카테고리 이름</label><input class="input" name="catName" value="${esc(s.name)}"></div>
+        ${s.etype ? `<div class="field"><label>지출 종류</label>
+          <div class="seg" data-role="cat-etype">${EXPENSE_TYPES.map((k) => `<button data-v="${k}" class="${k === s.etype ? "on" : ""}">${k}지출</button>`).join("")}</div>
+        </div>` : ""}
         <div class="field"><label>하위 카테고리</label>
           <section class="asset-group" style="margin-top:0">
             ${s.subs.map((x, i) => `
@@ -217,7 +231,7 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
         </div>
         <div class="btn-row"><button class="btn" data-act="back2">취소</button><button class="btn primary" data-act="save">저장</button></div>
         <button class="btn danger" data-act="delete" style="margin-top:8px">${s.confirmDelete ? "한 번 더 누르면 카테고리 삭제" : "이 카테고리 삭제"}</button>
-        <p class="note">이름을 바꾸면 이미 입력한 내역의 카테고리 이름도 함께 바뀌어요. 카테고리나 하위 카테고리를 삭제해도 이미 입력한 내역은 그대로 남아요.</p>`,
+        <p class="note">이름이나 지출 종류(고정/변동)를 바꾸면 이미 입력한 내역도 함께 바뀌어요. 카테고리나 하위 카테고리를 삭제해도 이미 입력한 내역은 그대로 남아요.</p>`,
     });
     const $p = (q) => panel.querySelector(q);
     const read = () => {
@@ -228,6 +242,7 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
       });
     };
     $p("[data-act=back]").onclick = drawList;
+    panel.querySelectorAll("[data-role=cat-etype] button").forEach((b) => (b.onclick = () => { read(); s.etype = b.dataset.v; drawCat(catId, s); }));
     $p("[data-act=back2]").onclick = drawList;
     panel.querySelectorAll("[data-toggle-del]").forEach((b) => (b.onclick = () => {
       read();
@@ -253,6 +268,13 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
       if (new Set(live).size !== live.length) return toast("하위 카테고리 이름이 겹쳐요.");
       const now = nowISO();
       if (newName !== cat.name) renameCategory(kind, cat.name, newName, now);
+      if (s.etype && s.etype !== catEtype(cat)) {
+        // 고정/변동을 바꾸면 이 카테고리로 입력한 지출도 같은 종류로 맞춘다(현황 합계가 일치하도록)
+        S.cats[catId] = { ...S.cats[catId], etype: s.etype, updatedAt: now };
+        for (const t of Object.values(S.transactions)) {
+          if (!t.deleted && t.kind === "지출" && t.category === newName && t.expenseType !== s.etype) S.transactions[t.id] = { ...t, expenseType: s.etype, updatedAt: now };
+        }
+      }
       s.subs.forEach((x, i) => {
         if (x.id && x.del) S.subcats[x.id] = { ...S.subcats[x.id], deleted: true, updatedAt: now };
         else if (x.id && S.subcats[x.id].name !== x.name.trim()) renameSubcat(x.id, x.name.trim(), now);
@@ -765,7 +787,7 @@ function openTxDialog(existing, presetDate) {
   if (existing?.deltas) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
   const draft = existing
     ? { currency: "KRW", ...existing }
-    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
+    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출", "변동")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
   if (existing) { const d = deltaRef(existing.assetDelta); draft.link = d ? linkKey(d.col, d.id) : ""; }
@@ -773,7 +795,7 @@ function openTxDialog(existing, presetDate) {
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
   const draw = () => {
-    const catList = catsFor(draft.kind);
+    const catList = catsFor(draft.kind, draft.kind === "지출" ? draft.expenseType : null);
     if (!catList.includes(draft.category) && !(existing && existing.kind === draft.kind && existing.category === draft.category)) draft.category = catList[0] || "";
     if (draft.category && !catList.includes(draft.category)) catList.push(draft.category); // 지워진 카테고리를 쓰던 내역
     const foreign = draft.currency !== "KRW";
@@ -916,7 +938,7 @@ function openTxDialog(existing, presetDate) {
       draw();
       toast(`'${draft.category} › ${name}' 추가했어요`);
     };
-    panel.querySelectorAll("[data-role=etype] button").forEach((b) => (b.onclick = () => { read(); draft.expenseType = b.dataset.v; draw(); }));
+    panel.querySelectorAll("[data-role=etype] button").forEach((b) => (b.onclick = () => { read(); draft.expenseType = b.dataset.v; draft.subcategory = ""; draw(); }));
     $p("[data-act=save]").onclick = async () => {
       read();
       const foreignNow = draft.currency !== "KRW";
