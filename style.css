@@ -66,6 +66,9 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
   border: 1px solid #3a3a40; border-radius: 3px; color: #d0d0d6;
   font-size: calc(0.72rem + var(--fs-up)); padding: 6px 6px; white-space: nowrap; line-height: 1;
 }
+/* 상단 버튼 아이콘(백업 구름·자산 지갑·부채 카드) */
+.top-row .ghost-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; }
+.btn-ico { flex: 0 0 auto; }
 /* 상단 나의 자산(초록) / 나의 부채(레드) — 각 창의 색과 맞춤 */
 .ghost-btn.asset-tone { background: var(--green-bg); border-color: var(--green-line); color: var(--green-text); }
 .ghost-btn.debt-tone { background: #3a1d24; border-color: #5e2a35; color: #ffc9d2; }
