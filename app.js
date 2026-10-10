@@ -463,7 +463,7 @@ function homeView(part = "summary") {
         const list = selTx.filter((t) => shortDebtType(t) === type);
         if (!list.length) return "";
         return `
-      <div class="group-title"><span class="cat-badge b-cred">${info.title.replace(" 사용", "")}</span><span class="cred">${signed(sum(list), "-")}</span></div>
+      <div class="group-title"><span class="cat-badge b-cred">${info.title.replace(" 사용", "")}</span></div>
       ${buildCatSections(list, type)}`;
       }).join("")
     : buildCatSections(selTx);
@@ -501,7 +501,13 @@ function homeView(part = "summary") {
     <div class="seg seg-5" data-role="detail-seg">
       ${Object.keys(segs).map((s) => `<button data-seg="${s}" class="${s === ui.seg ? "on" : ""}">${s}</button>`).join("")}
     </div>
-    <div class="total-bar"><span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
+    <div class="total-bar">
+      <div class="tb-main"><span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
+      ${ui.seg === "단기부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
+        const v = sum(selTx.filter((t) => shortDebtType(t) === type));
+        return `<div class="tb-sub"><span>└ ${info.title.replace(" 사용", "")}</span><span>${signed(v, "-")}</span></div>`;
+      }).join("") : ""}
+    </div>
     ${catSections || `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
   </section>`;
 }

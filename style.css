@@ -289,7 +289,7 @@ input[type="date"].input { color-scheme: dark; }
 .cat-badge.b-inc { background: #ffe9ec; color: #d42a4c; }
 .cat-badge.b-exp { background: #e6f3fd; color: #1c74c4; }
 .cat-badge.b-mov { background: #fff6dc; color: #9a7413; }
-.cat-badge.b-cred { background: #e3f6ff; color: #1590c4; }
+.cat-badge.b-cred { background: #e3f6ff; color: #0b5384; }
 .tx-content { color: #fff; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx .memo { font-size: 0.75rem; margin-top: 1px; }
 /* 탭 5개: 폰 폭에 맞게 글자를 조금 줄임 */
@@ -314,8 +314,11 @@ input[type="date"].input { color-scheme: dark; }
 .mr-note { font-size: 0.72rem; margin-top: 10px; }
 
 /* 현황(상세): 합계 바 + 카테고리 섹션 */
-.total-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding: 12px 14px; border-radius: 4px; background: var(--row); border: 1px solid #303035; font-size: 1rem; }
-.total-bar > span:first-child { color: var(--text); font-size: 1rem; } /* 카테고리 이름과 같은 흰색·크기 */
+.total-bar { margin-top: 14px; padding: 12px 14px; border-radius: 4px; background: var(--row); border: 1px solid #303035; font-size: 1rem; }
+.tb-main { display: flex; justify-content: space-between; align-items: center; }
+.tb-main > span:first-child { color: var(--text); font-size: 1rem; } /* 카테고리 이름과 같은 흰색·크기 */
+.tb-sub { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.85rem; padding: 4px 0 0 10px; }
+.tb-main + .tb-sub { margin-top: 6px; }
 .detail-cat .asset-group-head { border-bottom: none; }
 .detail-cat .asset-group-head:has(+ .detail-sub) { border-bottom: 1px solid var(--line); }
 .detail-sub { padding: 9px 0 9px 10px; color: var(--muted); }
@@ -325,5 +328,6 @@ input[type="date"].input { color-scheme: dark; }
 .detail-items { border-top: 1px solid var(--line); margin-top: 2px; cursor: default; }
 .detail-cat.open .asset-group-head { border-bottom: 1px solid var(--line); }
 /* 현황(상세) 단기부채: 신용카드 / 마이너스통장 묶음 제목 */
-.group-title { display: flex; justify-content: space-between; align-items: center; margin: 18px 2px 0; }
+.group-title { display: flex; justify-content: space-between; align-items: center; margin: 30px 2px 2px; }
+.total-bar + .group-title { margin-top: 22px; }
 .group-title .cat-badge { font-size: 0.8rem; }
