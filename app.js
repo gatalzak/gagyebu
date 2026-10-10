@@ -1484,22 +1484,24 @@ function openHoldingsDialog(col) {
     };
   };
 
-  // 전체 편집: 모든 자산의 종류·이름·통화·금액을 한 번에 고치고, 삭제는 표시해 두었다가 저장할 때 반영
+  // 전체 편집: 모든 자산의 종류·이름·통화·금액을 한 번에 고치고, 삭제는 표시해 두었다가 저장할 때 반영.
+  // '+ 추가'로 새 항목(isNew)도 여기서 바로 넣을 수 있다.
   const drawEdit = () => {
-    const groups = cfg.types.filter((t) => drafts.some((d) => S[col][d.id].type === t));
+    const sectionOf = (d) => (d.isNew ? d.type : S[col][d.id].type); // 새 항목은 고른 종류, 기존 항목은 원래 종류 섹션
+    const groups = cfg.types.filter((t) => drafts.some((d) => sectionOf(d) === t));
     const panel = openModal({
       cls: `theme-${col}`,
       title: `${cfg.unit} 편집`,
       body: groups.map((t) => `
         <section class="asset-group">
           <div class="asset-group-head"><span class="sector-badge">${t}</span></div>
-          ${drafts.filter((d) => S[col][d.id].type === t).map((d) => `
+          ${drafts.filter((d) => sectionOf(d) === t).map((d) => `
           <div class="edit-item${d.del ? " removed" : ""}" data-id="${d.id}">
             <button class="grip" data-handle aria-label="끌어서 순서 바꾸기">${GRIP}</button>
             <div class="edit-body">
             <div class="edit-line">
               <input class="input sm" name="name" value="${esc(d.name)}" placeholder="이름" ${d.del ? "disabled" : ""}>
-              <button class="edit-del" data-toggle-del>${d.del ? "되돌리기" : "삭제"}</button>
+              <button class="edit-del" data-toggle-del>${d.isNew ? "빼기" : d.del ? "되돌리기" : "삭제"}</button>
             </div>
             <div class="edit-line">
               <select class="input sm type" name="type" ${d.del ? "disabled" : ""}>${cfg.types.map((x) => `<option ${x === d.type ? "selected" : ""}>${x}</option>`).join("")}</select>
@@ -1509,6 +1511,7 @@ function openHoldingsDialog(col) {
             </div>
           </div>`).join("")}
         </section>`).join("") +
+        `<button class="btn edit-add-btn ${col === "debts" ? "red-tone" : "green-tone"}" data-add-item>+ ${cfg.unit} 추가</button>` +
         `<div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
     });
     const read = () => panel.querySelectorAll(".edit-item").forEach((el) => {
@@ -1534,9 +1537,25 @@ function openHoldingsDialog(col) {
       read();
       syncOrder();
       const d = drafts.find((x) => x.id === b.closest(".edit-item").dataset.id);
-      d.del = !d.del;
+      if (d.isNew) drafts = drafts.filter((x) => x !== d); // 새로 넣은 항목은 바로 뺀다
+      else d.del = !d.del;
       drawEdit();
     }));
+    // 새 항목의 종류를 바꾸면 그 종류 섹션으로 옮긴다
+    panel.querySelectorAll(".edit-item [name=type]").forEach((sel) => {
+      const d = drafts.find((x) => x.id === sel.closest(".edit-item").dataset.id);
+      if (d.isNew) sel.addEventListener("change", () => { read(); syncOrder(); drawEdit(); });
+    });
+    panel.querySelector("[data-add-item]").onclick = () => {
+      read();
+      syncOrder();
+      const id = uid();
+      drafts.push({ id, isNew: true, type: cfg.types[0], name: "", currency: "KRW", amount: 0, del: false });
+      drawEdit();
+      const input = $("#modal-root").querySelector(`.edit-item[data-id="${id}"] [name=name]`);
+      input?.scrollIntoView({ block: "center" });
+      input?.focus();
+    };
     panel.querySelector("[data-cancel]").onclick = () => { mode = null; drafts = null; draw(); };
     panel.querySelector("[data-save]").onclick = async () => {
       read();
@@ -1546,6 +1565,12 @@ function openHoldingsDialog(col) {
       let changed = 0;
       const pos = {}; // 섹션(원래 종류)별 순번
       for (const d of drafts) {
+        if (d.isNew) {
+          const i = (pos[d.type] = (pos[d.type] ?? -1) + 1);
+          S[col][d.id] = { id: d.id, type: d.type, order: 10000 + i, name: d.name.trim(), currency: d.currency, amount: d.amount, createdAt: now, updatedAt: now, deleted: false };
+          changed++;
+          continue;
+        }
         const a = S[col][d.id];
         if (d.del) {
           S[col][d.id] = { ...a, deleted: true, updatedAt: now };

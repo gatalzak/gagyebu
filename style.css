@@ -358,3 +358,8 @@ input[type="date"].input { color-scheme: dark; }
 .older-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 4px; font-size: 0.9rem; text-align: left; }
 .older-toggle .muted { font-size: 0.8rem; }
 .day-more { display: block; width: 100%; padding: 10px 0 0; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 0.8rem; text-align: center; }
+
+/* 자산·부채 편집: 새 항목 추가 */
+.edit-add-btn { margin-top: 12px; min-height: 42px; border-style: dashed; font-size: 0.9rem; }
+.edit-add-btn.red-tone { color: #ff9fae; border-color: #5e2a35; }
+.edit-add-btn.green-tone { color: #9fe0b5; border-color: var(--green-line); }
