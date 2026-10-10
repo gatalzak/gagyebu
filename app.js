@@ -302,7 +302,10 @@ function openTxDialog(existing, presetDate) {
           </div>
         </div>
         <div class="field" data-krw-field ${foreign ? "" : "hidden"}><label>원화 금액 <span class="muted" data-rate></span></label>
-          <input class="input amount-input" name="krw" inputmode="numeric" autocomplete="off" placeholder="0" value="${fmtAmount(Math.round(draft.krw || 0))}">
+          <div class="amount-wrap">
+            <input class="input amount-input" name="krw" inputmode="numeric" autocomplete="off" placeholder="0" value="${fmtAmount(Math.round(draft.krw || 0))}">
+            <span class="amount-unit">원</span>
+          </div>
         </div>
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
         <div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
@@ -322,7 +325,7 @@ function openTxDialog(existing, presetDate) {
     const refreshKRW = () => {
       const cur = curSel.value;
       $p("[data-unit]").textContent = unitLabel(cur);
-      $p(".amount-wrap").dataset.long = cur !== "KRW";
+      $p("[data-unit]").parentElement.dataset.long = cur !== "KRW";
       $p("[data-krw-field]").hidden = cur === "KRW";
       if (cur === "KRW") return;
       const r = rateKRW(cur);

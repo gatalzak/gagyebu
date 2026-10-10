@@ -184,7 +184,7 @@ input[type="date"].input { color-scheme: dark; }
 .money-line { display: flex; gap: 6px; }
 .money-line .cur-select { flex: 0 0 92px; }
 .amount-wrap { position: relative; flex: 1; min-width: 0; }
-.amount-wrap .amount-input { width: 100%; padding-right: 34px; }
+.amount-wrap .amount-input { display: block; width: 100%; padding-right: 34px; }
 .amount-wrap[data-long="true"] .amount-input { padding-right: 54px; }
 .amount-unit { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 0.95rem; pointer-events: none; }
 .money-line .amount-input { flex: 1; min-width: 0; }
