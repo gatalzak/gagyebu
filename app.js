@@ -523,14 +523,13 @@ function homeView(part = "summary") {
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
   const [selTx, cls, sign] = segs[ui.seg];
   // 카테고리마다 섹션 하나: 머리줄(카테고리·합계, 색 유지) → 구분선 → 하위 카테고리별 금액(회색)
-  // keyOf: 섹션을 나누는 기준(기본 카테고리, 자산이동은 경로). noSubs면 하위 줄 없음
-  const buildCatSections = (list, group = "", keyOf = (t) => t.category, noSubs = false) => {
+  const buildCatSections = (list, group = "") => {
     const byCat = {};
     list.forEach((t) => {
-      const c = (byCat[keyOf(t)] ||= { total: 0, subs: {} });
+      const c = (byCat[t.category] ||= { total: 0, subs: {} });
       const v = txKRW(t);
       c.total += v;
-      const sub = noSubs ? "" : t.subcategory || "";
+      const sub = t.subcategory || "";
       c.subs[sub] = (c.subs[sub] || 0) + v;
     });
     return Object.entries(byCat)
@@ -543,7 +542,7 @@ function homeView(part = "summary") {
         // 섹션을 누르면 그 카테고리 내역을 펼친다(다시 누르면 접힘)
         const key = `${ui.seg}|${group}|${c}`;
         const open = ui.openCat === key;
-        const items = open ? list.filter((t) => keyOf(t) === c).sort(txNewestFirst) : [];
+        const items = open ? list.filter((t) => t.category === c).sort(txNewestFirst) : [];
         return `
       <section class="asset-group detail-cat${open ? " open" : ""}" data-detail-cat="${esc(key)}">
         <div class="asset-group-head"><span>${esc(c)} <span class="cat-chev">${open ? "⌄" : "›"}</span></span><span class="${cls}">${signed(total, sign)}</span></div>
@@ -562,7 +561,7 @@ function homeView(part = "summary") {
       <div class="group-title"><span class="cat-badge b-cred">${info.label}</span></div>
       ${buildCatSections(list, type)}`;
       }).join("")
-    : ui.seg === "자산이동" ? buildCatSections(selTx, "", (t) => moveRoute(t) || MOVE_NONE, true)
+    : ui.seg === "자산이동" ? "" // 자산이동은 합계 아래 경로별 하위 항목만
     : buildCatSections(selTx);
 
   // 자산이동의 하위 항목: '출금 자산 → 입금 자산' 경로별 합계(큰 순서)
@@ -603,7 +602,7 @@ function homeView(part = "summary") {
       }).join("") : ""}
       ${ui.seg === "자산이동" ? routeTotals(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
     </div>
-    ${catSections || `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
+    ${selTx.length ? catSections : `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
   </section>`;
 }
 
