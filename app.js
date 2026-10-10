@@ -151,8 +151,11 @@ function txRow(t) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div>${esc(t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
-              ${t.time || t.memo ? `<div class="memo">${[t.time, t.memo && esc(t.memo)].filter(Boolean).join(" · ")}</div>` : ""}
+              <div>${esc(t.content || t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
+              ${(() => {
+                const sub = [t.time, t.content && esc(t.category), t.party && esc(t.party), t.memo && esc(t.memo)].filter(Boolean).join(" · ");
+                return sub ? `<div class="memo">${sub}</div>` : "";
+              })()}
             </div>
             <span class="amt ${KIND_CLASS[t.kind]}">${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
@@ -263,7 +266,7 @@ function bindAmount(input) {
 function openTxDialog(existing, presetDate) {
   const draft = existing
     ? { currency: "KRW", ...existing }
-    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, memo: "" };
+    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
 
@@ -295,10 +298,12 @@ function openTxDialog(existing, presetDate) {
         <div class="field" data-krw-field ${foreign ? "" : "hidden"}><label>원화 금액 <span class="muted" data-rate></span></label>
           <input class="input amount-input" name="krw" inputmode="numeric" autocomplete="off" placeholder="0" value="${fmtAmount(Math.round(draft.krw || 0))}">
         </div>
+        <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
+        <div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
         <div class="field"><label>카테고리</label>
           <select class="input" name="category">${CATEGORIES[draft.kind].map((c) => `<option ${c === draft.category ? "selected" : ""}>${c}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 점심 김치찌개" value="${esc(draft.memo)}"></div>
+        <div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
           <button class="btn primary" data-act="save">저장</button>
@@ -326,6 +331,8 @@ function openTxDialog(existing, presetDate) {
       draft.date = $p("[name=date]").value;
       draft.time = $p("[name=time]").value;
       draft.category = $p("[name=category]").value;
+      draft.content = $p("[name=content]").value;
+      draft.party = $p("[name=party]").value;
       draft.memo = $p("[name=memo]").value;
     };
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); });
@@ -353,6 +360,8 @@ function openTxDialog(existing, presetDate) {
         currency: draft.currency,
         amount: draft.amount,
         ...(foreignNow ? { krw: draft.krw } : {}),
+        content: (draft.content || "").trim(),
+        party: (draft.party || "").trim(),
         memo: draft.memo.trim(),
         createdAt: existing?.createdAt || now,
         updatedAt: now,
