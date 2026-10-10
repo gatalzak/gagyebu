@@ -49,7 +49,7 @@ function toast(msg) {
 
 // ---------------- 상태 ----------------
 let S;
-const ui = { month: ym(new Date()), tab: "home", seg: "수입" };
+const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null }; // day: 달력에서 고른 날짜(YYYY-MM-DD)
 
 const liveTx = () => Object.values(S.transactions).filter((t) => !t.deleted);
 const monthTx = () => liveTx().filter((t) => t.date.startsWith(ui.month));
@@ -94,7 +94,8 @@ function render() {
   const view = $("#view");
   if (ui.tab === "home") view.innerHTML = homeView();
   else if (ui.tab === "list") view.innerHTML = listView();
-  else view.innerHTML = `<div class="card"><div class="empty">${ui.tab === "calendar" ? "달력" : "월별"} 화면은 준비 중이에요.</div></div>`;
+  else if (ui.tab === "calendar") view.innerHTML = calendarView();
+  else view.innerHTML = `<div class="card"><div class="empty">월별 화면은 준비 중이에요.</div></div>`;
 }
 
 function homeView() {
@@ -142,21 +143,9 @@ function homeView() {
   </section>`;
 }
 
-function listView() {
-  const tx = monthTx().sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
-  if (!tx.length) return `<div class="card"><div class="empty">이번 달 내역이 없어요.<br>아래 + 버튼으로 추가해 보세요.</div></div>`;
-  const days = {};
-  tx.forEach((t) => (days[t.date] ||= []).push(t));
-  return Object.entries(days)
-    .map(([date, items]) => {
-      const dayInc = sum(items.filter((t) => t.kind === "수입"));
-      const dayExp = sum(items.filter((t) => t.kind === "지출"));
-      const totals = [dayInc && `<span class="inc">${signed(dayInc, "+")}</span>`, dayExp && `<span class="exp">${signed(dayExp, "-")}</span>`]
-        .filter(Boolean).join(" ");
-      return `
-      <section class="card day">
-        <div class="day-head"><span>${dayLabel(date)}</span><span>${totals}</span></div>
-        ${items.map((t) => `
+/** 내역 한 줄 (누르면 수정 창) */
+function txRow(t) {
+  return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
               <div>${esc(t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
@@ -165,7 +154,75 @@ function listView() {
             <span class="amt ${KIND_CLASS[t.kind]}">${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
               : signed(t.amount, KIND_SIGN[t.kind])}</span>
-          </button>`).join("")}
+          </button>`;
+}
+
+/** 하루 수입·지출 합계 (없는 쪽은 생략) */
+function dayTotals(items) {
+  const dayInc = sum(items.filter((t) => t.kind === "수입"));
+  const dayExp = sum(items.filter((t) => t.kind === "지출"));
+  return [dayInc && `<span class="inc">${signed(dayInc, "+")}</span>`, dayExp && `<span class="exp">${signed(dayExp, "-")}</span>`]
+    .filter(Boolean).join(" ");
+}
+
+// 달력 칸 안의 금액은 좁아서 '12.5만'처럼 줄여 쓴다
+const compact = (n) => new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 }).format(Math.round(n));
+
+function calendarView() {
+  const [y, m] = ui.month.split("-").map(Number);
+  const first = new Date(y, m - 1, 1).getDay(); // 1일의 요일 (0=일)
+  const days = new Date(y, m, 0).getDate();
+  const today = todayStr();
+  if (!ui.day || !ui.day.startsWith(ui.month)) ui.day = today.startsWith(ui.month) ? today : null;
+
+  const byDay = {};
+  monthTx().forEach((t) => (byDay[t.date] ||= []).push(t));
+  const tx = monthTx();
+  const monthInc = sum(tx.filter((t) => t.kind === "수입"));
+  const monthExp = sum(tx.filter((t) => t.kind === "지출"));
+
+  const cells = [];
+  for (let i = 0; i < first; i++) cells.push(`<div class="cal-cell blank"></div>`);
+  for (let d = 1; d <= days; d++) {
+    const date = `${ui.month}-${pad(d)}`;
+    const items = byDay[date] || [];
+    const inc = sum(items.filter((t) => t.kind === "수입"));
+    const exp = sum(items.filter((t) => t.kind === "지출"));
+    const dow = (first + d - 1) % 7;
+    cells.push(`
+      <button class="cal-cell${date === ui.day ? " sel" : ""}${date === today ? " today" : ""}${dow === 0 ? " sun" : dow === 6 ? " sat" : ""}" data-day="${date}">
+        <span class="cal-num">${d}</span>
+        ${inc ? `<span class="cal-amt inc">+${compact(inc)}</span>` : ""}
+        ${exp ? `<span class="cal-amt exp">-${compact(exp)}</span>` : ""}
+        ${!inc && !exp && items.length ? `<span class="cal-dot"></span>` : ""}
+      </button>`);
+  }
+
+  const sel = ui.day ? (byDay[ui.day] || []).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : [];
+  return `
+  <section class="card">
+    <div class="card-head"><span>${m}월</span><span class="cal-sum"><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span></span></div>
+    <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
+    <div class="cal-grid">${cells.join("")}</div>
+  </section>
+  ${ui.day ? `
+  <section class="card day">
+    <div class="day-head"><span>${dayLabel(ui.day)}</span><span>${dayTotals(sel)}</span></div>
+    ${sel.length ? sel.map(txRow).join("") : `<div class="empty" style="padding:16px 0">이 날의 내역이 없어요.<br>+ 버튼을 누르면 이 날짜로 추가돼요.</div>`}
+  </section>` : ""}`;
+}
+
+function listView() {
+  const tx = monthTx().sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
+  if (!tx.length) return `<div class="card"><div class="empty">이번 달 내역이 없어요.<br>아래 + 버튼으로 추가해 보세요.</div></div>`;
+  const days = {};
+  tx.forEach((t) => (days[t.date] ||= []).push(t));
+  return Object.entries(days)
+    .map(([date, items]) => {
+      return `
+      <section class="card day">
+        <div class="day-head"><span>${dayLabel(date)}</span><span>${dayTotals(items)}</span></div>
+        ${items.map(txRow).join("")}
       </section>`;
     })
     .join("");
@@ -200,10 +257,10 @@ function bindAmount(input) {
 // 내역 추가/수정
 // 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
 // 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
-function openTxDialog(existing) {
+function openTxDialog(existing, presetDate) {
   const draft = existing
     ? { currency: "KRW", ...existing }
-    : { kind: "지출", expenseType: "변동", date: todayStr(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, memo: "" };
+    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
 
@@ -653,7 +710,7 @@ function bindEvents() {
   $("#prev").onclick = () => { ui.month = shiftMonth(ui.month, -1); render(); };
   $("#next").onclick = () => { ui.month = shiftMonth(ui.month, 1); render(); };
   document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => { ui.tab = b.dataset.tab; render(); }));
-  $("#fab").onclick = () => openTxDialog();
+  $("#fab").onclick = () => openTxDialog(null, ui.tab === "calendar" && ui.day ? ui.day : undefined);
   $("#open-assets").onclick = () => openHoldingsDialog("assets");
   $("#open-debts").onclick = () => openHoldingsDialog("debts");
   $("#open-backup").onclick = openBackupDialog;
@@ -664,6 +721,8 @@ function bindEvents() {
   $("#view").addEventListener("click", (e) => {
     const seg = e.target.closest("[data-seg]");
     if (seg) { ui.seg = seg.dataset.seg; render(); return; }
+    const day = e.target.closest("[data-day]");
+    if (day) { ui.day = day.dataset.day; render(); return; }
     const tx = e.target.closest("[data-tx]");
     if (tx) openTxDialog(S.transactions[tx.dataset.tx]);
   });
