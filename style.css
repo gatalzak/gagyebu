@@ -294,3 +294,6 @@ input[type="date"].input { color-scheme: dark; }
 .tx .memo { font-size: 0.75rem; margin-top: 1px; }
 /* 탭 5개: 폰 폭에 맞게 글자를 조금 줄임 */
 .tabs:not(.sub-tabs) button { font-size: 0.86rem; white-space: nowrap; }
+/* 달력 월 합계: 1줄 수입·지출, 2줄 신용·마통 */
+.card-head.cal-head { align-items: flex-start; }
+.cal-sum { text-align: right; line-height: 1.6; white-space: nowrap; }

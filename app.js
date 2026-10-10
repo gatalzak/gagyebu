@@ -524,7 +524,10 @@ function calendarView() {
   const sel = ui.day ? (byDay[ui.day] || []).sort(txNewestFirst) : [];
   return `
   <section class="card">
-    <div class="card-head"><span>${m}월</span><span class="cal-sum"><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span>${shortDebtTotals(tx) ? ` ${shortDebtTotals(tx)}` : ""}</span></div>
+    <div class="card-head cal-head"><span>${m}월</span><div class="cal-sum">
+      <div><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span></div>
+      ${shortDebtTotals(tx) ? `<div>${shortDebtTotals(tx)}</div>` : ""}
+    </div></div>
     <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
     <div class="cal-grid">${cells.join("")}</div>
   </section>
