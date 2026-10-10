@@ -531,9 +531,9 @@ function txRow(t, { withDate = false } = {}) {
     : outA || inA ? `${outA ? esc(outA.name) : "?"} → ${inA ? esc(inA.name) : "?"}` : "";
   const when = withDate ? `${Number(t.date.slice(5, 7))}/${Number(t.date.slice(8, 10))} ${t.time || ""}`.trim() : t.time;
   const sub = [when, t.party ? esc(t.party) : ""].filter(Boolean).join(" · ");
-  // 시간 아래 줄: 수입=입금 자산, 지출=출금(결제 수단), 자산이동=출금 → 입금
+  // 시간 아래 줄: 수입=입금 자산, 지출=출금 자산(신용카드·마통 등 부채는 '결제'), 자산이동=출금 → 입금
   const linked = d && (d.col === "debts" ? S.debts[d.id] : S.assets[d.id]);
-  const via = linked ? `${t.kind === "수입" ? "입금" : "출금"} ${esc(linked.name)}` : route;
+  const via = linked ? `${t.kind === "수입" ? "입금" : d.col === "debts" ? "결제" : "출금"} ${esc(linked.name)}` : route;
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
@@ -1258,7 +1258,7 @@ function favViaText(f) {
   const name = (key) => { const r = key && parseLinkKey(key); const h = r && S[r.col]?.[r.id]; return h && !h.deleted ? esc(h.name) : ""; };
   if (f.kind === "자산이동") { const a = name(f.fromAsset), b = name(f.toAsset); return a || b ? `${a || "?"} → ${b || "?"}` : ""; }
   const n = name(f.link);
-  return n ? `${f.kind === "수입" ? "입금" : "출금"} ${n}` : "";
+  return n ? `${f.kind === "수입" ? "입금" : parseLinkKey(f.link)?.col === "debts" ? "결제" : "출금"} ${n}` : "";
 }
 
 /** 자주 쓰는 내역 목록: 누르면 onPick, ✕는 onBack(내역 추가 창으로). 편집 아이콘으로 삭제 모드 */
