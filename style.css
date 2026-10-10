@@ -292,7 +292,8 @@ input[type="date"].input { color-scheme: dark; }
 
 /* 내역: 한 줄 (뱃지 → 내용 → 시간·거래처) */
 .tx { align-items: center; }
-.tx .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.tx .badges { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 5px; }
+.tx .cat-badge { font-size: calc(0.8rem + var(--fs-up)); padding: 3px 8px; } /* 내역 줄의 뱃지는 조금 크게 */
 .cat-badge { font-size: calc(0.72rem + var(--fs-up)); line-height: 1.4; padding: 2px 7px; border-radius: 3px; }
 .cat-badge.b-inc { background: #e3f8eb; color: #1b8a4c; }
 .cat-badge.b-exp { background: #ffe8e8; color: #c9302c; }
