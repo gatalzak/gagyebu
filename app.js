@@ -678,8 +678,6 @@ function calendarView() {
   const byDay = {};
   monthTx().forEach((t) => (byDay[t.date] ||= []).push(t));
   const tx = monthTx();
-  const monthInc = sum(tx.filter((t) => t.kind === "수입"));
-  const monthExp = sum(tx.filter(isPlainExpense));
 
   const cells = [];
   for (let i = 0; i < first; i++) cells.push(`<div class="cal-cell blank"></div>`);
@@ -703,10 +701,7 @@ function calendarView() {
   const sel = ui.day ? (byDay[ui.day] || []).sort(txNewestFirst) : [];
   return `
   <section class="card">
-    <div class="card-head cal-head"><span class="month-badge">${m}월</span><div class="cal-sum">
-      <div><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span></div>
-      ${shortDebtTotals(tx)}
-    </div></div>
+    <div class="card-head cal-head"><span class="month-badge">${m}월</span><div class="cal-sum">${monthCols(tx) || `<div class="muted">내역 없음</div>`}</div></div>
     <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
     <div class="cal-grid">${cells.join("")}</div>
   </section>
@@ -718,7 +713,7 @@ function calendarView() {
 }
 
 // 월별: 상단 연도 합계, 아래 달마다 합계와 수입·지출 비교 막대. 달을 누르면 그 달 현황으로 이동.
-/** 월별 합계 두 칸: 왼쪽 수입·지출·Total(수입-지출), 오른쪽 신용·마통 등·부채 증가. 내역이 없으면 "" */
+/** 월별·달력 합계 두 칸: 왼쪽 수입·지출·합계(수입-지출), 오른쪽 신용·마통 등·부채(합). 내역이 없으면 "" */
 function monthCols(items) {
   const inc = sum(items.filter((t) => t.kind === "수입"));
   const exp = sum(items.filter(isPlainExpense));
@@ -726,8 +721,8 @@ function monthCols(items) {
   const left = inc || exp ? `
     <div class="inc">${signed(inc, "+")}</div>
     <div class="exp">${signed(exp, "-")}</div>
-    <div class="mc-total">Total: ${won(inc - exp)}</div>` : "";
-  const right = debt ? `${shortDebtTotals(items)}<div class="mc-total">부채 증가: ${won(debt)}</div>` : "";
+    <div class="mc-total">합계: ${won(inc - exp)}</div>` : "";
+  const right = debt ? `${shortDebtTotals(items)}<div class="mc-total">부채: ${won(debt)}</div>` : "";
   if (!left && !right) return "";
   return `<div class="mc-cols">${left ? `<div>${left}</div>` : ""}${right ? `<div>${right}</div>` : ""}</div>`;
 }
