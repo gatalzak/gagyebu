@@ -428,33 +428,45 @@ function homeView(part = "summary") {
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
   const [selTx, cls, sign] = segs[ui.seg];
   // 카테고리마다 섹션 하나: 머리줄(카테고리·합계, 색 유지) → 구분선 → 하위 카테고리별 금액(회색)
-  const byCat = {};
-  selTx.forEach((t) => {
-    const c = (byCat[t.category] ||= { total: 0, subs: {} });
-    const v = txKRW(t);
-    c.total += v;
-    const sub = t.subcategory || "";
-    c.subs[sub] = (c.subs[sub] || 0) + v;
-  });
-  const catSections = Object.entries(byCat)
-    .sort((a, b) => b[1].total - a[1].total)
-    .map(([c, { total, subs }]) => {
-      const named = Object.entries(subs).filter(([s]) => s).sort((a, b) => b[1] - a[1]);
-      const rest = subs[""] || 0;
-      // 하위 카테고리가 하나도 없으면 하위 줄을 생략, 섞여 있으면 하위 없는 금액을 '미분류'로
-      const rows = named.length ? named.concat(rest ? [["미분류", rest]] : []) : [];
-      // 섹션을 누르면 그 카테고리 내역을 펼친다(다시 누르면 접힘)
-      const key = `${ui.seg}|${c}`;
-      const open = ui.openCat === key;
-      const items = open ? selTx.filter((t) => t.category === c).sort(txNewestFirst) : [];
-      return `
+  const buildCatSections = (list, group = "") => {
+    const byCat = {};
+    list.forEach((t) => {
+      const c = (byCat[t.category] ||= { total: 0, subs: {} });
+      const v = txKRW(t);
+      c.total += v;
+      const sub = t.subcategory || "";
+      c.subs[sub] = (c.subs[sub] || 0) + v;
+    });
+    return Object.entries(byCat)
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([c, { total, subs }]) => {
+        const named = Object.entries(subs).filter(([s]) => s).sort((a, b) => b[1] - a[1]);
+        const rest = subs[""] || 0;
+        // 하위 카테고리가 하나도 없으면 하위 줄을 생략, 섞여 있으면 하위 없는 금액을 '미분류'로
+        const rows = named.length ? named.concat(rest ? [["미분류", rest]] : []) : [];
+        // 섹션을 누르면 그 카테고리 내역을 펼친다(다시 누르면 접힘)
+        const key = `${ui.seg}|${group}|${c}`;
+        const open = ui.openCat === key;
+        const items = open ? list.filter((t) => t.category === c).sort(txNewestFirst) : [];
+        return `
       <section class="asset-group detail-cat${open ? " open" : ""}" data-detail-cat="${esc(key)}">
         <div class="asset-group-head"><span>${esc(c)} <span class="cat-chev">${open ? "⌄" : "›"}</span></span><span class="${cls}">${signed(total, sign)}</span></div>
         ${rows.map(([s, v]) => `<div class="asset-row detail-sub"><span class="name">${esc(s)}</span><span class="amt">${signed(v, sign)}</span></div>`).join("")}
         ${open ? `<div class="detail-items">${items.map((t) => txRow(t, { withDate: true })).join("")}</div>` : ""}
       </section>`;
-    })
-    .join("");
+      })
+      .join("");
+  };
+  // 단기부채는 신용카드 / 마이너스통장으로 나눠서, 각 묶음 제목(뱃지·소계) 아래에 카테고리 섹션
+  const catSections = ui.seg === "단기부채"
+    ? Object.entries(SHORT_DEBT).map(([type, info]) => {
+        const list = selTx.filter((t) => shortDebtType(t) === type);
+        if (!list.length) return "";
+        return `
+      <div class="group-title"><span class="cat-badge b-cred">${info.title.replace(" 사용", "")}</span><span class="cred">${signed(sum(list), "-")}</span></div>
+      ${buildCatSections(list, type)}`;
+      }).join("")
+    : buildCatSections(selTx);
 
   // 자산이동의 하위 항목: 내역의 카테고리별 합계(큰 순서)
   const movByCat = {};

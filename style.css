@@ -324,3 +324,6 @@ input[type="date"].input { color-scheme: dark; }
 .cat-chev { color: var(--muted); font-size: 0.85rem; margin-left: 2px; }
 .detail-items { border-top: 1px solid var(--line); margin-top: 2px; cursor: default; }
 .detail-cat.open .asset-group-head { border-bottom: 1px solid var(--line); }
+/* 현황(상세) 단기부채: 신용카드 / 마이너스통장 묶음 제목 */
+.group-title { display: flex; justify-content: space-between; align-items: center; margin: 18px 2px 0; }
+.group-title .cat-badge { font-size: 0.8rem; }
