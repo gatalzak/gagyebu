@@ -154,7 +154,7 @@ function txRow(t) {
               <div>${esc(t.content || t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
               ${(() => {
                 const toAsset = t.assetDelta && S.assets[t.assetDelta.assetId];
-                const sub = [t.time, t.content && esc(t.category), t.party && esc(t.party), toAsset && `→ ${esc(toAsset.name)}`, t.memo && esc(t.memo)].filter(Boolean).join(" · ");
+                const sub = [t.time, t.content && esc(t.category), t.party && esc(t.party), toAsset && `${t.assetDelta.amount >= 0 ? "입금" : "출금"} ${esc(toAsset.name)}`, t.memo && esc(t.memo)].filter(Boolean).join(" · ");
                 return sub ? `<div class="memo">${sub}</div>` : "";
               })()}
             </div>
@@ -264,7 +264,8 @@ function bindAmount(input) {
 /** 금액칸 단위 표시: 원화는 '원', 외화는 통화 코드 */
 const unitLabel = (cur) => (cur === "KRW" ? "원" : cur);
 
-// ---------------- 수입 → 자산 입금 ----------------
+// ---------------- 수입 → 자산 입금 / 지출 → 자산 출금 ----------------
+const ASSET_LINK = { 수입: { label: "입금 자산", sign: 1, verb: "입금" }, 지출: { label: "출금 자산", sign: -1, verb: "출금" } };
 // 수입을 저장하면 고른 자산 잔액이 늘어난다. 실제로 더한 값(자산 통화 기준)을 내역의 assetDelta에 기록해 두고,
 // 내역을 고치거나 지우면 그 값을 그대로 빼서 되돌린다(그사이 환율이 바뀌어도 정확히 되돌아감).
 
@@ -341,8 +342,8 @@ function openTxDialog(existing, presetDate) {
             <span class="amount-unit">원</span>
           </div>
         </div>
-        ${draft.kind === "수입" ? `
-        <div class="field"><label>입금 자산</label>
+        ${ASSET_LINK[draft.kind] ? `
+        <div class="field"><label>${ASSET_LINK[draft.kind].label}</label>
           <select class="input" name="asset">${assetOptions(draft.assetId)}</select>
           <div class="fx-hint" data-asset-hint></div>
         </div>` : ""}
@@ -399,7 +400,9 @@ function openTxDialog(existing, presetDate) {
       if (!a) { hint.textContent = ""; return; }
       const cur = curOf(a);
       const add = amountInCurrency({ currency: curSel.value, amount: parseMoney(amt.value, curSel.value), krw: parseAmount(krwIn.value) }, cur);
-      hint.textContent = add === null ? "환율 정보가 없어 이 자산에 반영할 수 없어요" : add ? `저장하면 ${a.name} 잔액이 +${formatMoney(roundFor(add, cur), cur)} 늘어나요` : "";
+      hint.textContent = add === null ? "환율 정보가 없어 이 자산에 반영할 수 없어요" : !add ? "" : ASSET_LINK[draft.kind].sign > 0
+        ? `저장하면 ${a.name} 잔액이 +${formatMoney(roundFor(add, cur), cur)} 늘어나요`
+        : `저장하면 ${a.name} 잔액이 -${formatMoney(roundFor(add, cur), cur)} 줄어들어요`;
     };
     if (assetSel) {
       assetSel.onchange = refreshAssetHint;
@@ -435,12 +438,12 @@ function openTxDialog(existing, presetDate) {
         deleted: false,
       };
       let delta = null;
-      if (rec.kind === "수입" && draft.assetId) {
+      if (ASSET_LINK[rec.kind] && draft.assetId) {
         const a = S.assets[draft.assetId];
         if (!a || a.deleted) return toast("선택한 자산을 찾을 수 없어요.");
         const add = amountInCurrency(rec, curOf(a));
         if (add === null) return toast("환율 정보가 없어 자산에 반영할 수 없어요.");
-        delta = { assetId: a.id, amount: roundFor(add, curOf(a)) };
+        delta = { assetId: a.id, amount: ASSET_LINK[rec.kind].sign * roundFor(add, curOf(a)) };
       }
       if (existing?.assetDelta) adjustAsset(existing.assetDelta.assetId, -existing.assetDelta.amount, now);
       if (delta) { adjustAsset(delta.assetId, delta.amount, now); rec.assetDelta = delta; }
@@ -450,7 +453,7 @@ function openTxDialog(existing, presetDate) {
       await commit();
       const target = delta && S.assets[delta.assetId];
       toast(`${rec.kind} ${formatMoney(rec.amount, rec.currency)} ${existing ? "수정" : "추가"}했어요` +
-        (target ? ` · ${target.name} +${formatMoney(delta.amount, curOf(target))}` : ""));
+        (target ? ` · ${target.name} ${delta.amount >= 0 ? "+" : "-"}${formatMoney(Math.abs(delta.amount), curOf(target))}` : ""));
     };
     const del = $p("[data-act=delete]");
     if (del) del.onclick = async () => {
