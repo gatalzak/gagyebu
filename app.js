@@ -277,16 +277,21 @@ function openAssetsDialog() {
     const groups = ASSET_TYPES.filter((t) => assets.some((a) => a.type === t));
     const body = assets.length
       ? `<div class="asset-total"><span class="muted">총 자산</span><span>${won(sum(assets))}</span></div>` +
-        groups.map((t, i) => `
-          ${i ? `<div class="asset-sep"></div>` : ""}
-          <div class="asset-group">${t}</div>
-          ${assets.filter((a) => a.type === t).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((a) => `
+        groups.map((t) => {
+          // 종류별 한 덩어리(섹션). 안쪽 자산은 상자 없이 줄로만 구분한다.
+          const items = assets.filter((a) => a.type === t).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          return `
+          <section class="asset-group">
+            <div class="asset-group-head"><span>${t}</span><span>${won(sum(items))}</span></div>
+            ${items.map((a) => `
             <div class="asset-row">
               <span class="name">${esc(a.name)}</span><span class="amt">${won(a.amount)}</span>
               ${pendingDelete === a.id
                 ? `<button class="link-btn warn" data-del-ok="${a.id}">확인</button><button class="link-btn" data-del-no>취소</button>`
                 : `<button class="link-btn" data-edit="${a.id}">수정</button><button class="link-btn" data-del="${a.id}">삭제</button>`}
-            </div>`).join("")}`).join("")
+            </div>`).join("")}
+          </section>`;
+        }).join("")
       : `<div class="empty">등록된 자산이 없어요.<br>오른쪽 위 '자산 등록'으로 추가해 보세요.</div>`;
     const panel = openModal({
       title: "나의 자산",

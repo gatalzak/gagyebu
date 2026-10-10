@@ -145,10 +145,13 @@ input[type="date"].input { color-scheme: dark; }
 .amount-input { text-align: right; font-size: 1.1rem; }
 
 /* 나의 자산 */
-.asset-group { color: var(--muted); font-size: 0.8rem; margin: 10px 0 6px; }
-.asset-sep { border-top: 1px solid var(--line); margin: 14px 0 4px; }
-.asset-row { display: flex; align-items: center; gap: 8px; background: var(--row); border-radius: 2px; padding: 10px 10px 10px 12px; }
-.asset-row + .asset-row { margin-top: 6px; }
+.asset-group { border: 1px solid var(--line); border-radius: 4px; padding: 4px 14px; margin-top: 10px; }
+.asset-group-head {
+  display: flex; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.asset-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
+.asset-row + .asset-row { border-top: 1px solid var(--line-soft); }
 .asset-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92rem; }
 .asset-row .amt { white-space: nowrap; font-size: 0.92rem; }
 .link-btn { color: var(--muted); font-size: 0.75rem; padding: 2px 3px; }
