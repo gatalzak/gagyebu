@@ -149,7 +149,7 @@ function renameSubcat(id, to, now) {
  * 카테고리 편집 창: 구분별 카테고리 목록 → 카테고리를 누르면 이름·하위 카테고리 편집.
  * 다 끝나면 onClose()로 원래 창(내역 추가)으로 돌아간다.
  */
-function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "변동", onClose = closeModal } = {}) {
+function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "고정", onClose = closeModal } = {}) {
   let kind = startKind;
   let etab = startEtype; // 지출일 때 보고 있는 탭: 고정 | 변동
 
@@ -602,14 +602,14 @@ function adjustHolding(col, id, amount, now) {
 }
 
 /** 선택 목록: 자산(종류별) → 부채(종류별), 현재 잔액을 함께 보여 준다 */
-function holdingOptions(cols, selectedKey) {
+function holdingOptions(cols, selectedKey, { balance = true } = {}) {
   const html = cols.map((col) => {
     const types = HOLDINGS[col].types;
     const items = Object.values(S[col]).filter((a) => !a.deleted).sort(makeOrder(types));
     return types.filter((t) => items.some((a) => a.type === t)).map((t) => `
     <optgroup label="${col === "debts" ? `부채 · ${t}` : t}">${items.filter((a) => a.type === t).map((a) => {
       const key = linkKey(col, a.id);
-      return `<option value="${key}" ${key === selectedKey ? "selected" : ""}>${esc(a.name)} · ${formatMoney(a.amount, a.currency || "KRW")}</option>`;
+      return `<option value="${key}" ${key === selectedKey ? "selected" : ""}>${esc(a.name)}${balance ? ` · ${formatMoney(a.amount, a.currency || "KRW")}` : ""}</option>`;
     }).join("")}
     </optgroup>`).join("");
   }).join("");
@@ -789,7 +789,7 @@ function openTxDialog(existing, presetDate) {
   if (existing?.deltas) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
   const draft = existing
     ? { currency: "KRW", ...existing }
-    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출", "변동")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
+    : { kind: "지출", expenseType: "고정", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출", "고정")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
   if (existing) { const d = deltaRef(existing.assetDelta); draft.link = d ? linkKey(d.col, d.id) : ""; }
@@ -832,7 +832,7 @@ function openTxDialog(existing, presetDate) {
         </div>
         ${ASSET_LINK[draft.kind] ? `
         <div class="field"><label>${ASSET_LINK[draft.kind].label}</label>
-          <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link)}</select>
+          <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
           <div class="fx-hint" data-asset-hint></div>
         </div>` : ""}
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
@@ -920,7 +920,7 @@ function openTxDialog(existing, presetDate) {
     $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draw(); };
     $p("[data-act=edit-cats]").onclick = () => {
       read();
-      openCategoryEditor({ kind: draft.kind, etype: draft.expenseType || "변동", onClose: () => draw() });
+      openCategoryEditor({ kind: draft.kind, etype: draft.expenseType || "고정", onClose: () => draw() });
     };
     $p("[name=subcategory]").onchange = (e) => {
       const adding = e.target.value === "__add__";
