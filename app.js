@@ -101,18 +101,28 @@ function render() {
   else view.innerHTML = `<div class="card"><div class="empty">월별 화면은 준비 중이에요.</div></div>`;
 }
 
+/** 신용카드(부채 종류)로 결제한 지출인지 — 카드가 나중에 지워져도 종류는 남아 있어 그대로 구분된다 */
+function isCardExpense(t) {
+  if (t.kind !== "지출") return false;
+  const d = deltaRef(t.assetDelta);
+  return d?.col === "debts" && S.debts[d.id]?.type === "신용카드";
+}
+
 function homeView() {
   const tx = monthTx();
   const inc = tx.filter((t) => t.kind === "수입");
   const exp = tx.filter((t) => t.kind === "지출");
   const mov = tx.filter((t) => t.kind === "자산이동");
-  const fixed = exp.filter((t) => t.expenseType === "고정");
-  const variable = exp.filter((t) => t.expenseType !== "고정");
+  // 신용카드로 결제한 지출은 고정·변동과 따로 묶는다(합치면 전체 지출)
+  const card = exp.filter(isCardExpense);
+  const fixed = exp.filter((t) => !isCardExpense(t) && t.expenseType === "고정");
+  const variable = exp.filter((t) => !isCardExpense(t) && t.expenseType !== "고정");
 
   const segs = {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
+    신용카드: [card, "exp", "-"],
     자산이동: [mov, "mov", ""],
   };
   const [selTx, cls, sign] = segs[ui.seg];
@@ -131,12 +141,13 @@ function homeView() {
       <div class="row-main"><span>지출</span><span class="exp">${signed(sum(exp), "-")}</span></div>
       <div class="row-sub"><span>└ 고정지출</span><span class="exp">${signed(sum(fixed), "-")}</span></div>
       <div class="row-sub"><span>└ 변동지출</span><span class="exp">${signed(sum(variable), "-")}</span></div>
+      <div class="row-sub"><span>└ 신용카드 지출</span><span class="exp">${signed(sum(card), "-")}</span></div>
     </div>
     <div class="row"><div class="row-main"><span>자산이동</span><span class="mov">${won(sum(mov))}</span></div></div>
   </section>
   <section class="card">
     <div class="card-head plain"><span>상세 현황</span></div>
-    <div class="seg" data-role="detail-seg">
+    <div class="seg seg-5" data-role="detail-seg">
       ${Object.keys(segs).map((s) => `<button data-seg="${s}" class="${s === ui.seg ? "on" : ""}">${s}</button>`).join("")}
     </div>
     <div class="row" style="margin-top:6px">

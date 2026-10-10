@@ -100,6 +100,8 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
   background: var(--row); border: 1px solid #303035; color: var(--muted);
 }
 .seg button.on { background: var(--wine); border-color: var(--wine); color: #fff; }
+.seg.seg-5 { gap: 4px; }
+.seg.seg-5 button { font-size: 0.74rem; padding: 0 2px; white-space: nowrap; }
 
 /* 내역 목록 */
 .day { margin-bottom: 10px; }
