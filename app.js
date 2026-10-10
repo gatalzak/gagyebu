@@ -51,10 +51,6 @@ function shiftMonth(month, step) {
   const [y, m] = month.split("-").map(Number);
   return ym(new Date(y, m - 1 + step, 1));
 }
-function dayLabel(date) {
-  const d = new Date(date + "T00:00:00");
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${"일월화수목금토"[d.getDay()]})`;
-}
 
 let toastTimer;
 function toast(msg) {
@@ -447,19 +443,18 @@ function homeView() {
 
 /** 내역 한 줄 (누르면 수정 창) */
 function txRow(t) {
+  // 뱃지: 카테고리(수입=연한 레드, 지출=연한 블루, 자산이동=연한 옐로우) + 부채로 결제했으면 그 부채 이름(하늘색)
+  const kindBadge = t.kind === "수입" ? "b-inc" : t.kind === "지출" ? "b-exp" : "b-mov";
+  const d = deltaRef(t.assetDelta);
+  const debt = d?.col === "debts" ? S.debts[d.id] : null;
+  const from = t.deltas && S.assets[t.deltas.find((x) => x.col === "assets")?.id];
+  const sub = [t.time, t.party ? esc(t.party) : from ? `${esc(from.name)}에서 상환` : ""].filter(Boolean).join(" · ");
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div>${esc(t.content || catLabel(t))}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
-              ${(() => {
-                const d = deltaRef(t.assetDelta);
-                const linked = d && S[d.col]?.[d.id];
-                const how = d && (d.col === "debts" ? "결제" : d.amount >= 0 ? "입금" : "출금");
-                const from = t.deltas && S.assets[t.deltas.find((x) => x.col === "assets")?.id];
-                const repaid = t.deltas && from ? `${esc(from.name)}에서 상환` : "";
-                const sub = [t.time, t.content && esc(catLabel(t)), t.party && esc(t.party), linked && `${how} ${esc(linked.name)}`, repaid, t.memo && esc(t.memo)].filter(Boolean).join(" · ");
-                return sub ? `<div class="memo">${sub}</div>` : "";
-              })()}
+              <div class="badges"><span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span>${debt ? `<span class="cat-badge b-cred">${esc(debt.name)}</span>` : ""}</div>
+              ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
+              ${sub ? `<div class="memo">${sub}</div>` : ""}
             </div>
             <span class="amt ${isShortDebt(t) ? "cred" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : t.deltas ? "상환 " : ""}${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
@@ -467,13 +462,25 @@ function txRow(t) {
           </button>`;
 }
 
-/** 하루 수입·지출·신용카드 합계 (없는 쪽은 생략) */
-function dayTotals(items) {
-  const dayInc = sum(items.filter((t) => t.kind === "수입"));
-  const dayExp = sum(items.filter(isPlainExpense));
-  return [dayInc && `<span class="inc">${signed(dayInc, "+")}</span>`, dayExp && `<span class="exp">${signed(dayExp, "-")}</span>`,
-    shortDebtTotals(items)].filter(Boolean).join(" ");
+/** 날짜 머리줄: 왼쪽 [일] [요일] [년-월], 오른쪽 1줄 수입·지출 / 2줄 신용·마통 */
+function dayHead(date, items) {
+  const dt = new Date(date + "T00:00:00");
+  const dow = "일월화수목금토"[dt.getDay()];
+  const inc = sum(items.filter((t) => t.kind === "수입"));
+  const exp = sum(items.filter(isPlainExpense));
+  const line1 = [inc && `<span class="inc">${signed(inc, "+")}</span>`, exp && `<span class="exp">${signed(exp, "-")}</span>`].filter(Boolean).join(" ");
+  const line2 = shortDebtTotals(items);
+  return `
+        <div class="day-head2">
+          <div class="dh-left">
+            <span class="dh-day">${dt.getDate()}</span>
+            <span class="dh-dow${dt.getDay() === 0 ? " sun" : dt.getDay() === 6 ? " sat" : ""}">${dow}요일</span>
+            <span class="dh-ym">${date.slice(0, 7)}</span>
+          </div>
+          <div class="dh-right">${line1 ? `<div>${line1}</div>` : ""}${line2 ? `<div>${line2}</div>` : ""}</div>
+        </div>`;
 }
+
 
 // 달력 칸 안의 금액은 좁아서 '12.5만'처럼 줄여 쓴다
 const compact = (n) => new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 }).format(Math.round(n));
@@ -519,7 +526,7 @@ function calendarView() {
   </section>
   ${ui.day ? `
   <section class="card day">
-    <div class="day-head"><span>${dayLabel(ui.day)}</span><span>${dayTotals(sel)}</span></div>
+    ${dayHead(ui.day, sel)}
     ${sel.length ? sel.map(txRow).join("") : `<div class="empty" style="padding:16px 0">이 날의 내역이 없어요.<br>+ 버튼을 누르면 이 날짜로 추가돼요.</div>`}
   </section>` : ""}`;
 }
@@ -533,7 +540,7 @@ function listView() {
     .map(([date, items]) => {
       return `
       <section class="card day">
-        <div class="day-head"><span>${dayLabel(date)}</span><span>${dayTotals(items)}</span></div>
+        ${dayHead(date, items)}
         ${items.map(txRow).join("")}
       </section>`;
     })

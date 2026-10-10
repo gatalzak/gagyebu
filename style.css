@@ -272,3 +272,23 @@ input[type="date"].input { color-scheme: dark; }
 .tabs.sub-tabs { margin: 12px 0 0; }
 .tabs.sub-tabs button { font-size: 0.88rem; padding: 6px 0 8px; }
 .tabs.sub-tabs + .asset-group { margin-top: 10px; }
+
+/* 내역: 날짜 머리줄 */
+.day-head2 { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 0 2px 12px; border-bottom: 1px solid var(--line); }
+.dh-left { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.dh-day { font-size: 1.35rem; line-height: 1; color: #fff; }
+.dh-dow { font-size: 0.75rem; padding: 3px 8px; border-radius: 3px; background: var(--row); border: 1px solid #303035; color: #d0d0d6; }
+.dh-dow.sun { color: #ff8a9b; } .dh-dow.sat { color: #7cc4f5; }
+.dh-ym { font-size: 0.78rem; color: var(--muted); }
+.dh-right { text-align: right; font-size: 0.78rem; line-height: 1.6; white-space: nowrap; }
+
+/* 내역: 한 줄 (뱃지 → 내용 → 시간·거래처) */
+.tx { align-items: center; }
+.tx .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+.cat-badge { font-size: 0.72rem; line-height: 1.4; padding: 2px 7px; border-radius: 3px; }
+.cat-badge.b-inc { background: #ffe9ec; color: #d42a4c; }
+.cat-badge.b-exp { background: #e6f3fd; color: #1c74c4; }
+.cat-badge.b-mov { background: #fff6dc; color: #9a7413; }
+.cat-badge.b-cred { background: #e3f6ff; color: #1590c4; }
+.tx-content { color: #fff; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx .memo { font-size: 0.75rem; margin-top: 1px; }
