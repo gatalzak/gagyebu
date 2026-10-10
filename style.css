@@ -399,3 +399,11 @@ input[type="date"].input { color-scheme: dark; }
 /* 내역 창 자산이동: 출금 자산 ↓ 입금 자산 */
 .flow-arrow { display: flex; justify-content: center; margin: 10px 0 -6px; color: var(--mov); }
 .field.flow-to { margin-top: 0; }
+
+/* 월별: 왼쪽 수입·지출·Total / 오른쪽 신용·마통·부채 증가 */
+.mc-cols { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: flex-end; text-align: right; } /* 금액이 길면 오른쪽 칸이 아래로 내려감 */
+.mc-total { color: #fff; }
+.month-badge { white-space: nowrap; flex: 0 0 auto; }
+.cal-head .mc-cols { gap: 4px 10px; font-size: calc(0.78rem + var(--fs-up)); }
+.cal-head:has(.mc-cols) { gap: 8px; }
+.cal-head:has(.mc-cols) .month-badge { padding: 4px 8px; }

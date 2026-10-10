@@ -717,16 +717,21 @@ function calendarView() {
   </section>` : ""}`;
 }
 
-/** 합계: 1줄 수입·지출, 그 아래 신용·마통 등 단기부채를 한 줄씩 (없는 것은 생략) */
-function totalsTwoLines(items) {
+// 월별: 상단 연도 합계, 아래 달마다 합계와 수입·지출 비교 막대. 달을 누르면 그 달 현황으로 이동.
+/** 월별 합계 두 칸: 왼쪽 수입·지출·Total(수입-지출), 오른쪽 신용·마통 등·부채 증가. 내역이 없으면 "" */
+function monthCols(items) {
   const inc = sum(items.filter((t) => t.kind === "수입"));
   const exp = sum(items.filter(isPlainExpense));
-  const line1 = [inc && `<span class="inc">${signed(inc, "+")}</span>`, exp && `<span class="exp">${signed(exp, "-")}</span>`].filter(Boolean).join(" ");
-  const line2 = shortDebtTotals(items);
-  return `${line1 ? `<div>${line1}</div>` : ""}${line2}`;
+  const debt = sum(items.filter(isShortDebt));
+  const left = inc || exp ? `
+    <div class="inc">${signed(inc, "+")}</div>
+    <div class="exp">${signed(exp, "-")}</div>
+    <div class="mc-total">Total: ${won(inc - exp)}</div>` : "";
+  const right = debt ? `${shortDebtTotals(items)}<div class="mc-total">부채 증가: ${won(debt)}</div>` : "";
+  if (!left && !right) return "";
+  return `<div class="mc-cols">${left ? `<div>${left}</div>` : ""}${right ? `<div>${right}</div>` : ""}</div>`;
 }
 
-// 월별: 상단 연도 합계, 아래 달마다 합계와 수입·지출 비교 막대. 달을 누르면 그 달 현황으로 이동.
 function monthlyView() {
   const year = Number(ui.month.slice(0, 4));
   const now = new Date();
@@ -739,12 +744,12 @@ function monthlyView() {
     months.push({ m, key, items, inc: sum(items.filter((t) => t.kind === "수입")), exp: sum(items.filter(isPlainExpense)) + sum(items.filter(isShortDebt)) });
   }
   const max = Math.max(1, ...months.map((x) => Math.max(x.inc, x.exp)));
-  const yearTotals = totalsTwoLines(yearTx);
+  const yearTotals = monthCols(yearTx);
   return `
   <section class="card">
     <div class="card-head cal-head"><span class="month-badge">${year}년</span><div class="cal-sum">${yearTotals || `<div class="muted">내역 없음</div>`}</div></div>
     ${months.map((x) => {
-      const totals = totalsTwoLines(x.items);
+      const totals = monthCols(x.items);
       return `
       <button class="month-row${x.key === ui.month ? " sel" : ""}" data-month-go="${x.key}">
         <div class="mr-top">
