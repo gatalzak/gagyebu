@@ -300,12 +300,60 @@ function bindMoney(input, getCur, hint) {
   return update;
 }
 
+const GRIP = `<svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="4" r="1.4"/><circle cx="10" cy="4" r="1.4"/><circle cx="4" cy="9" r="1.4"/><circle cx="10" cy="9" r="1.4"/><circle cx="4" cy="14" r="1.4"/><circle cx="10" cy="14" r="1.4"/></svg>`;
+const NO_ORDER = 1e9; // 순서를 정한 적 없는 자산은 뒤로(등록 순)
+
+/** 나의 자산 정렬: 종류 순 → 사용자가 드래그로 정한 순서 → 등록 순 */
+const assetOrder = (a, b) =>
+  ASSET_TYPES.indexOf(a.type) - ASSET_TYPES.indexOf(b.type) ||
+  (a.order ?? NO_ORDER) - (b.order ?? NO_ORDER) ||
+  a.createdAt.localeCompare(b.createdAt);
+
+/**
+ * 손잡이(⋮⋮)를 잡고 끌면 같은 섹션 안에서 위치를 바꾼다.
+ * 터치(안드로이드)에서도 되도록 브라우저 드래그앤드롭 대신 포인터 이벤트로 직접 구현.
+ */
+function enableReorder(panel, onDrop) {
+  const overlay = panel.closest(".overlay");
+  panel.querySelectorAll("[data-handle]").forEach((handle) => {
+    handle.addEventListener("pointerdown", (e) => {
+      const item = handle.closest(".edit-item");
+      const section = item.parentElement;
+      e.preventDefault();
+      handle.setPointerCapture(e.pointerId);
+      item.classList.add("dragging");
+
+      const onMove = (ev) => {
+        // 화면 끝 근처에서는 자동으로 스크롤
+        if (ev.clientY < 70) overlay.scrollTop -= 10;
+        else if (ev.clientY > window.innerHeight - 70) overlay.scrollTop += 10;
+        const others = [...section.querySelectorAll(".edit-item")].filter((x) => x !== item);
+        const before = others.find((x) => {
+          const r = x.getBoundingClientRect();
+          return ev.clientY < r.top + r.height / 2;
+        });
+        if (before) { if (item.nextElementSibling !== before) section.insertBefore(item, before); }
+        else if (others.length && section.lastElementChild !== item) section.appendChild(item);
+      };
+      const onUp = () => {
+        item.classList.remove("dragging");
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        handle.removeEventListener("pointercancel", onUp);
+        onDrop();
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+      handle.addEventListener("pointercancel", onUp);
+    });
+  });
+}
+
 function openAssetsDialog() {
   let mode = null;   // null: 목록 | "add": 등록 | "edit": 전체 편집
   let drafts = null; // 전체 편집 중인 값 [{ id, type, name, currency, amount, del }]
 
-  const sortedAssets = () =>
-    liveAssets().sort((a, b) => ASSET_TYPES.indexOf(a.type) - ASSET_TYPES.indexOf(b.type) || a.createdAt.localeCompare(b.createdAt));
+  const sortedAssets = () => liveAssets().sort(assetOrder);
 
   // 환율을 새로 받으면 목록의 원화 환산을 다시 그린다
   refreshRates().then((updated) => { if (updated && mode === null && $("#modal-root").children.length) draw(); });
@@ -362,6 +410,8 @@ function openAssetsDialog() {
           <div class="asset-group-head"><span class="sector-badge">${t}</span></div>
           ${drafts.filter((d) => S.assets[d.id].type === t).map((d) => `
           <div class="edit-item${d.del ? " removed" : ""}" data-id="${d.id}">
+            <button class="grip" data-handle aria-label="끌어서 순서 바꾸기">${GRIP}</button>
+            <div class="edit-body">
             <div class="edit-line">
               <input class="input sm" name="name" value="${esc(d.name)}" placeholder="이름" ${d.del ? "disabled" : ""}>
               <button class="edit-del" data-toggle-del>${d.del ? "되돌리기" : "삭제"}</button>
@@ -370,6 +420,7 @@ function openAssetsDialog() {
               <select class="input sm type" name="type" ${d.del ? "disabled" : ""}>${ASSET_TYPES.map((x) => `<option ${x === d.type ? "selected" : ""}>${x}</option>`).join("")}</select>
               <select class="input sm cur" name="currency" ${d.del ? "disabled" : ""}>${CURRENCIES.map((c) => `<option ${c === d.currency ? "selected" : ""}>${c}</option>`).join("")}</select>
               <input class="input sm amount-input" name="amount" inputmode="decimal" value="${toInput(d.amount, d.currency)}" placeholder="0" ${d.del ? "disabled" : ""}>
+            </div>
             </div>
           </div>`).join("")}
         </section>`).join("") +
@@ -383,6 +434,11 @@ function openAssetsDialog() {
       d.currency = el.querySelector("[name=currency]").value;
       d.amount = parseMoney(el.querySelector("[name=amount]").value, d.currency);
     });
+    const syncOrder = () => {
+      const ids = [...panel.querySelectorAll(".edit-item")].map((el) => el.dataset.id);
+      drafts.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    };
+    enableReorder(panel, syncOrder);
     panel.querySelectorAll(".edit-item").forEach((el) => {
       const cur = el.querySelector("[name=currency]");
       const amt = el.querySelector("[name=amount]");
@@ -391,6 +447,7 @@ function openAssetsDialog() {
     });
     panel.querySelectorAll("[data-toggle-del]").forEach((b) => (b.onclick = () => {
       read();
+      syncOrder();
       const d = drafts.find((x) => x.id === b.closest(".edit-item").dataset.id);
       d.del = !d.del;
       drawEdit();
@@ -398,16 +455,22 @@ function openAssetsDialog() {
     panel.querySelector("[data-cancel]").onclick = () => { mode = null; drafts = null; draw(); };
     panel.querySelector("[data-save]").onclick = async () => {
       read();
+      syncOrder();
       if (drafts.some((d) => !d.del && !d.name.trim())) return toast("이름이 빈 자산이 있어요.");
       const now = nowISO();
       let changed = 0;
+      const pos = {}; // 섹션(원래 종류)별 순번
       for (const d of drafts) {
         const a = S.assets[d.id];
         if (d.del) {
           S.assets[d.id] = { ...a, deleted: true, updatedAt: now };
           changed++;
-        } else if (a.type !== d.type || a.name !== d.name.trim() || curOf(a) !== d.currency || a.amount !== d.amount) {
-          S.assets[d.id] = { ...a, type: d.type, name: d.name.trim(), currency: d.currency, amount: d.amount, updatedAt: now };
+          continue;
+        }
+        const i = (pos[a.type] = (pos[a.type] ?? -1) + 1);
+        const order = d.type === a.type ? i : 10000 + i; // 종류를 옮긴 자산은 새 섹션의 맨 뒤로
+        if (a.type !== d.type || a.name !== d.name.trim() || curOf(a) !== d.currency || a.amount !== d.amount || a.order !== order) {
+          S.assets[d.id] = { ...a, type: d.type, name: d.name.trim(), currency: d.currency, amount: d.amount, order, updatedAt: now };
           changed++;
         }
       }
@@ -445,9 +508,12 @@ function openAssetsDialog() {
       const name = panel.querySelector("[name=name]").value.trim();
       if (!name) return toast("이름을 입력해 주세요.");
       const now = nowISO();
+      const type = panel.querySelector("[name=type]").value;
+      const last = Math.max(-1, ...liveAssets().filter((a) => a.type === type && a.order != null && a.order < NO_ORDER).map((a) => a.order));
       const rec = {
         id: uid(),
-        type: panel.querySelector("[name=type]").value,
+        type,
+        order: last + 1,
         name,
         currency: cur.value,
         amount: parseMoney(amt.value, cur.value),

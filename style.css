@@ -161,13 +161,18 @@ input[type="date"].input { color-scheme: dark; }
 .icon-only { color: #c8c8ce; display: flex; align-items: center; padding: 4px; }
 
 /* 자산 전체 편집 */
-.edit-item { padding: 12px 0; }
+.edit-item { padding: 12px 0; display: flex; align-items: center; gap: 4px; background: var(--card); }
+.edit-body { flex: 1; min-width: 0; }
+.grip { flex: 0 0 22px; align-self: stretch; display: flex; align-items: center; justify-content: center;
+  color: var(--muted); touch-action: none; cursor: grab; margin-left: -6px; }
+.edit-item.dragging { background: var(--row); border-radius: 3px; outline: 1px solid var(--line); }
+.edit-item.dragging .grip { color: var(--sector); cursor: grabbing; }
 .edit-item + .edit-item { border-top: 1px solid var(--line-soft); }
 .edit-line { display: flex; gap: 6px; align-items: center; }
 .edit-line + .edit-line { margin-top: 6px; }
 .input.sm { height: 38px; font-size: 0.9rem; padding: 0 10px; }
 .input.sm.cur { flex: 0 0 76px; background-position: calc(100% - 14px) 16px, calc(100% - 9px) 16px; padding-right: 20px; }
-.input.sm.type { flex: 0 0 88px; background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px; }
+.input.sm.type { flex: 0 0 80px; background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px; }
 .edit-line .input.sm:not(.type):not(.cur) { flex: 1; min-width: 0; }
 .edit-del { flex: 0 0 auto; color: var(--muted); font-size: 0.8rem; padding: 0 4px 0 6px; white-space: nowrap; }
 .edit-item.removed .input { opacity: 0.35; text-decoration: line-through; }
