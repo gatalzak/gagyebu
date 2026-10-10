@@ -159,6 +159,8 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
   background: #3a1d24; border: 1px solid #5e2a35; color: #ffc9d2;
   border-radius: 3px; font-size: 0.78rem; padding: 6px 10px; line-height: 1;
 }
+.panel.theme-debts .head-actions { gap: 6px; }
+.panel.theme-debts .head-actions .red-btn { padding: 6px 8px; white-space: nowrap; }
 .green-btn {
   background: var(--green-bg); border: 1px solid var(--green-line); color: var(--green-text);
   border-radius: 3px; font-size: 0.78rem; padding: 6px 10px; line-height: 1;
