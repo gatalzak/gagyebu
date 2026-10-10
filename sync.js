@@ -9,7 +9,9 @@ const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const FILE_NAME = "클로드가계부_동기화.json";
 const TOKEN_KEY = "gdrive_token";        // { token, exp }
 const CONNECTED_KEY = "gdrive_connected"; // '1'이면 자동 동기화
-const SILENT_KEY = "gdrive_silent_at";    // 조용한 재로그인 시도 시각 (반복 방지)
+const SILENT_KEY = "gdrive_silent_at";    // 조용한 재로그인 시도 시각
+const FAIL_KEY = "gdrive_silent_fail";    // 조용한 재로그인이 실패한 시각 (실패했을 때만 잠시 쉰다)
+const EMAIL_KEY = "gdrive_email";         // 연결한 구글 계정 (계정이 여러 개여도 자동으로 그 계정을 고르게)
 
 /** status: off | syncing | ok | offline | need-login | error */
 export const sync = { status: "off", error: null, onChange: () => {} };
@@ -31,12 +33,16 @@ function set(status) {
 export const isConfigured = () => !!GOOGLE_CLIENT_ID;
 export const isConnected = () => store(CONNECTED_KEY) === "1";
 
-function token() {
+function tokenInfo() {
   try {
-    const t = JSON.parse(store(TOKEN_KEY));
-    if (t && t.exp > Date.now() + 60_000) return t.token;
-  } catch {}
-  return null;
+    return JSON.parse(store(TOKEN_KEY));
+  } catch {
+    return null;
+  }
+}
+function token() {
+  const t = tokenInfo();
+  return t && t.exp > Date.now() + 60_000 ? t.token : null;
 }
 
 function authorize(prompt) {
@@ -49,13 +55,20 @@ function authorize(prompt) {
     prompt,
     state: "gdrive",
   });
+  const email = store(EMAIL_KEY);
+  if (email) params.set("login_hint", email); // 계정 선택 화면 없이 바로 그 계정으로
   location.assign("https://accounts.google.com/o/oauth2/v2/auth?" + params);
 }
 
-export const connect = () => authorize("select_account consent");
+export function connect() {
+  store(FAIL_KEY, null);
+  store(EMAIL_KEY, null); // 다른 계정을 고를 수 있게
+  authorize("select_account consent");
+}
 export function disconnect() {
   store(TOKEN_KEY, null);
   store(CONNECTED_KEY, null);
+  store(EMAIL_KEY, null);
   set("off");
 }
 
@@ -68,21 +81,28 @@ export function handleRedirect() {
     const exp = Date.now() + Number(h.get("expires_in") || 3600) * 1000;
     store(TOKEN_KEY, JSON.stringify({ token: h.get("access_token"), exp }));
     store(CONNECTED_KEY, "1");
+    store(FAIL_KEY, null);
     return true;
   }
   if (h.get("error")) {
     sync.error = h.get("error");
+    store(FAIL_KEY, String(Date.now()));
     if (isConnected()) set("need-login");
   }
   return false;
 }
 
-/** 연결돼 있는데 토큰(1시간짜리)이 만료됐으면 화면 전환으로 조용히 새 토큰을 받는다. 10분에 한 번만 시도. */
-export function refreshIfNeeded() {
-  if (!isConfigured() || !isConnected() || token() || !navigator.onLine) return false;
-  const last = Number(store(SILENT_KEY) || 0);
-  if (Date.now() - last < 10 * 60_000) {
-    set("need-login");
+/**
+ * 구글 토큰은 1시간짜리라, 만료됐거나 marginMs 안에 만료될 예정이면 화면 전환으로 조용히 새 토큰을 받는다.
+ * (구글에 로그인돼 있으면 화면이 잠깐 깜빡이고 돌아온다. 데이터는 이미 기기에 저장돼 있어 사라지지 않는다.)
+ * 조용한 재로그인이 실패했을 때만 30분 동안 다시 시도하지 않는다(무한 반복 방지).
+ */
+export function refreshIfNeeded(marginMs = 60_000) {
+  if (!isConfigured() || !isConnected() || !navigator.onLine) return false;
+  const t = tokenInfo();
+  if (t && t.exp > Date.now() + marginMs) return false;
+  if (Date.now() - Number(store(FAIL_KEY) || 0) < 30 * 60_000) {
+    if (!token()) set("need-login");
     return false;
   }
   store(SILENT_KEY, String(Date.now()));
@@ -178,6 +198,13 @@ export function syncNow(state) {
       }
       state.meta.driveFileId = id;
       state.meta.lastSync = new Date().toISOString();
+      if (!store(EMAIL_KEY)) {
+        // 다음 조용한 재로그인 때 계정을 자동으로 고르도록 연결된 계정 주소를 기억
+        try {
+          const about = await (await api("/drive/v3/about?fields=user(emailAddress)")).json();
+          if (about.user?.emailAddress) store(EMAIL_KEY, about.user.emailAddress);
+        } catch {}
+      }
       await saveState(state);
       sync.error = null;
       set("ok");

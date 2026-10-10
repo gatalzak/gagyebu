@@ -1119,7 +1119,15 @@ function bindEvents() {
   $("#open-debts").onclick = () => openHoldingsDialog("debts");
   $("#open-backup").onclick = openBackupDialog;
   $("#sync-bar").onclick = () => (sync.status === "need-login" ? connect() : runSync());
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") runSync(); });
+  // 앱으로 돌아왔을 때: 토큰이 끝났으면(창이 열려 있지 않을 때) 조용히 재로그인, 아니면 바로 동기화
+  const idle = () => document.visibilityState === "visible" && !$("#modal-root").children.length;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (idle() && refreshIfNeeded()) return;
+    runSync();
+  });
+  // 켜 둔 채로 쓰는 동안: 토큰이 5분 안에 끝나면 미리 새로 받는다(입력 창이 열려 있을 땐 기다림)
+  setInterval(() => { if (idle()) refreshIfNeeded(5 * 60_000); }, 60_000);
   window.addEventListener("online", () => runSync());
   window.addEventListener("offline", () => { sync.status = "offline"; renderSyncBar(); });
   $("#view").addEventListener("click", (e) => {
