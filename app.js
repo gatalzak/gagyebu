@@ -26,7 +26,18 @@ const DEFAULT_SUBCATS = {
   수입: { 월급: ["기본급", "상여금"], 부수입: ["중고거래", "프리랜스"] },
 };
 const ASSET_TYPES = ["현금", "은행", "증권", "부동산", "가상자산", "상품권", "기타"];
-const DEBT_TYPES = ["신용카드", "대출", "마이너스통장", "할부", "미납금", "개인(지인)", "기타"];
+const DEBT_TYPES = ["신용카드", "대출", "마이너스통장", "할부", "미납금", "지인에게 빌린 돈", "기타"];
+const OLD_DEBT_TYPE = { "개인(지인)": "지인에게 빌린 돈" }; // 예전 종류 이름 → 지금 이름
+const debtType = (d) => OLD_DEBT_TYPE[d?.type] || d?.type;
+/** 예전 종류 이름으로 저장된 부채를 지금 이름으로 바꾼다 */
+function migrateDebtTypes() {
+  let n = 0;
+  const now = nowISO();
+  for (const d of Object.values(S.debts)) {
+    if (!d.deleted && OLD_DEBT_TYPE[d.type]) { S.debts[d.id] = { ...d, type: OLD_DEBT_TYPE[d.type], updatedAt: now }; n++; }
+  }
+  return n;
+}
 const KIND_CLASS = { 수입: "inc", 지출: "exp", 자산이동: "mov" };
 const KIND_SIGN = { 수입: "+", 지출: "-", 자산이동: "" };
 
@@ -372,14 +383,20 @@ function render() {
 }
 
 /** 단기부채로 잡는 결제 수단(부채 종류)과 화면 표시 글자 */
-const SHORT_DEBT = { 신용카드: { short: "신용", title: "신용카드 사용" }, 마이너스통장: { short: "마통", title: "마이너스통장 사용" } };
+const SHORT_DEBT = {
+  신용카드: { short: "신용", title: "신용카드 사용", label: "신용카드" },
+  마이너스통장: { short: "마통", title: "마이너스통장 사용", label: "마이너스통장" },
+  미납금: { short: "미납", title: "미납금", label: "미납금" },
+  "지인에게 빌린 돈": { short: "지인", title: "지인에게 빌린 돈", label: "지인에게 빌린 돈" },
+  기타: { short: "기타부채", title: "기타", label: "기타 부채" },
+};
 
-/** 신용카드·마이너스통장으로 결제한 지출이면 그 부채 종류, 아니면 null.
+/** 단기부채(신용카드·마이너스통장·미납금·지인에게 빌린 돈·기타)로 결제한 지출이면 그 부채 종류, 아니면 null.
  *  부채가 나중에 지워져도 기록(삭제 표시)은 남아 있어 종류로 계속 구분된다. */
 function shortDebtType(t) {
   if (t.kind !== "지출") return null;
   const d = deltaRef(t.assetDelta);
-  const type = d?.col === "debts" ? S.debts[d.id]?.type : null;
+  const type = d?.col === "debts" ? debtType(S.debts[d.id]) : null;
   return SHORT_DEBT[type] ? type : null;
 }
 const isShortDebt = (t) => !!shortDebtType(t);
@@ -409,6 +426,7 @@ function homeView(part = "summary") {
   // 부채(단기) 섹션: 종류별 줄 + 그 아래 항목(카드·통장)별 사용액
   const shortDebtRows = Object.entries(SHORT_DEBT).map(([type, info]) => {
     const items = shortDebt.filter((t) => shortDebtType(t) === type);
+    if (!sum(items)) return ""; // 0원인 종류는 생략
     const byDebt = {};
     items.forEach((t) => { const id = deltaRef(t.assetDelta).id; byDebt[id] = (byDebt[id] || 0) + txKRW(t); });
     const subs = Object.entries(byDebt)
@@ -467,7 +485,7 @@ function homeView(part = "summary") {
         const list = selTx.filter((t) => shortDebtType(t) === type);
         if (!list.length) return "";
         return `
-      <div class="group-title"><span class="cat-badge b-cred">${info.title.replace(" 사용", "")}</span></div>
+      <div class="group-title"><span class="cat-badge b-cred">${info.label}</span></div>
       ${buildCatSections(list, type)}`;
       }).join("")
     : buildCatSections(selTx);
@@ -509,7 +527,7 @@ function homeView(part = "summary") {
       <div class="tb-main"><span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
       ${ui.seg === "단기부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
-        return `<div class="tb-sub"><span>└ ${info.title.replace(" 사용", "")}</span><span>${signed(v, "-")}</span></div>`;
+        return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${signed(v, "-")}</span></div>` : "";
       }).join("") : ""}
     </div>
     ${catSections || `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
@@ -537,7 +555,7 @@ function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debt.type || debt.name)}</span>` : ""}<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span></div>
+              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span></div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo">${via}</div>` : ""}
@@ -1808,7 +1826,7 @@ async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
-  if (seedCats() + retireOldCats() + seedSubcats()) await saveState(S);
+  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes()) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();
