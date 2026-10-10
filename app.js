@@ -101,14 +101,28 @@ function render() {
   else view.innerHTML = `<div class="card"><div class="empty">월별 화면은 준비 중이에요.</div></div>`;
 }
 
-/** 지출(신용카드 제외) */
-const isPlainExpense = (t) => t.kind === "지출" && !isCardExpense(t);
+/** 단기부채로 잡는 결제 수단(부채 종류)과 화면 표시 글자 */
+const SHORT_DEBT = { 신용카드: { short: "신용", title: "신용카드 사용" }, 마이너스통장: { short: "마통", title: "마이너스통장 사용" } };
 
-/** 신용카드(부채 종류)로 결제한 지출인지 — 카드가 나중에 지워져도 종류는 남아 있어 그대로 구분된다 */
-function isCardExpense(t) {
-  if (t.kind !== "지출") return false;
+/** 신용카드·마이너스통장으로 결제한 지출이면 그 부채 종류, 아니면 null.
+ *  부채가 나중에 지워져도 기록(삭제 표시)은 남아 있어 종류로 계속 구분된다. */
+function shortDebtType(t) {
+  if (t.kind !== "지출") return null;
   const d = deltaRef(t.assetDelta);
-  return d?.col === "debts" && S.debts[d.id]?.type === "신용카드";
+  const type = d?.col === "debts" ? S.debts[d.id]?.type : null;
+  return SHORT_DEBT[type] ? type : null;
+}
+const isShortDebt = (t) => !!shortDebtType(t);
+
+/** 지출(신용카드·마이너스통장 사용 제외) */
+const isPlainExpense = (t) => t.kind === "지출" && !isShortDebt(t);
+
+/** 단기부채 종류별 합계를 '신용 -1,000원 마통 -2,000원' 형태로 */
+function shortDebtTotals(items) {
+  return Object.keys(SHORT_DEBT).map((type) => {
+    const v = sum(items.filter((t) => shortDebtType(t) === type));
+    return v ? `<span class="cred">${SHORT_DEBT[type].short} ${signed(v, "-")}</span>` : "";
+  }).filter(Boolean).join(" ");
 }
 
 function homeView() {
@@ -116,26 +130,35 @@ function homeView() {
   const inc = tx.filter((t) => t.kind === "수입");
   const exp = tx.filter((t) => t.kind === "지출");
   const mov = tx.filter((t) => t.kind === "자산이동");
-  // 신용카드로 결제한 지출은 고정·변동과 따로 묶는다(합치면 전체 지출)
-  const card = exp.filter(isCardExpense);
-  const fixed = exp.filter((t) => !isCardExpense(t) && t.expenseType === "고정");
-  const variable = exp.filter((t) => !isCardExpense(t) && t.expenseType !== "고정");
+  // 신용카드·마이너스통장으로 결제한 지출은 단기부채로 따로 묶고, 지출(고정·변동)에서는 뺀다
+  const shortDebt = exp.filter(isShortDebt);
+  const fixed = exp.filter((t) => isPlainExpense(t) && t.expenseType === "고정");
+  const variable = exp.filter((t) => isPlainExpense(t) && t.expenseType !== "고정");
 
-  // 카드별 사용액 (신용카드 사용 섹션의 하위 줄)
-  const byCard = {};
-  card.forEach((t) => { const id = deltaRef(t.assetDelta).id; byCard[id] = (byCard[id] || 0) + txKRW(t); });
-  const cardRows = Object.entries(byCard)
-    .sort((a, b) => b[1] - a[1])
-    .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || "신용카드")}</span><span class="cred">${signed(v, "-")}</span></div>`)
-    .join("");
+  // 부채(단기) 섹션: 종류별 줄 + 그 아래 항목(카드·통장)별 사용액
+  const shortDebtRows = Object.entries(SHORT_DEBT).map(([type, info]) => {
+    const items = shortDebt.filter((t) => shortDebtType(t) === type);
+    const byDebt = {};
+    items.forEach((t) => { const id = deltaRef(t.assetDelta).id; byDebt[id] = (byDebt[id] || 0) + txKRW(t); });
+    const subs = Object.entries(byDebt)
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || type)}</span><span class="cred">${signed(v, "-")}</span></div>`)
+      .join("");
+    return `
+    <div class="row">
+      <div class="row-main"><span>${info.title}</span><span class="cred">${signed(sum(items), "-")}</span></div>
+      ${subs}
+    </div>`;
+  }).join("");
 
   const segs = {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
-    신용카드: [card, "cred", "-"],
+    단기부채: [shortDebt, "cred", "-"],
     자산이동: [mov, "mov", ""],
   };
+  if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
   const [selTx, cls, sign] = segs[ui.seg];
   const byCat = {};
   selTx.forEach((t) => (byCat[t.category] = (byCat[t.category] || 0) + txKRW(t)));
@@ -153,11 +176,11 @@ function homeView() {
       <div class="row-sub"><span>└ 고정지출</span><span class="exp">${signed(sum(fixed), "-")}</span></div>
       <div class="row-sub"><span>└ 변동지출</span><span class="exp">${signed(sum(variable), "-")}</span></div>
     </div>
-    <div class="row">
-      <div class="row-main"><span>신용카드 사용</span><span class="cred">${signed(sum(card), "-")}</span></div>
-      ${cardRows}
-    </div>
     <div class="row"><div class="row-main"><span>자산이동</span><span class="mov">${won(sum(mov))}</span></div></div>
+  </section>
+  <section class="card">
+    <div class="card-head"><span>부채(단기)</span><span class="cred">${signed(sum(shortDebt), "-")}</span></div>
+    ${shortDebtRows}
   </section>
   <section class="card">
     <div class="card-head plain"><span>상세 현황</span></div>
@@ -185,7 +208,7 @@ function txRow(t) {
                 return sub ? `<div class="memo">${sub}</div>` : "";
               })()}
             </div>
-            <span class="amt ${isCardExpense(t) ? "cred" : KIND_CLASS[t.kind]}">${isCardExpense(t) ? "신용 " : ""}${t.currency && t.currency !== "KRW"
+            <span class="amt ${isShortDebt(t) ? "cred" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : ""}${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
               : signed(t.amount, KIND_SIGN[t.kind])}</span>
           </button>`;
@@ -195,9 +218,8 @@ function txRow(t) {
 function dayTotals(items) {
   const dayInc = sum(items.filter((t) => t.kind === "수입"));
   const dayExp = sum(items.filter(isPlainExpense));
-  const dayCred = sum(items.filter(isCardExpense));
   return [dayInc && `<span class="inc">${signed(dayInc, "+")}</span>`, dayExp && `<span class="exp">${signed(dayExp, "-")}</span>`,
-    dayCred && `<span class="cred">신용 ${signed(dayCred, "-")}</span>`].filter(Boolean).join(" ");
+    shortDebtTotals(items)].filter(Boolean).join(" ");
 }
 
 // 달력 칸 안의 금액은 좁아서 '12.5만'처럼 줄여 쓴다
@@ -215,7 +237,6 @@ function calendarView() {
   const tx = monthTx();
   const monthInc = sum(tx.filter((t) => t.kind === "수입"));
   const monthExp = sum(tx.filter(isPlainExpense));
-  const monthCred = sum(tx.filter(isCardExpense));
 
   const cells = [];
   for (let i = 0; i < first; i++) cells.push(`<div class="cal-cell blank"></div>`);
@@ -224,7 +245,7 @@ function calendarView() {
     const items = byDay[date] || [];
     const inc = sum(items.filter((t) => t.kind === "수입"));
     const exp = sum(items.filter(isPlainExpense));
-    const cred = sum(items.filter(isCardExpense));
+    const cred = sum(items.filter(isShortDebt));
     const dow = (first + d - 1) % 7;
     cells.push(`
       <button class="cal-cell${date === ui.day ? " sel" : ""}${date === today ? " today" : ""}${dow === 0 ? " sun" : dow === 6 ? " sat" : ""}" data-day="${date}">
@@ -239,7 +260,7 @@ function calendarView() {
   const sel = ui.day ? (byDay[ui.day] || []).sort(txNewestFirst) : [];
   return `
   <section class="card">
-    <div class="card-head"><span>${m}월</span><span class="cal-sum"><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span>${monthCred ? ` <span class="cred">신용 ${signed(monthCred, "-")}</span>` : ""}</span></div>
+    <div class="card-head"><span>${m}월</span><span class="cal-sum"><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span>${shortDebtTotals(tx) ? ` ${shortDebtTotals(tx)}` : ""}</span></div>
     <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
     <div class="cal-grid">${cells.join("")}</div>
   </section>
