@@ -297,3 +297,5 @@ input[type="date"].input { color-scheme: dark; }
 /* 달력 월 합계: 1줄 수입·지출, 2줄 신용·마통 */
 .card-head.cal-head { align-items: flex-start; }
 .cal-sum { text-align: right; line-height: 1.6; white-space: nowrap; }
+/* 달력 '10월' 상자 표시 (내역의 요일 뱃지와 같은 계열) */
+.month-badge { display: inline-block; padding: 4px 12px; border-radius: 3px; background: var(--row); border: 1px solid #3a3a40; color: #fff; font-size: 1rem; line-height: 1.4; }

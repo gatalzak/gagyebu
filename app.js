@@ -524,7 +524,7 @@ function calendarView() {
   const sel = ui.day ? (byDay[ui.day] || []).sort(txNewestFirst) : [];
   return `
   <section class="card">
-    <div class="card-head cal-head"><span>${m}월</span><div class="cal-sum">
+    <div class="card-head cal-head"><span class="month-badge">${m}월</span><div class="cal-sum">
       <div><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span></div>
       ${shortDebtTotals(tx) ? `<div>${shortDebtTotals(tx)}</div>` : ""}
     </div></div>
