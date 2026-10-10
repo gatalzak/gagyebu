@@ -474,6 +474,9 @@ function shortDebtType(t) {
 }
 const isShortDebt = (t) => !!shortDebtType(t);
 
+/** 금액 앞 부호: 수입 +, 지출 -, 자산이동·단기 부채(신용·마통 등)는 없음 */
+const txSign = (t) => (isShortDebt(t) ? "" : KIND_SIGN[t.kind]);
+
 /** 지출(신용카드·마이너스통장 사용 제외) */
 const isPlainExpense = (t) => t.kind === "지출" && !isShortDebt(t);
 
@@ -481,7 +484,7 @@ const isPlainExpense = (t) => t.kind === "지출" && !isShortDebt(t);
 function shortDebtTotals(items) {
   return Object.keys(SHORT_DEBT).map((type) => {
     const v = sum(items.filter((t) => shortDebtType(t) === type));
-    return v ? `<div><span class="cred">${SHORT_DEBT[type].short} ${signed(v, "-")}</span></div>` : "";
+    return v ? `<div><span class="cred">${SHORT_DEBT[type].short} ${won(v)}</span></div>` : "";
   }).join("");
 }
 
@@ -515,11 +518,11 @@ function homeView(part = "summary") {
     items.forEach((t) => { const id = deltaRef(t.assetDelta).id; byDebt[id] = (byDebt[id] || 0) + txKRW(t); });
     const subs = Object.entries(byDebt)
       .sort((a, b) => b[1] - a[1])
-      .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || type)}</span><span>${signed(v, "-")}</span></div>`)
+      .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || type)}</span><span>${won(v)}</span></div>`)
       .join("");
     return `
     <div class="row">
-      <div class="row-main"><span>${info.title}</span><span class="cred">${signed(sum(items), "-")}</span></div>
+      <div class="row-main"><span>${info.title}</span><span class="cred">${won(sum(items))}</span></div>
       ${subs}
     </div>`;
   }).join("");
@@ -528,7 +531,7 @@ function homeView(part = "summary") {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
-    "단기 부채": [shortDebt, "cred", "-"],
+    "단기 부채": [shortDebt, "cred", ""], // 단기 부채는 부호 없이(갚아야 할 돈)
     자산이동: [mov, "mov", ""],
   };
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
@@ -595,7 +598,7 @@ function homeView(part = "summary") {
     </div>
   </section>
   <section class="card">
-    <div class="card-head">${homeLabel("단기부채", "단기 부채", "cred")}<span class="cred">${signed(sum(shortDebt), "-")}</span></div>
+    <div class="card-head">${homeLabel("단기부채", "단기 부채", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
     ${shortDebtRows}
   </section>`;
   if (part === "summary") return summary;
@@ -609,7 +612,7 @@ function homeView(part = "summary") {
       <div class="tb-main"><span class="home-label"><span class="${cls}">${SUM_ICON}</span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
       ${ui.seg === "단기 부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
-        return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${signed(v, "-")}</span></div>` : "";
+        return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${won(v)}</span></div>` : "";
       }).join("") : ""}
       ${ui.seg === "자산이동" ? routeTotals(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
     </div>
@@ -640,8 +643,8 @@ function txRow(t, { withDate = false } = {}) {
               ${via ? `<div class="memo${t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
             </div>
             <span class="amt ${isShortDebt(t) ? "cred" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : ""}${t.currency && t.currency !== "KRW"
-              ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
-              : signed(t.amount, KIND_SIGN[t.kind])}</span>
+              ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
+              : signed(t.amount, txSign(t))}</span>
           </button>`;
 }
 
@@ -693,7 +696,7 @@ function calendarView() {
         <span class="cal-num">${d}</span>
         ${inc ? `<span class="cal-amt inc">+${compact(inc)}</span>` : ""}
         ${exp ? `<span class="cal-amt exp">-${compact(exp)}</span>` : ""}
-        ${cred ? `<span class="cal-amt cred">-${compact(cred)}</span>` : ""}
+        ${cred ? `<span class="cal-amt cred">${compact(cred)}</span>` : ""}
         ${!inc && !exp && !cred && items.length ? `<span class="cal-dot"></span>` : ""}
       </button>`);
   }
@@ -1398,7 +1401,7 @@ function openFavorites({ onPick, onBack }) {
               ${f.content ? `<div class="tx-content">${esc(f.content)}</div>` : ""}
               ${[f.party ? esc(f.party) : "", via].filter(Boolean).map((x) => `<div class="memo">${x}</div>`).join("")}
             </div>
-            <span class="amt ${sd ? "cred" : KIND_CLASS[f.kind]}">${sd ? SHORT_DEBT[sd].short + " " : ""}${f.currency && f.currency !== "KRW" ? `${KIND_SIGN[f.kind]}${formatMoney(f.amount, f.currency)}` : signed(f.amount, KIND_SIGN[f.kind])}</span>
+            <span class="amt ${sd ? "cred" : KIND_CLASS[f.kind]}">${sd ? SHORT_DEBT[sd].short + " " : ""}${f.currency && f.currency !== "KRW" ? `${sd ? "" : KIND_SIGN[f.kind]}${formatMoney(f.amount, f.currency)}` : signed(f.amount, sd ? "" : KIND_SIGN[f.kind])}</span>
           </button>
           ${editing ? `<button class="btn danger fav-del" data-del="${f.id}">삭제</button>` : ""}
         </div>`;
