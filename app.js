@@ -434,6 +434,14 @@ function homeView(part = "summary") {
     .map(([c, v]) => `<div class="row-sub" style="padding:6px 4px 0"><span>${esc(c)}</span><span class="${cls}">${signed(v, sign)}</span></div>`)
     .join("");
 
+  // 자산이동의 하위 항목: 내역의 카테고리별 합계(큰 순서)
+  const movByCat = {};
+  mov.forEach((t) => (movByCat[t.category] = (movByCat[t.category] || 0) + txKRW(t)));
+  const movRows = Object.entries(movByCat)
+    .sort((a, b) => b[1] - a[1])
+    .map(([c, v]) => `<div class="row-sub"><span>└ ${esc(c)}</span><span>${won(v)}</span></div>`)
+    .join("");
+
   const summary = `
   <section class="card">
     <div class="card-head"><span>이번달 현재</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
@@ -443,7 +451,10 @@ function homeView(part = "summary") {
       <div class="row-sub"><span>└ 고정지출</span><span>${signed(sum(fixed), "-")}</span></div>
       <div class="row-sub"><span>└ 변동지출</span><span>${signed(sum(variable), "-")}</span></div>
     </div>
-    <div class="row"><div class="row-main"><span>자산이동</span><span class="mov">${won(sum(mov))}</span></div></div>
+    <div class="row">
+      <div class="row-main"><span>자산이동</span><span class="mov">${won(sum(mov))}</span></div>
+      ${movRows}
+    </div>
   </section>
   <section class="card">
     <div class="card-head"><span>부채(단기)</span><span class="cred">${signed(sum(shortDebt), "-")}</span></div>
