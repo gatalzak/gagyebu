@@ -382,3 +382,7 @@ input[type="date"].input { color-scheme: dark; }
 
 /* 내역: 자산이동 경로(출금 → 입금) 강조 */
 .tx .memo.mov { color: var(--mov); }
+
+/* 현황: 수입·지출·자산이동·단기 부채 제목 앞 아이콘 */
+.home-label { display: inline-flex; align-items: center; gap: 7px; }
+.home-label > span { display: inline-flex; }

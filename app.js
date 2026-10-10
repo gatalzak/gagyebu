@@ -485,7 +485,17 @@ function shortDebtTotals(items) {
   }).join("");
 }
 
-/** part: "summary" = 현황(이번달 현재·부채(단기)), "detail" = 현황(상세) */
+/** 현황 섹션 제목 앞 아이콘 (글자색은 구분색을 따른다) */
+const ICO = (paths) => `<svg class="home-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const HOME_ICONS = {
+  수입: ICO('<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>'),      // 들어오는 돈
+  지출: ICO('<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/>'),        // 나가는 돈
+  자산이동: ICO('<path d="M4 8h14"/><path d="M14.5 4.5 18 8l-3.5 3.5"/><path d="M20 16H6"/><path d="M9.5 12.5 6 16l3.5 3.5"/>'), // 옮기기
+  단기부채: ICO('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>'), // 카드
+};
+const homeLabel = (key, text, cls) => `<span class="home-label"><span class="${cls}">${HOME_ICONS[key]}</span>${text}</span>`;
+
+/** part: "summary" = 현황(이번달 현재·단기 부채), "detail" = 현황(상세) */
 function homeView(part = "summary") {
   const tx = monthTx();
   const inc = tx.filter((t) => t.kind === "수입");
@@ -496,7 +506,7 @@ function homeView(part = "summary") {
   const fixed = exp.filter((t) => isPlainExpense(t) && t.expenseType === "고정");
   const variable = exp.filter((t) => isPlainExpense(t) && t.expenseType !== "고정");
 
-  // 부채(단기) 섹션: 종류별 줄 + 그 아래 항목(카드·통장)별 사용액
+  // 단기 부채 섹션: 종류별 줄 + 그 아래 항목(카드·통장)별 사용액
   const shortDebtRows = Object.entries(SHORT_DEBT).map(([type, info]) => {
     const items = shortDebt.filter((t) => shortDebtType(t) === type);
     if (!sum(items)) return ""; // 0원인 종류는 생략
@@ -572,19 +582,19 @@ function homeView(part = "summary") {
   const summary = `
   <section class="card">
     <div class="card-head"><span>이번달 현재</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
-    <div class="row"><div class="row-main"><span>수입</span><span class="inc">${signed(sum(inc), "+")}</span></div></div>
+    <div class="row"><div class="row-main">${homeLabel("수입", "수입", "inc")}<span class="inc">${signed(sum(inc), "+")}</span></div></div>
     <div class="row">
-      <div class="row-main"><span>지출</span><span class="exp">${signed(sum(fixed) + sum(variable), "-")}</span></div>
+      <div class="row-main">${homeLabel("지출", "지출", "exp")}<span class="exp">${signed(sum(fixed) + sum(variable), "-")}</span></div>
       <div class="row-sub"><span>└ 고정지출</span><span>${signed(sum(fixed), "-")}</span></div>
       <div class="row-sub"><span>└ 변동지출</span><span>${signed(sum(variable), "-")}</span></div>
     </div>
     <div class="row">
-      <div class="row-main"><span>자산이동</span><span class="mov">${won(sum(mov))}</span></div>
+      <div class="row-main">${homeLabel("자산이동", "자산이동", "mov")}<span class="mov">${won(sum(mov))}</span></div>
       ${movRows}
     </div>
   </section>
   <section class="card">
-    <div class="card-head"><span>부채(단기)</span><span class="cred">${signed(sum(shortDebt), "-")}</span></div>
+    <div class="card-head">${homeLabel("단기부채", "단기 부채", "cred")}<span class="cred">${signed(sum(shortDebt), "-")}</span></div>
     ${shortDebtRows}
   </section>`;
   if (part === "summary") return summary;
