@@ -527,7 +527,7 @@ function homeView(part = "summary") {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
-    단기부채: [shortDebt, "cred", "-"],
+    "단기 부채": [shortDebt, "cred", "-"],
     자산이동: [mov, "mov", ""],
   };
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
@@ -563,7 +563,7 @@ function homeView(part = "summary") {
       .join("");
   };
   // 단기부채는 신용카드 / 마이너스통장으로 나눠서, 각 묶음 제목(뱃지·소계) 아래에 카테고리 섹션
-  const catSections = ui.seg === "단기부채"
+  const catSections = ui.seg === "단기 부채"
     ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const list = selTx.filter((t) => shortDebtType(t) === type);
         if (!list.length) return "";
@@ -606,7 +606,7 @@ function homeView(part = "summary") {
     </div>
     <div class="total-bar">
       <div class="tb-main"><span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
-      ${ui.seg === "단기부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
+      ${ui.seg === "단기 부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${signed(v, "-")}</span></div>` : "";
       }).join("") : ""}
