@@ -1501,12 +1501,12 @@ function openHoldingsDialog(col) {
             <div class="edit-body">
             <div class="edit-line">
               <input class="input sm" name="name" value="${esc(d.name)}" placeholder="이름" ${d.del ? "disabled" : ""}>
-              <button class="edit-del" data-toggle-del>${d.isNew ? "빼기" : d.del ? "되돌리기" : "삭제"}</button>
+              <input class="input sm amount-input amt-fixed" name="amount" inputmode="decimal" value="${toInput(d.amount, d.currency)}" placeholder="0" ${d.del ? "disabled" : ""}>
             </div>
             <div class="edit-line">
               <select class="input sm type" name="type" ${d.del ? "disabled" : ""}>${cfg.types.map((x) => `<option ${x === d.type ? "selected" : ""}>${x}</option>`).join("")}</select>
               <select class="input sm cur" name="currency" ${d.del ? "disabled" : ""}>${CURRENCIES.map((c) => `<option ${c === d.currency ? "selected" : ""}>${c}</option>`).join("")}</select>
-              <input class="input sm amount-input" name="amount" inputmode="decimal" value="${toInput(d.amount, d.currency)}" placeholder="0" ${d.del ? "disabled" : ""}>
+              <button class="edit-del" data-toggle-del>${d.isNew ? "빼기" : d.del ? "되돌리기" : "삭제"}</button>
             </div>
             </div>
           </div>`).join("")}

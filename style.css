@@ -236,8 +236,9 @@ input[type="date"].input { color-scheme: dark; }
 .edit-line { display: flex; gap: 6px; align-items: center; }
 .edit-line + .edit-line { margin-top: 6px; }
 .input.sm { height: 38px; font-size: 0.9rem; padding: 0 10px; }
-.input.sm.cur { flex: 0 0 76px; background-position: calc(100% - 14px) 16px, calc(100% - 9px) 16px; padding-right: 20px; }
-.input.sm.type { flex: 0 0 80px; background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px; }
+.input.sm.cur { flex: 0 0 66px; background-position: calc(100% - 12px) 16px, calc(100% - 7px) 16px; padding: 0 18px 0 8px; }
+.input.sm.type { flex: 1; min-width: 0; padding: 0 22px 0 8px; background-position: calc(100% - 13px) 16px, calc(100% - 8px) 16px; } /* 둘째 줄 남는 폭을 다 써서 긴 종류 이름도 보이게 */
+.edit-line .input.sm.amt-fixed:not(.type):not(.cur) { flex: 0 0 120px; }
 .edit-line .input.sm:not(.type):not(.cur) { flex: 1; min-width: 0; }
 .edit-del { flex: 0 0 auto; color: var(--muted); font-size: 0.8rem; padding: 0 4px 0 6px; white-space: nowrap; }
 .edit-item.removed .input { opacity: 0.35; text-decoration: line-through; }
