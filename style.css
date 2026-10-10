@@ -15,6 +15,7 @@
   --green-bg: #1f3a2a;
   --green-line: #2b5039;
   --green-text: #cfeedd;
+  --sector: #f3dc94;   /* 나의 자산 종류 뱃지·합계 */
   --app-width: 390px;
   color-scheme: dark;
 }
@@ -147,9 +148,15 @@ input[type="date"].input { color-scheme: dark; }
 /* 나의 자산 */
 .asset-group { border: 1px solid var(--line); border-radius: 4px; padding: 4px 14px; margin-top: 10px; }
 .asset-group-head {
-  display: flex; justify-content: space-between;
+  display: flex; justify-content: space-between; align-items: center;
   padding: 10px 0; border-bottom: 1px solid var(--line);
 }
+/* 종류(섹터) 이름은 옐로우 뱃지, 섹터 합계는 옐로우 글자 → 아래 자산 목록과 구분 */
+.sector-badge {
+  display: inline-block; padding: 3px 9px; border-radius: 3px; font-size: 0.8rem; line-height: 1.4;
+  color: var(--sector); background: rgba(243, 220, 148, 0.12); border: 1px solid rgba(243, 220, 148, 0.35);
+}
+.sector-total { color: var(--sector); }
 .asset-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
 .icon-only { color: #c8c8ce; display: flex; align-items: center; padding: 4px; }
 
@@ -165,8 +172,8 @@ input[type="date"].input { color-scheme: dark; }
 .edit-item.removed .input { opacity: 0.35; text-decoration: line-through; }
 .edit-item.removed .edit-del { color: var(--text); }
 .asset-row + .asset-row { border-top: 1px solid var(--line-soft); }
-.asset-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92rem; }
-.asset-row .amt { white-space: nowrap; font-size: 0.92rem; }
+.asset-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
+.asset-row .amt { white-space: nowrap; font-size: 0.85rem; }
 .asset-total { display: flex; justify-content: space-between; padding: 4px 2px 6px; }
 
 .note { color: var(--muted); font-size: 0.82rem; line-height: 1.6; margin: 4px 0 0; }

@@ -288,7 +288,7 @@ function openAssetsDialog() {
           const items = assets.filter((a) => a.type === t);
           return `
           <section class="asset-group">
-            <div class="asset-group-head"><span>${t}</span><span>${won(sum(items))}</span></div>
+            <div class="asset-group-head"><span class="sector-badge">${t}</span><span class="sector-total">${won(sum(items))}</span></div>
             ${items.map((a) => `<div class="asset-row"><span class="name">${esc(a.name)}</span><span class="amt">${won(a.amount)}</span></div>`).join("")}
           </section>`;
         }).join("")
@@ -316,7 +316,7 @@ function openAssetsDialog() {
       title: "자산 편집",
       body: groups.map((t) => `
         <section class="asset-group">
-          <div class="asset-group-head"><span>${t}</span></div>
+          <div class="asset-group-head"><span class="sector-badge">${t}</span></div>
           ${drafts.filter((d) => S.assets[d.id].type === t).map((d) => `
           <div class="edit-item${d.del ? " removed" : ""}" data-id="${d.id}">
             <div class="edit-line">
