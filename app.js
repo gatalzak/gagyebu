@@ -452,7 +452,12 @@ function txRow(t) {
   const d = deltaRef(t.assetDelta);
   const debt = d?.col === "debts" ? S.debts[d.id] : null;
   const from = t.deltas && S.assets[t.deltas.find((x) => x.col === "assets")?.id];
-  const sub = [t.time, t.party ? esc(t.party) : from ? `${esc(from.name)}에서 상환` : ""].filter(Boolean).join(" · ");
+  const isRepay = t.deltas?.some((x) => x.col === "debts");
+  const outA = !isRepay && t.deltas && S.assets[t.deltas.find((x) => x.amount < 0)?.id];
+  const inA = !isRepay && t.deltas && S.assets[t.deltas.find((x) => x.amount > 0)?.id];
+  const route = isRepay ? (from ? `${esc(from.name)}에서 상환` : "")
+    : outA || inA ? `${outA ? esc(outA.name) : "?"} → ${inA ? esc(inA.name) : "?"}` : "";
+  const sub = [t.time, t.party ? esc(t.party) : route].filter(Boolean).join(" · ");
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
@@ -460,7 +465,7 @@ function txRow(t) {
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
             </div>
-            <span class="amt ${isShortDebt(t) ? "cred" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : t.deltas ? "상환 " : ""}${t.currency && t.currency !== "KRW"
+            <span class="amt ${isShortDebt(t) ? "cred" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : ""}${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
               : signed(t.amount, KIND_SIGN[t.kind])}</span>
           </button>`;
@@ -800,13 +805,18 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
 // 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
 // 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
 function openTxDialog(existing, presetDate) {
-  if (existing?.deltas) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
+  if (existing?.deltas?.some((d) => d.col === "debts")) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
   const draft = existing
     ? { currency: "KRW", ...existing }
     : { kind: "지출", expenseType: "고정", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출", "고정")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
   if (existing) { const d = deltaRef(existing.assetDelta); draft.link = d ? linkKey(d.col, d.id) : ""; }
+  // 자산이동: 출금 자산 → 입금 자산
+  const prevOut = existing?.deltas?.find((d) => d.col === "assets" && d.amount < 0);
+  const prevIn = existing?.deltas?.find((d) => d.col === "assets" && d.amount > 0);
+  draft.fromAsset = prevOut ? linkKey("assets", prevOut.id) : "";
+  draft.toAsset = prevIn ? linkKey("assets", prevIn.id) : "";
 
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
@@ -849,9 +859,19 @@ function openTxDialog(existing, presetDate) {
           <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
           <div class="fx-hint" data-asset-hint></div>
         </div>` : ""}
-        <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
-        <div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
-        <div class="field"><label>카테고리 · 하위 카테고리</label>
+        ${draft.kind === "자산이동" ? `
+        <div class="field"><label>출금 자산</label>
+          <select class="input" name="fromAsset">${holdingOptions(["assets"], draft.fromAsset, { balance: false })}</select>
+          <div class="fx-hint" data-from-hint></div>
+        </div>
+        <div class="field"><label>입금 자산</label>
+          <select class="input" name="toAsset">${holdingOptions(["assets"], draft.toAsset, { balance: false })}</select>
+          <div class="fx-hint" data-to-hint></div>
+        </div>` : ""}
+        <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
+        ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
+        ` : ""}
+        ${draft.kind !== "자산이동" ? `<div class="field"><label>카테고리 · 하위 카테고리</label>
           <div class="money-line">
             <select class="input half" name="category">${catList.map((c) => `<option ${c === draft.category ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
             <select class="input half" name="subcategory">
@@ -867,7 +887,7 @@ function openTxDialog(existing, presetDate) {
             <button class="btn subcat-add-btn" data-act="add-subcat">추가</button>
           </div>
         </div>
-        <div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>
+        <div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
           <button class="btn primary" data-act="save">저장</button>
@@ -896,12 +916,13 @@ function openTxDialog(existing, presetDate) {
       draft.krw = parseAmount(krwIn.value);
       draft.date = $p("[name=date]").value;
       draft.time = $p("[name=time]").value;
-      draft.category = $p("[name=category]").value;
-      const sc = $p("[name=subcategory]").value;
-      draft.subcategory = sc === "__add__" ? draft.subcategory || "" : sc;
+      if ($p("[name=category]")) draft.category = $p("[name=category]").value;
+      const sc = $p("[name=subcategory]")?.value;
+      if (sc !== undefined) draft.subcategory = sc === "__add__" ? draft.subcategory || "" : sc;
       draft.content = $p("[name=content]").value;
-      draft.party = $p("[name=party]").value;
-      draft.memo = $p("[name=memo]").value;
+      if ($p("[name=party]")) draft.party = $p("[name=party]").value;
+      if ($p("[name=memo]")) draft.memo = $p("[name=memo]").value;
+      if ($p("[name=fromAsset]")) { draft.fromAsset = $p("[name=fromAsset]").value; draft.toAsset = $p("[name=toAsset]").value; }
       if ($p("[name=asset]")) draft.link = $p("[name=asset]").value;
     };
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); });
@@ -931,6 +952,7 @@ function openTxDialog(existing, presetDate) {
     }
 
     panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { read(); draft.kind = b.dataset.v; draft.subcategory = ""; draw(); }));
+    if ($p("[name=category]")) {
     $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draw(); };
     $p("[data-act=edit-cats]").onclick = () => {
       read();
@@ -954,6 +976,24 @@ function openTxDialog(existing, presetDate) {
       draw();
       toast(`'${draft.category} › ${name}' 추가했어요`);
     };
+    }
+    // 자산이동: 출금·입금 안내
+    const fromSel = $p("[name=fromAsset]"), toSel = $p("[name=toAsset]");
+    const refreshTransferHint = () => {
+      if (!fromSel) return;
+      const amtNow = { currency: curSel.value, amount: parseMoney(amt.value, curSel.value), krw: parseAmount(krwIn.value) };
+      [[fromSel, "[data-from-hint]", "에서", "-", "빠져나가요"], [toSel, "[data-to-hint]", "에", "+", "들어가요"]].forEach(([sel, hintSel, josa, sign, verb]) => {
+        const ref = parseLinkKey(sel.value);
+        const a = ref && S.assets[ref.id];
+        const v = a && amountInCurrency(amtNow, curOf(a));
+        $p(hintSel).textContent = !a || !amtNow.amount ? "" : v === null ? "환율 정보가 없어 반영할 수 없어요" : `${a.name}${josa} ${sign}${formatMoney(roundFor(v, curOf(a)), curOf(a))} ${verb}`;
+      });
+    };
+    if (fromSel) {
+      [fromSel, toSel, curSel].forEach((el) => el.addEventListener("change", refreshTransferHint));
+      [amt, krwIn].forEach((el) => el.addEventListener("input", refreshTransferHint));
+      refreshTransferHint();
+    }
     panel.querySelectorAll("[data-role=etype] button").forEach((b) => (b.onclick = () => { read(); draft.expenseType = b.dataset.v; draft.subcategory = ""; draw(); }));
     $p("[data-act=save]").onclick = async () => {
       read();
@@ -962,6 +1002,26 @@ function openTxDialog(existing, presetDate) {
       if (foreignNow && draft.krw <= 0) return toast("원화 금액을 입력해 주세요.");
       if (!draft.date) return toast("날짜를 입력해 주세요.");
       const now = nowISO();
+      const isMove = draft.kind === "자산이동";
+      let deltas = null;
+      if (isMove) {
+        const fromRef = parseLinkKey(draft.fromAsset), toRef = parseLinkKey(draft.toAsset);
+        if (fromRef && toRef && fromRef.id === toRef.id) return toast("출금 자산과 입금 자산이 같아요.");
+        deltas = [];
+        const amtRec = { currency: draft.currency, amount: draft.amount, krw: draft.currency === "KRW" ? draft.amount : draft.krw };
+        for (const [ref, sign] of [[fromRef, -1], [toRef, 1]]) {
+          if (!ref) continue;
+          const a = S.assets[ref.id];
+          if (!a || a.deleted) return toast("선택한 자산을 찾을 수 없어요.");
+          const v = amountInCurrency(amtRec, curOf(a));
+          if (v === null) return toast("환율 정보가 없어 반영할 수 없어요.");
+          deltas.push({ col: "assets", id: a.id, amount: sign * roundFor(v, curOf(a)) });
+        }
+        if (!catsFor("자산이동").includes(draft.category)) draft.category = catsFor("자산이동").includes("계좌이체") ? "계좌이체" : catsFor("자산이동")[0] || "계좌이체";
+        draft.subcategory = "";
+        draft.party = "";
+        draft.memo = "";
+      }
       const rec = {
         id: existing?.id || uid(),
         date: draft.date,
@@ -991,7 +1051,9 @@ function openTxDialog(existing, presetDate) {
       }
       const prev = deltaRef(existing?.assetDelta);
       if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
+      revertDeltas(existing, now); // 이전 자산이동 반영 되돌리기
       if (delta) { adjustHolding(delta.col, delta.id, delta.amount, now); rec.assetDelta = delta; }
+      if (deltas?.length) { deltas.forEach((x) => adjustHolding(x.col, x.id, x.amount, now)); rec.deltas = deltas; }
       S.transactions[rec.id] = rec;
       closeModal();
       ui.month = rec.date.slice(0, 7);
@@ -1006,10 +1068,11 @@ function openTxDialog(existing, presetDate) {
       const now = nowISO();
       const prev = deltaRef(existing.assetDelta);
       if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
+      revertDeltas(existing, now);
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
       closeModal();
       await commit();
-      toast(prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : "삭제했어요");
+      toast(prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : existing.deltas?.length ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요");
     };
     if (!existing && !draft.amount) amt.focus();
   };
