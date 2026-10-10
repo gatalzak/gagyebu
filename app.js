@@ -267,70 +267,135 @@ function openTxDialog(existing) {
 }
 
 // 나의 자산
-function openAssetsDialog() {
-  let mode = null; // null: 목록 | "add": 등록 | 자산 id: 편집
+const PENCIL = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>`;
 
+function openAssetsDialog() {
+  let mode = null;   // null: 목록 | "add": 등록 | "edit": 전체 편집
+  let drafts = null; // 전체 편집 중인 값 [{ id, type, name, amount, del }]
+
+  const sortedAssets = () =>
+    liveAssets().sort((a, b) => ASSET_TYPES.indexOf(a.type) - ASSET_TYPES.indexOf(b.type) || a.createdAt.localeCompare(b.createdAt));
+
+  // 목록(보기 전용): 종류별 한 덩어리, 안쪽은 줄로만 구분
   const draw = () => {
-    if (mode !== null) return drawForm();
-    const assets = liveAssets();
+    if (mode === "add") return drawAdd();
+    if (mode === "edit") return drawEdit();
+    const assets = sortedAssets();
     const groups = ASSET_TYPES.filter((t) => assets.some((a) => a.type === t));
     const body = assets.length
       ? `<div class="asset-total"><span class="muted">총 자산</span><span>${won(sum(assets))}</span></div>` +
         groups.map((t) => {
-          // 종류별 한 덩어리(섹션). 안쪽 자산은 상자 없이 줄로만 구분하고, 누르면 편집 창이 열린다.
-          const items = assets.filter((a) => a.type === t).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+          const items = assets.filter((a) => a.type === t);
           return `
           <section class="asset-group">
             <div class="asset-group-head"><span>${t}</span><span>${won(sum(items))}</span></div>
-            ${items.map((a) => `
-            <button class="asset-row" data-edit="${a.id}">
-              <span class="name">${esc(a.name)}</span><span class="amt">${won(a.amount)}</span><span class="chev">›</span>
-            </button>`).join("")}
+            ${items.map((a) => `<div class="asset-row"><span class="name">${esc(a.name)}</span><span class="amt">${won(a.amount)}</span></div>`).join("")}
           </section>`;
         }).join("")
       : `<div class="empty">등록된 자산이 없어요.<br>오른쪽 위 '자산 등록'으로 추가해 보세요.</div>`;
     const panel = openModal({
       title: "나의 자산",
-      headExtra: `<button class="green-btn" data-add>자산 등록</button>`,
+      headExtra: `<button class="green-btn" data-add>자산 등록</button>` +
+        (assets.length ? `<button class="icon-only" data-edit aria-label="자산 편집">${PENCIL}</button>` : ""),
       body: body + `<button class="btn" data-close-btn style="margin-top:18px">닫기</button>`,
     });
     panel.querySelector("[data-add]").onclick = () => { mode = "add"; draw(); };
     panel.querySelector("[data-close-btn]").onclick = closeModal;
-    panel.querySelectorAll("[data-edit]").forEach((b) => (b.onclick = () => { mode = b.dataset.edit; draw(); }));
+    const edit = panel.querySelector("[data-edit]");
+    if (edit) edit.onclick = () => {
+      drafts = sortedAssets().map((a) => ({ id: a.id, type: a.type, name: a.name, amount: a.amount, del: false }));
+      mode = "edit";
+      draw();
+    };
   };
 
-  // 등록 / 편집 창. 편집일 때만 삭제 버튼이 있고, 삭제는 두 번 눌러야 한다.
-  const drawForm = (confirmDelete = false, draft = null) => {
-    const editing = mode !== "add" ? S.assets[mode] : null;
-    const v = draft || { type: editing?.type || "현금", name: editing?.name || "", amount: editing?.amount || 0 };
+  // 전체 편집: 모든 자산의 종류·이름·금액을 한 번에 고치고, 삭제는 표시해 두었다가 저장할 때 반영
+  const drawEdit = () => {
+    const groups = ASSET_TYPES.filter((t) => drafts.some((d) => S.assets[d.id].type === t));
     const panel = openModal({
-      title: editing ? "자산 편집" : "자산 등록",
+      title: "자산 편집",
+      body: groups.map((t) => `
+        <section class="asset-group">
+          <div class="asset-group-head"><span>${t}</span></div>
+          ${drafts.filter((d) => S.assets[d.id].type === t).map((d) => `
+          <div class="edit-item${d.del ? " removed" : ""}" data-id="${d.id}">
+            <div class="edit-line">
+              <input class="input sm" name="name" value="${esc(d.name)}" placeholder="이름" ${d.del ? "disabled" : ""}>
+              <button class="edit-del" data-toggle-del>${d.del ? "되돌리기" : "삭제"}</button>
+            </div>
+            <div class="edit-line">
+              <select class="input sm type" name="type" ${d.del ? "disabled" : ""}>${ASSET_TYPES.map((x) => `<option ${x === d.type ? "selected" : ""}>${x}</option>`).join("")}</select>
+              <input class="input sm amount-input" name="amount" inputmode="numeric" value="${fmtAmount(d.amount)}" placeholder="0" ${d.del ? "disabled" : ""}>
+            </div>
+          </div>`).join("")}
+        </section>`).join("") +
+        `<div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
+    });
+    const read = () => panel.querySelectorAll(".edit-item").forEach((el) => {
+      const d = drafts.find((x) => x.id === el.dataset.id);
+      if (d.del) return;
+      d.name = el.querySelector("[name=name]").value;
+      d.type = el.querySelector("[name=type]").value;
+      d.amount = parseAmount(el.querySelector("[name=amount]").value);
+    });
+    panel.querySelectorAll("[name=amount]").forEach(bindAmount);
+    panel.querySelectorAll("[data-toggle-del]").forEach((b) => (b.onclick = () => {
+      read();
+      const d = drafts.find((x) => x.id === b.closest(".edit-item").dataset.id);
+      d.del = !d.del;
+      drawEdit();
+    }));
+    panel.querySelector("[data-cancel]").onclick = () => { mode = null; drafts = null; draw(); };
+    panel.querySelector("[data-save]").onclick = async () => {
+      read();
+      if (drafts.some((d) => !d.del && !d.name.trim())) return toast("이름이 빈 자산이 있어요.");
+      const now = nowISO();
+      let changed = 0;
+      for (const d of drafts) {
+        const a = S.assets[d.id];
+        if (d.del) {
+          S.assets[d.id] = { ...a, deleted: true, updatedAt: now };
+          changed++;
+        } else if (a.type !== d.type || a.name !== d.name.trim() || a.amount !== d.amount) {
+          S.assets[d.id] = { ...a, type: d.type, name: d.name.trim(), amount: d.amount, updatedAt: now };
+          changed++;
+        }
+      }
+      if (changed) {
+        await saveState(S);
+        scheduleSync();
+      }
+      mode = null;
+      drafts = null;
+      draw();
+      toast(changed ? `${changed}개 자산을 저장했어요` : "바뀐 내용이 없어요");
+    };
+  };
+
+  // 새 자산 등록
+  const drawAdd = () => {
+    const panel = openModal({
+      title: "자산 등록",
       body: `
         <div class="field" style="margin-top:4px"><label>종류</label>
-          <select class="input" name="type">${ASSET_TYPES.map((t) => `<option ${t === v.type ? "selected" : ""}>${t}</option>`).join("")}</select>
+          <select class="input" name="type">${ASSET_TYPES.map((t) => `<option>${t}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>이름</label><input class="input" name="name" placeholder="예: 국민은행 통장" value="${esc(v.name)}"></div>
-        <div class="field"><label>금액(원)</label><input class="input amount-input" name="amount" inputmode="numeric" placeholder="0" value="${fmtAmount(v.amount)}"></div>
-        <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>
-        ${editing ? `<button class="btn danger" data-delete style="margin-top:8px">${confirmDelete ? "한 번 더 누르면 삭제" : "이 자산 삭제"}</button>` : ""}`,
-    });
-    const read = () => ({
-      type: panel.querySelector("[name=type]").value,
-      name: panel.querySelector("[name=name]").value,
-      amount: parseAmount(panel.querySelector("[name=amount]").value),
+        <div class="field"><label>이름</label><input class="input" name="name" placeholder="예: 국민은행 통장"></div>
+        <div class="field"><label>금액(원)</label><input class="input amount-input" name="amount" inputmode="numeric" placeholder="0"></div>
+        <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
     });
     bindAmount(panel.querySelector("[name=amount]"));
     panel.querySelector("[data-cancel]").onclick = () => { mode = null; draw(); };
     panel.querySelector("[data-save]").onclick = async () => {
-      const f = read();
-      if (!f.name.trim()) return toast("이름을 입력해 주세요.");
+      const name = panel.querySelector("[name=name]").value.trim();
+      if (!name) return toast("이름을 입력해 주세요.");
       const now = nowISO();
       const rec = {
-        id: editing?.id || uid(),
-        type: f.type,
-        name: f.name.trim(),
-        amount: f.amount,
-        createdAt: editing?.createdAt || now,
+        id: uid(),
+        type: panel.querySelector("[name=type]").value,
+        name,
+        amount: parseAmount(panel.querySelector("[name=amount]").value),
+        createdAt: now,
         updatedAt: now,
         deleted: false,
       };
@@ -339,17 +404,7 @@ function openAssetsDialog() {
       scheduleSync();
       mode = null;
       draw();
-      toast(editing ? "수정했어요" : "등록했어요");
-    };
-    const del = panel.querySelector("[data-delete]");
-    if (del) del.onclick = async () => {
-      if (!confirmDelete) return drawForm(true, read());
-      S.assets[editing.id] = { ...editing, deleted: true, updatedAt: nowISO() };
-      await saveState(S);
-      scheduleSync();
-      mode = null;
-      draw();
-      toast("삭제했어요");
+      toast("등록했어요");
     };
   };
   draw();

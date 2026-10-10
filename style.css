@@ -150,8 +150,20 @@ input[type="date"].input { color-scheme: dark; }
   display: flex; justify-content: space-between;
   padding: 10px 0; border-bottom: 1px solid var(--line);
 }
-.asset-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; width: 100%; text-align: left; }
-.asset-row .chev { color: var(--muted); font-size: 1.1rem; line-height: 1; margin-left: 2px; }
+.asset-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
+.icon-only { color: #c8c8ce; display: flex; align-items: center; padding: 4px; }
+
+/* 자산 전체 편집 */
+.edit-item { padding: 12px 0; }
+.edit-item + .edit-item { border-top: 1px solid var(--line-soft); }
+.edit-line { display: flex; gap: 6px; align-items: center; }
+.edit-line + .edit-line { margin-top: 6px; }
+.input.sm { height: 38px; font-size: 0.9rem; padding: 0 10px; }
+.input.sm.type { flex: 0 0 104px; background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px; }
+.edit-line .input.sm:not(.type) { flex: 1; min-width: 0; }
+.edit-del { flex: 0 0 auto; color: var(--muted); font-size: 0.8rem; padding: 0 4px 0 6px; white-space: nowrap; }
+.edit-item.removed .input { opacity: 0.35; text-decoration: line-through; }
+.edit-item.removed .edit-del { color: var(--text); }
 .asset-row + .asset-row { border-top: 1px solid var(--line-soft); }
 .asset-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.92rem; }
 .asset-row .amt { white-space: nowrap; font-size: 0.92rem; }
