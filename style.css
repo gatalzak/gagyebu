@@ -432,3 +432,4 @@ input[type="date"].input { color-scheme: dark; }
 .fx-hint.tx-hint.inc { color: var(--inc); }
 .fx-hint.tx-hint.exp { color: var(--exp); }
 .fx-hint.tx-hint.mov { color: var(--mov); }
+.fx-hint.tx-hint.cred { color: var(--cred); }
