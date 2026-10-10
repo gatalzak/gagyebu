@@ -4,7 +4,7 @@ import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, r
 
 // ---------------- 기본 목록 ----------------
 const KINDS = ["수입", "지출", "자산이동"];
-const EXPENSE_TYPES = ["변동", "고정"];
+const EXPENSE_TYPES = ["고정", "변동"]; // 화면 표시 순서(고정지출이 앞)
 const CATEGORIES = {
   수입: ["월급", "부수입", "용돈", "이자/배당", "환급", "기타"],
   지출: ["식비", "카페/간식", "교통", "주거/통신", "생활용품", "쇼핑", "의료/건강", "문화/여가", "교육", "경조사", "보험", "기타"],
