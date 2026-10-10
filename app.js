@@ -526,13 +526,17 @@ function txRow(t, { withDate = false } = {}) {
   const route = isRepay ? (from ? `${esc(from.name)}에서 상환` : "")
     : outA || inA ? `${outA ? esc(outA.name) : "?"} → ${inA ? esc(inA.name) : "?"}` : "";
   const when = withDate ? `${Number(t.date.slice(5, 7))}/${Number(t.date.slice(8, 10))} ${t.time || ""}`.trim() : t.time;
-  const sub = [when, t.party ? esc(t.party) : route].filter(Boolean).join(" · ");
+  const sub = [when, t.party ? esc(t.party) : ""].filter(Boolean).join(" · ");
+  // 시간 아래 줄: 수입=입금 자산, 지출=결제 수단, 자산이동=출금 → 입금
+  const linked = d && (d.col === "debts" ? S.debts[d.id] : S.assets[d.id]);
+  const via = linked ? `${t.kind === "수입" ? "입금" : "결제"} ${esc(linked.name)}` : route;
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
               <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debt.name)}</span>` : ""}<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span></div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
+              ${via ? `<div class="memo">${via}</div>` : ""}
             </div>
             <span class="amt ${isShortDebt(t) ? "cred" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : ""}${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
