@@ -393,7 +393,7 @@ function homeView() {
     items.forEach((t) => { const id = deltaRef(t.assetDelta).id; byDebt[id] = (byDebt[id] || 0) + txKRW(t); });
     const subs = Object.entries(byDebt)
       .sort((a, b) => b[1] - a[1])
-      .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || type)}</span><span class="cred">${signed(v, "-")}</span></div>`)
+      .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || type)}</span><span>${signed(v, "-")}</span></div>`)
       .join("");
     return `
     <div class="row">
@@ -424,8 +424,8 @@ function homeView() {
     <div class="row"><div class="row-main"><span>수입</span><span class="inc">${signed(sum(inc), "+")}</span></div></div>
     <div class="row">
       <div class="row-main"><span>지출</span><span class="exp">${signed(sum(fixed) + sum(variable), "-")}</span></div>
-      <div class="row-sub"><span>└ 고정지출</span><span class="exp">${signed(sum(fixed), "-")}</span></div>
-      <div class="row-sub"><span>└ 변동지출</span><span class="exp">${signed(sum(variable), "-")}</span></div>
+      <div class="row-sub"><span>└ 고정지출</span><span>${signed(sum(fixed), "-")}</span></div>
+      <div class="row-sub"><span>└ 변동지출</span><span>${signed(sum(variable), "-")}</span></div>
     </div>
     <div class="row"><div class="row-main"><span>자산이동</span><span class="mov">${won(sum(mov))}</span></div></div>
   </section>
