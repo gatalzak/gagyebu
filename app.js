@@ -871,7 +871,7 @@ function openTxDialog(existing, presetDate) {
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
         ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
         ` : ""}
-        ${draft.kind !== "자산이동" ? `<div class="field"><label>카테고리 · 하위 카테고리</label>
+        <div class="field"><label>카테고리 · 하위 카테고리</label>
           <div class="money-line">
             <select class="input half" name="category">${catList.map((c) => `<option ${c === draft.category ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
             <select class="input half" name="subcategory">
@@ -887,7 +887,7 @@ function openTxDialog(existing, presetDate) {
             <button class="btn subcat-add-btn" data-act="add-subcat">추가</button>
           </div>
         </div>
-        <div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>` : ""}
+        ${draft.kind !== "자산이동" ? `<div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
           <button class="btn primary" data-act="save">저장</button>
@@ -1017,8 +1017,6 @@ function openTxDialog(existing, presetDate) {
           if (v === null) return toast("환율 정보가 없어 반영할 수 없어요.");
           deltas.push({ col: "assets", id: a.id, amount: sign * roundFor(v, curOf(a)) });
         }
-        if (!catsFor("자산이동").includes(draft.category)) draft.category = catsFor("자산이동").includes("계좌이체") ? "계좌이체" : catsFor("자산이동")[0] || "계좌이체";
-        draft.subcategory = "";
         draft.party = "";
         draft.memo = "";
       }
