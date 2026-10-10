@@ -2,7 +2,7 @@
 // 내 드라이브에 '클로드가계부_동기화.json' 파일 하나를 두고, 기기마다 [받기 → 내역 단위로 합치기 → 올리기]를 한다.
 // 같은 내역은 updatedAt이 최신인 쪽이 이기고, 서로 다른 내역은 모두 남는다(통째로 덮어쓰지 않음).
 // 권한은 drive.file: 이 앱이 만든 파일만 볼 수 있고 드라이브의 다른 파일에는 접근하지 못한다.
-import { mergeInto, saveState } from "./store.js";
+import { mergeInto, saveState, COLLECTIONS } from "./store.js";
 import { GOOGLE_CLIENT_ID } from "./config.js";
 
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -138,8 +138,8 @@ async function upload(id, data) {
 }
 
 function hasLocalNewer(state, remote) {
-  for (const col of ["transactions", "assets"]) {
-    for (const [id, rec] of Object.entries(state[col])) {
+  for (const col of COLLECTIONS) {
+    for (const [id, rec] of Object.entries(state[col] || {})) {
       const r = remote?.[col]?.[id];
       if (!r || (rec.updatedAt || "") > (r.updatedAt || "")) return true;
     }

@@ -5,6 +5,9 @@ const DB_NAME = "claude-gagyebu";
 const STORE = "kv";
 const KEY = "state";
 
+/** 기기 간에 합치는 기록 묶음 */
+export const COLLECTIONS = ["transactions", "assets", "debts"];
+
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
@@ -15,7 +18,7 @@ function openDB() {
 }
 
 function emptyState() {
-  return { version: 1, transactions: {}, assets: {}, meta: {} };
+  return { version: 1, transactions: {}, assets: {}, debts: {}, meta: {} };
 }
 
 export async function loadState() {
@@ -48,7 +51,7 @@ export const nowISO = () => new Date().toISOString();
 /** incoming의 기록을 state에 합친다. 같은 id면 updatedAt이 더 최근인 쪽이 이긴다. 바뀐 개수를 돌려준다. */
 export function mergeInto(state, incoming) {
   let changed = 0;
-  for (const col of ["transactions", "assets"]) {
+  for (const col of COLLECTIONS) {
     for (const [id, rec] of Object.entries(incoming?.[col] || {})) {
       const cur = state[col][id];
       if (!cur || (rec.updatedAt || "") > (cur.updatedAt || "")) {

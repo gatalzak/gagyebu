@@ -11,6 +11,7 @@ const CATEGORIES = {
   자산이동: ["계좌이체", "저축", "투자", "카드대금", "현금인출", "기타"],
 };
 const ASSET_TYPES = ["현금", "은행", "증권", "부동산", "가상자산", "상품권", "기타"];
+const DEBT_TYPES = ["신용카드", "대출", "마이너스통장", "할부", "개인(지인)", "기타"];
 const KIND_CLASS = { 수입: "inc", 지출: "exp", 자산이동: "mov" };
 const KIND_SIGN = { 수입: "+", 지출: "-", 자산이동: "" };
 
@@ -49,7 +50,6 @@ let S;
 const ui = { month: ym(new Date()), tab: "home", seg: "수입" };
 
 const liveTx = () => Object.values(S.transactions).filter((t) => !t.deleted);
-const liveAssets = () => Object.values(S.assets).filter((a) => !a.deleted);
 const monthTx = () => liveTx().filter((t) => t.date.startsWith(ui.month));
 
 async function commit() {
@@ -303,11 +303,17 @@ function bindMoney(input, getCur, hint) {
 const GRIP = `<svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor" aria-hidden="true"><circle cx="4" cy="4" r="1.4"/><circle cx="10" cy="4" r="1.4"/><circle cx="4" cy="9" r="1.4"/><circle cx="10" cy="9" r="1.4"/><circle cx="4" cy="14" r="1.4"/><circle cx="10" cy="14" r="1.4"/></svg>`;
 const NO_ORDER = 1e9; // 순서를 정한 적 없는 자산은 뒤로(등록 순)
 
-/** 나의 자산 정렬: 종류 순 → 사용자가 드래그로 정한 순서 → 등록 순 */
-const assetOrder = (a, b) =>
-  ASSET_TYPES.indexOf(a.type) - ASSET_TYPES.indexOf(b.type) ||
+/** 정렬: 종류 순 → 사용자가 드래그로 정한 순서 → 등록 순 */
+const makeOrder = (types) => (a, b) =>
+  types.indexOf(a.type) - types.indexOf(b.type) ||
   (a.order ?? NO_ORDER) - (b.order ?? NO_ORDER) ||
   a.createdAt.localeCompare(b.createdAt);
+
+/** 나의 자산 / 나의 부채는 같은 창을 쓰고 이름·종류만 다르다. */
+const HOLDINGS = {
+  assets: { title: "나의 자산", unit: "자산", subj: "자산이", obj: "자산을", total: "총 자산", types: ASSET_TYPES, placeholder: "예: 국민은행 통장" },
+  debts: { title: "나의 부채", unit: "부채", subj: "부채가", obj: "부채를", total: "총 부채", types: DEBT_TYPES, placeholder: "예: 신한카드 10월 결제분" },
+};
 
 /**
  * 손잡이(⋮⋮)를 잡고 끌면 같은 섹션 안에서 위치를 바꾼다.
@@ -349,11 +355,14 @@ function enableReorder(panel, onDrop) {
   });
 }
 
-function openAssetsDialog() {
+function openHoldingsDialog(col) {
+  const cfg = HOLDINGS[col];
+  const order = makeOrder(cfg.types);
+  const liveList = () => Object.values(S[col]).filter((a) => !a.deleted);
   let mode = null;   // null: 목록 | "add": 등록 | "edit": 전체 편집
   let drafts = null; // 전체 편집 중인 값 [{ id, type, name, currency, amount, del }]
 
-  const sortedAssets = () => liveAssets().sort(assetOrder);
+  const sortedAssets = () => liveList().sort(order);
 
   // 환율을 새로 받으면 목록의 원화 환산을 다시 그린다
   refreshRates().then((updated) => { if (updated && mode === null && $("#modal-root").children.length) draw(); });
@@ -363,11 +372,11 @@ function openAssetsDialog() {
     if (mode === "add") return drawAdd();
     if (mode === "edit") return drawEdit();
     const assets = sortedAssets();
-    const groups = ASSET_TYPES.filter((t) => assets.some((a) => a.type === t));
+    const groups = cfg.types.filter((t) => assets.some((a) => a.type === t));
     const all = krwTotal(assets);
     const hasForeign = assets.some((a) => curOf(a) !== "KRW");
     const body = assets.length
-      ? `<div class="asset-total"><span class="muted">총 자산</span><span>${all.missing ? "약 " : ""}${won(all.total)}</span></div>` +
+      ? `<div class="asset-total"><span class="muted">${cfg.total}</span><span>${all.missing ? "약 " : ""}${won(all.total)}</span></div>` +
         groups.map((t) => {
           const items = assets.filter((a) => a.type === t);
           const g = krwTotal(items);
@@ -383,11 +392,11 @@ function openAssetsDialog() {
           </section>`;
         }).join("") +
         (hasForeign ? `<p class="note fx-note">외화는 ${ratesDate() ? `${ratesDate()} 환율` : "환율"}로 원화 환산해 합계에 넣었어요.${all.missing ? ` 환율을 받지 못한 ${all.missing}개는 합계에서 빠졌어요.` : ""}</p>` : "")
-      : `<div class="empty">등록된 자산이 없어요.<br>오른쪽 위 '자산 등록'으로 추가해 보세요.</div>`;
+      : `<div class="empty">등록된 ${cfg.subj} 없어요.<br>오른쪽 위 '${cfg.unit} 등록'으로 추가해 보세요.</div>`;
     const panel = openModal({
-      title: "나의 자산",
-      headExtra: `<button class="green-btn" data-add>자산 등록</button>` +
-        (assets.length ? `<button class="icon-only" data-edit aria-label="자산 편집">${PENCIL}</button>` : ""),
+      title: cfg.title,
+      headExtra: `<button class="green-btn" data-add>${cfg.unit} 등록</button>` +
+        (assets.length ? `<button class="icon-only" data-edit aria-label="${cfg.unit} 편집">${PENCIL}</button>` : ""),
       body: body + `<button class="btn" data-close-btn style="margin-top:18px">닫기</button>`,
     });
     panel.querySelector("[data-add]").onclick = () => { mode = "add"; draw(); };
@@ -402,13 +411,13 @@ function openAssetsDialog() {
 
   // 전체 편집: 모든 자산의 종류·이름·통화·금액을 한 번에 고치고, 삭제는 표시해 두었다가 저장할 때 반영
   const drawEdit = () => {
-    const groups = ASSET_TYPES.filter((t) => drafts.some((d) => S.assets[d.id].type === t));
+    const groups = cfg.types.filter((t) => drafts.some((d) => S[col][d.id].type === t));
     const panel = openModal({
-      title: "자산 편집",
+      title: `${cfg.unit} 편집`,
       body: groups.map((t) => `
         <section class="asset-group">
           <div class="asset-group-head"><span class="sector-badge">${t}</span></div>
-          ${drafts.filter((d) => S.assets[d.id].type === t).map((d) => `
+          ${drafts.filter((d) => S[col][d.id].type === t).map((d) => `
           <div class="edit-item${d.del ? " removed" : ""}" data-id="${d.id}">
             <button class="grip" data-handle aria-label="끌어서 순서 바꾸기">${GRIP}</button>
             <div class="edit-body">
@@ -417,7 +426,7 @@ function openAssetsDialog() {
               <button class="edit-del" data-toggle-del>${d.del ? "되돌리기" : "삭제"}</button>
             </div>
             <div class="edit-line">
-              <select class="input sm type" name="type" ${d.del ? "disabled" : ""}>${ASSET_TYPES.map((x) => `<option ${x === d.type ? "selected" : ""}>${x}</option>`).join("")}</select>
+              <select class="input sm type" name="type" ${d.del ? "disabled" : ""}>${cfg.types.map((x) => `<option ${x === d.type ? "selected" : ""}>${x}</option>`).join("")}</select>
               <select class="input sm cur" name="currency" ${d.del ? "disabled" : ""}>${CURRENCIES.map((c) => `<option ${c === d.currency ? "selected" : ""}>${c}</option>`).join("")}</select>
               <input class="input sm amount-input" name="amount" inputmode="decimal" value="${toInput(d.amount, d.currency)}" placeholder="0" ${d.del ? "disabled" : ""}>
             </div>
@@ -456,21 +465,21 @@ function openAssetsDialog() {
     panel.querySelector("[data-save]").onclick = async () => {
       read();
       syncOrder();
-      if (drafts.some((d) => !d.del && !d.name.trim())) return toast("이름이 빈 자산이 있어요.");
+      if (drafts.some((d) => !d.del && !d.name.trim())) return toast(`이름이 빈 ${cfg.subj} 있어요.`);
       const now = nowISO();
       let changed = 0;
       const pos = {}; // 섹션(원래 종류)별 순번
       for (const d of drafts) {
-        const a = S.assets[d.id];
+        const a = S[col][d.id];
         if (d.del) {
-          S.assets[d.id] = { ...a, deleted: true, updatedAt: now };
+          S[col][d.id] = { ...a, deleted: true, updatedAt: now };
           changed++;
           continue;
         }
         const i = (pos[a.type] = (pos[a.type] ?? -1) + 1);
         const order = d.type === a.type ? i : 10000 + i; // 종류를 옮긴 자산은 새 섹션의 맨 뒤로
         if (a.type !== d.type || a.name !== d.name.trim() || curOf(a) !== d.currency || a.amount !== d.amount || a.order !== order) {
-          S.assets[d.id] = { ...a, type: d.type, name: d.name.trim(), currency: d.currency, amount: d.amount, order, updatedAt: now };
+          S[col][d.id] = { ...a, type: d.type, name: d.name.trim(), currency: d.currency, amount: d.amount, order, updatedAt: now };
           changed++;
         }
       }
@@ -481,19 +490,19 @@ function openAssetsDialog() {
       mode = null;
       drafts = null;
       draw();
-      toast(changed ? `${changed}개 자산을 저장했어요` : "바뀐 내용이 없어요");
+      toast(changed ? `${changed}개 ${cfg.obj} 저장했어요` : "바뀐 내용이 없어요");
     };
   };
 
-  // 새 자산 등록 (기본 원화, 외화 선택 가능)
+  // 새로 등록 (기본 원화, 외화 선택 가능)
   const drawAdd = () => {
     const panel = openModal({
-      title: "자산 등록",
+      title: `${cfg.unit} 등록`,
       body: `
         <div class="field" style="margin-top:4px"><label>종류</label>
-          <select class="input" name="type">${ASSET_TYPES.map((t) => `<option>${t}</option>`).join("")}</select>
+          <select class="input" name="type">${cfg.types.map((t) => `<option>${t}</option>`).join("")}</select>
         </div>
-        <div class="field"><label>이름</label><input class="input" name="name" placeholder="예: 국민은행 통장"></div>
+        <div class="field"><label>이름</label><input class="input" name="name" placeholder="${cfg.placeholder}"></div>
         <div class="field"><label>통화</label><select class="input" name="currency">${currencyOptions("KRW")}</select></div>
         <div class="field"><label>금액</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
           <div class="fx-hint" data-hint></div></div>
@@ -509,7 +518,7 @@ function openAssetsDialog() {
       if (!name) return toast("이름을 입력해 주세요.");
       const now = nowISO();
       const type = panel.querySelector("[name=type]").value;
-      const last = Math.max(-1, ...liveAssets().filter((a) => a.type === type && a.order != null && a.order < NO_ORDER).map((a) => a.order));
+      const last = Math.max(-1, ...liveList().filter((a) => a.type === type && a.order != null && a.order < NO_ORDER).map((a) => a.order));
       const rec = {
         id: uid(),
         type,
@@ -521,7 +530,7 @@ function openAssetsDialog() {
         updatedAt: now,
         deleted: false,
       };
-      S.assets[rec.id] = rec;
+      S[col][rec.id] = rec;
       await saveState(S);
       scheduleSync();
       mode = null;
@@ -599,8 +608,8 @@ function bindEvents() {
   $("#next").onclick = () => { ui.month = shiftMonth(ui.month, 1); render(); };
   document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => { ui.tab = b.dataset.tab; render(); }));
   $("#fab").onclick = () => openTxDialog();
-  $("#open-assets").onclick = openAssetsDialog;
-  $("#open-debts").onclick = () => openModal({ title: "나의 부채", body: `<div class="empty">나의 부채 기능은 준비 중이에요.</div>` });
+  $("#open-assets").onclick = () => openHoldingsDialog("assets");
+  $("#open-debts").onclick = () => openHoldingsDialog("debts");
   $("#open-backup").onclick = openBackupDialog;
   $("#sync-bar").onclick = () => (sync.status === "need-login" ? connect() : runSync());
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") runSync(); });
