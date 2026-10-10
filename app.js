@@ -159,7 +159,7 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
       title: "카테고리 편집",
       body: `
         <div class="seg" data-role="kind">${KINDS.map((k) => `<button data-v="${k}" class="${k === kind ? "on" : ""}">${k}</button>`).join("")}</div>
-        ${kind === "지출" ? `<div class="tabs sub-tabs" data-role="etab">${EXPENSE_TYPES.map((k) => `<button data-v="${k}" class="${k === etab ? "active" : ""}">${k}지출</button>`).join("")}</div>` : ""}
+        ${kind === "지출" ? `<div class="tabs sub-tabs" data-role="etab">${["고정", "변동"].map((k) => `<button data-v="${k}" class="${k === etab ? "active" : ""}">${k}지출</button>`).join("")}</div>` : ""}
         ${[kind === "지출" ? etab : null].map((et) => {
           const list = cats.filter((c) => !et || catEtype(c) === et);
           return `<section class="asset-group">
