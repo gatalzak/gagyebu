@@ -63,7 +63,7 @@ function toast(msg) {
 
 // ---------------- 상태 ----------------
 let S;
-const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null, openCat: null }; // day: 달력에서 고른 날짜, openCat: 현황(상세)에서 펼친 카테고리
+const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null, openCat: null, dayOpen: {}, dayMore: {} }; // day: 달력에서 고른 날짜, openCat: 현황(상세)에서 펼친 카테고리, dayOpen/dayMore: 내역 탭에서 펼치거나 접은 날짜
 
 const liveTx = () => Object.values(S.transactions).filter((t) => !t.deleted);
 const monthTx = () => liveTx().filter((t) => t.date.startsWith(ui.month));
@@ -549,7 +549,7 @@ function txRow(t, { withDate = false } = {}) {
 }
 
 /** 날짜 머리줄: 왼쪽 [일] [요일] [년-월], 오른쪽 1줄 수입·지출 / 2줄 신용·마통 */
-function dayHead(date, items) {
+function dayHead(date, items, { fold = null } = {}) {
   const dt = new Date(date + "T00:00:00");
   const dow = "일월화수목금토"[dt.getDay()];
   const inc = sum(items.filter((t) => t.kind === "수입"));
@@ -557,11 +557,11 @@ function dayHead(date, items) {
   const line1 = [inc && `<span class="inc">${signed(inc, "+")}</span>`, exp && `<span class="exp">${signed(exp, "-")}</span>`].filter(Boolean).join(" ");
   const line2 = shortDebtTotals(items);
   return `
-        <div class="day-head2">
+        <div class="day-head2${fold ? " foldable" : ""}"${fold ? ` data-day-fold="${date}"` : ""}>
           <div class="dh-left">
             <span class="dh-day">${dt.getDate()}</span>
             <span class="dh-dow${dt.getDay() === 0 ? " sun" : dt.getDay() === 6 ? " sat" : ""}">${dow}요일</span>
-            <span class="dh-ym">${date.slice(0, 7)}</span>
+            ${fold ? `<span class="dh-ym">${fold === "closed" ? `${items.length}건 ▾` : "▴"}</span>` : `<span class="dh-ym">${date.slice(0, 7)}</span>`}
           </div>
           <div class="dh-right">${line1 ? `<div>${line1}</div>` : ""}${line2 ? `<div>${line2}</div>` : ""}</div>
         </div>`;
@@ -669,12 +669,20 @@ function listView() {
   if (!tx.length) return `<div class="card"><div class="empty">이번 달 내역이 없어요.<br>아래 + 버튼으로 추가해 보세요.</div></div>`;
   const days = {};
   tx.forEach((t) => (days[t.date] ||= []).push(t));
+  // 최근 OPEN_DAYS일만 펼쳐 두고 그 전 날짜는 머리줄(합계)만. 머리줄을 누르면 펼치고 접는다.
+  // 펼친 날도 내역이 많으면 DAY_LIMIT건까지만 보이고 '더 보기'로 나머지를 연다.
+  const OPEN_DAYS = 3, DAY_LIMIT = 5;
   return Object.entries(days)
-    .map(([date, items]) => {
+    .map(([date, items], i) => {
+      const open = ui.dayOpen[date] ?? i < OPEN_DAYS;
+      const more = ui.dayMore[date] || items.length <= DAY_LIMIT + 1;
+      const shown = !open ? [] : more ? items : items.slice(0, DAY_LIMIT);
       return `
-      <section class="card day">
-        ${dayHead(date, items)}
-        ${items.map(txRow).join("")}
+      <section class="card day${open ? "" : " folded"}">
+        ${dayHead(date, items, { fold: open ? "open" : "closed" })}
+        ${shown.map((t) => txRow(t)).join("")}
+        ${open && !more ? `<button class="day-more" data-day-more="${date}">${items.length - DAY_LIMIT}건 더 보기 ▾</button>` : ""}
+        ${open && ui.dayMore[date] && items.length > DAY_LIMIT + 1 ? `<button class="day-more" data-day-less="${date}">줄이기 ▴</button>` : ""}
       </section>`;
     })
     .join("");
@@ -1765,6 +1773,15 @@ function bindEvents() {
   $("#view").addEventListener("click", (e) => {
     const seg = e.target.closest("[data-seg]");
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
+    const fold = e.target.closest("[data-day-fold]");
+    if (fold) {
+      const d = fold.dataset.dayFold;
+      ui.dayOpen[d] = fold.closest(".day").classList.contains("folded");
+      render();
+      return;
+    }
+    const more = e.target.closest("[data-day-more],[data-day-less]");
+    if (more) { ui.dayMore[more.dataset.dayMore || more.dataset.dayLess] = !!more.dataset.dayMore; render(); return; }
     const go = e.target.closest("[data-month-go]");
     if (go) { ui.month = go.dataset.monthGo; ui.tab = "home"; render(); window.scrollTo(0, 0); return; }
     const day = e.target.closest("[data-day]");

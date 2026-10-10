@@ -353,3 +353,8 @@ input[type="date"].input { color-scheme: dark; }
 .sync-badge.sb-busy { color: #f3dc94; background: rgba(243, 220, 148, 0.12); border-color: rgba(243, 220, 148, 0.35); }
 .sync-badge.sb-bad { color: #ff9fae; background: rgba(255, 159, 174, 0.12); border-color: rgba(255, 159, 174, 0.35); }
 .sync-badge.sb-off { color: var(--muted); background: var(--row); border-color: #303035; }
+
+/* 내역: 날짜 접기 */
+.day-head2.foldable { cursor: pointer; }
+.day.folded .day-head2 { border-bottom: 0; padding-bottom: 0; }
+.day-more { display: block; width: 100%; padding: 10px 0 0; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 0.8rem; text-align: center; }
