@@ -1805,7 +1805,7 @@ function openBackupDialog() {
           <option value="year">${ui.month.slice(0, 4)}년 내역</option>
           <option value="all">전체 내역</option>
         </select>
-        <button class="btn excel-btn" data-excel>엑셀 파일 저장</button>
+        <button class="btn excel-btn" data-excel><svg class="excel-ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#1d7a45"/><path d="M8.2 8l7.6 8M15.8 8l-7.6 8" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>엑셀 파일 저장</button>
       </div>
       <div class="section-title">가져오기</div>
       <p class="note">백업 파일의 내역을 지금 데이터에 <b style="font-weight:400;color:#fff">합쳐요</b>. 같은 내역은 최신 것으로 바뀌고, 지금 데이터는 지워지지 않아요.</p>

@@ -411,4 +411,4 @@ input[type="date"].input { color-scheme: dark; }
 
 /* 백업/복원: 엑셀 내보내기 (기간 고르기 + 버튼) */
 .money-line .excel-range { flex: 1; min-width: 0; }
-.money-line .excel-btn { flex: 0 0 auto; width: auto; min-height: 44px; padding: 0 14px; white-space: nowrap; }
+.money-line .excel-btn { flex: 0 0 auto; width: auto; min-height: 44px; padding: 0 14px; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; }
