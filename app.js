@@ -515,7 +515,7 @@ function homeView(part = "summary") {
 /** 내역 한 줄 (누르면 수정 창) */
 /** withDate: 여러 날짜가 섞인 목록(현황(상세) 펼치기)에서는 날짜도 함께 표시 */
 function txRow(t, { withDate = false } = {}) {
-  // 뱃지: 카테고리(수입=연한 레드, 지출=연한 블루, 자산이동=연한 옐로우) + 부채로 결제했으면 그 부채 이름(하늘색)
+  // 뱃지: 카테고리(수입=연한 레드, 지출=연한 블루, 자산이동=연한 옐로우) + 부채로 결제했으면 그 부채 종류(하늘색, 이름은 아래 결제 줄에)
   const kindBadge = t.kind === "수입" ? "b-inc" : t.kind === "지출" ? "b-exp" : "b-mov";
   const d = deltaRef(t.assetDelta);
   const debt = d?.col === "debts" ? S.debts[d.id] : null;
@@ -533,7 +533,7 @@ function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debt.name)}</span>` : ""}<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span></div>
+              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debt.type || debt.name)}</span>` : ""}<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span></div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo">${via}</div>` : ""}
