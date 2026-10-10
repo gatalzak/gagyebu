@@ -301,7 +301,7 @@ input[type="date"].input { color-scheme: dark; }
 .tx-content { color: #fff; font-size: calc(0.95rem + var(--fs-up)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx .memo { font-size: calc(0.75rem + var(--fs-up)); margin-top: 1px; }
 /* 탭 5개: 폰 폭에 맞게 글자를 조금 줄임 */
-.tabs:not(.sub-tabs) button { font-size: calc(0.86rem + var(--fs-up)); white-space: nowrap; }
+.tabs:not(.sub-tabs) button { font-size: calc(0.94rem + var(--fs-up)); white-space: nowrap; flex: 1 1 auto; padding-left: 2px; padding-right: 2px; } /* 글자 길이만큼 폭을 나눠 현황(상세)도 안 잘리게 */
 /* 달력 월 합계: 1줄 수입·지출, 2줄 신용·마통 */
 .card-head.cal-head { align-items: flex-start; }
 .cal-sum { text-align: right; line-height: 1.6; white-space: nowrap; }
