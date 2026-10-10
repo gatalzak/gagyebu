@@ -353,7 +353,6 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
 }
 
 /** 화면 표시용 '식비 › 외식' */
-const catLabel = (t) => (t.subcategory ? `${t.category} › ${t.subcategory}` : t.category);
 /** 자산이동 경로 '출금 자산 → 입금 자산'(상환은 '출금 자산 → 부채'). 연결된 자산이 없으면 "" (이스케이프 전 글자) */
 function moveRoute(t) {
   const ds = t.deltas || [];
@@ -637,7 +636,7 @@ function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span>` : ""}</div>
+              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
@@ -1390,7 +1389,7 @@ function openFavorites({ onPick, onBack }) {
       headExtra: favs.length ? `<button class="icon-only${editing ? " on" : ""}" data-act="edit" aria-label="편집">${PENCIL}</button>` : "",
       body: favs.length ? favs.map((f) => {
         const badge = f.kind === "수입" ? "b-inc" : f.kind === "지출" ? "b-exp" : "b-mov";
-        const cat = esc(f.category || "") + (f.subcategory ? ` › ${esc(f.subcategory)}` : "");
+        const cat = esc(f.category || "");
         const via = favViaText(f);
         const sd = shortDebtType({ kind: f.kind, assetDelta: parseLinkKey(f.link) });
         return `
