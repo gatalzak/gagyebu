@@ -20,6 +20,9 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const pad = (n) => String(n).padStart(2, "0");
 const ym = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 const todayStr = () => { const d = new Date(); return `${ym(d)}-${pad(d.getDate())}`; };
+const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+/** 최신이 위로: 날짜 → 시각(없으면 맨 아래) → 등록 순 */
+const txNewestFirst = (a, b) => (b.date + (b.time || "") + b.createdAt).localeCompare(a.date + (a.time || "") + a.createdAt);
 const won = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
 const signed = (n, sign) => `${sign}${won(n)}`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -149,7 +152,7 @@ function txRow(t) {
           <button class="tx" data-tx="${t.id}">
             <div class="left">
               <div>${esc(t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
-              ${t.memo ? `<div class="memo">${esc(t.memo)}</div>` : ""}
+              ${t.time || t.memo ? `<div class="memo">${[t.time, t.memo && esc(t.memo)].filter(Boolean).join(" · ")}</div>` : ""}
             </div>
             <span class="amt ${KIND_CLASS[t.kind]}">${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
@@ -198,7 +201,7 @@ function calendarView() {
       </button>`);
   }
 
-  const sel = ui.day ? (byDay[ui.day] || []).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : [];
+  const sel = ui.day ? (byDay[ui.day] || []).sort(txNewestFirst) : [];
   return `
   <section class="card">
     <div class="card-head"><span>${m}월</span><span class="cal-sum"><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span></span></div>
@@ -213,7 +216,7 @@ function calendarView() {
 }
 
 function listView() {
-  const tx = monthTx().sort((a, b) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt));
+  const tx = monthTx().sort(txNewestFirst);
   if (!tx.length) return `<div class="card"><div class="empty">이번 달 내역이 없어요.<br>아래 + 버튼으로 추가해 보세요.</div></div>`;
   const days = {};
   tx.forEach((t) => (days[t.date] ||= []).push(t));
@@ -260,7 +263,7 @@ function bindAmount(input) {
 function openTxDialog(existing, presetDate) {
   const draft = existing
     ? { currency: "KRW", ...existing }
-    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, memo: "" };
+    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
 
@@ -286,7 +289,12 @@ function openTxDialog(existing, presetDate) {
         <div class="field" data-krw-field ${foreign ? "" : "hidden"}><label>원화 금액 <span class="muted" data-rate></span></label>
           <input class="input amount-input" name="krw" inputmode="numeric" autocomplete="off" placeholder="0" value="${fmtAmount(Math.round(draft.krw || 0))}">
         </div>
-        <div class="field"><label>날짜</label><input class="input" type="date" name="date" value="${draft.date}"></div>
+        <div class="field"><label>날짜 · 시간</label>
+          <div class="money-line">
+            <input class="input" type="date" name="date" value="${draft.date}">
+            <input class="input time-input" type="time" name="time" value="${draft.time || ""}">
+          </div>
+        </div>
         <div class="field"><label>카테고리</label>
           <select class="input" name="category">${CATEGORIES[draft.kind].map((c) => `<option ${c === draft.category ? "selected" : ""}>${c}</option>`).join("")}</select>
         </div>
@@ -316,6 +324,7 @@ function openTxDialog(existing, presetDate) {
       draft.amount = parseMoney(amt.value, draft.currency);
       draft.krw = parseAmount(krwIn.value);
       draft.date = $p("[name=date]").value;
+      draft.time = $p("[name=time]").value;
       draft.category = $p("[name=category]").value;
       draft.memo = $p("[name=memo]").value;
     };
@@ -337,6 +346,7 @@ function openTxDialog(existing, presetDate) {
       const rec = {
         id: existing?.id || uid(),
         date: draft.date,
+        time: draft.time || "",
         kind: draft.kind,
         expenseType: draft.kind === "지출" ? draft.expenseType : "",
         category: draft.category,
