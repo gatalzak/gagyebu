@@ -342,7 +342,8 @@ function render() {
   $("#month-title").textContent = `${y}년 ${Number(m)}월`;
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === ui.tab));
   const view = $("#view");
-  if (ui.tab === "home") view.innerHTML = homeView();
+  if (ui.tab === "home") view.innerHTML = homeView("summary");
+  else if (ui.tab === "detail") view.innerHTML = homeView("detail");
   else if (ui.tab === "list") view.innerHTML = listView();
   else if (ui.tab === "calendar") view.innerHTML = calendarView();
   else view.innerHTML = `<div class="card"><div class="empty">월별 화면은 준비 중이에요.</div></div>`;
@@ -372,7 +373,8 @@ function shortDebtTotals(items) {
   }).filter(Boolean).join(" ");
 }
 
-function homeView() {
+/** part: "summary" = 현황(이번달 현재·부채(단기)), "detail" = 현황(상세) */
+function homeView(part = "summary") {
   const tx = monthTx();
   const inc = tx.filter((t) => t.kind === "수입");
   const exp = tx.filter((t) => t.kind === "지출");
@@ -414,7 +416,7 @@ function homeView() {
     .map(([c, v]) => `<div class="row-sub" style="padding:6px 4px 0"><span>${esc(c)}</span><span class="${cls}">${signed(v, sign)}</span></div>`)
     .join("");
 
-  return `
+  const summary = `
   <section class="card">
     <div class="card-head"><span>이번달 현재</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
     <div class="row"><div class="row-main"><span>수입</span><span class="inc">${signed(sum(inc), "+")}</span></div></div>
@@ -428,9 +430,11 @@ function homeView() {
   <section class="card">
     <div class="card-head"><span>부채(단기)</span><span class="cred">${signed(sum(shortDebt), "-")}</span></div>
     ${shortDebtRows}
-  </section>
+  </section>`;
+  if (part === "summary") return summary;
+  return `
   <section class="card">
-    <div class="card-head plain"><span>상세 현황</span></div>
+    <div class="card-head plain"><span>현황(상세)</span></div>
     <div class="seg seg-5" data-role="detail-seg">
       ${Object.keys(segs).map((s) => `<button data-seg="${s}" class="${s === ui.seg ? "on" : ""}">${s}</button>`).join("")}
     </div>

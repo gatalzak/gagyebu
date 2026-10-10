@@ -292,3 +292,5 @@ input[type="date"].input { color-scheme: dark; }
 .cat-badge.b-cred { background: #e3f6ff; color: #1590c4; }
 .tx-content { color: #fff; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx .memo { font-size: 0.75rem; margin-top: 1px; }
+/* 탭 5개: 폰 폭에 맞게 글자를 조금 줄임 */
+.tabs:not(.sub-tabs) button { font-size: 0.86rem; white-space: nowrap; }
