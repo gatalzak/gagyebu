@@ -401,9 +401,10 @@ input[type="date"].input { color-scheme: dark; }
 .field.flow-to { margin-top: 0; }
 
 /* 월별: 왼쪽 수입·지출·Total / 오른쪽 신용·마통·부채 증가 */
-.mc-cols { display: flex; flex-wrap: wrap; gap: 4px 16px; justify-content: flex-end; text-align: right; } /* 금액이 길면 오른쪽 칸이 아래로 내려감 */
+.mc-cols { display: flex; flex-wrap: wrap; gap: 4px 15px; justify-content: flex-end; text-align: right; } /* 금액이 길면 오른쪽 칸이 아래로 내려감 */
+.mc-cols > div + div { padding-left: 15px; border-left: 1px solid var(--line); } /* 왼쪽(수입·지출·합계) | 오른쪽(신용·마통·부채) 구분 */
 .mc-total { color: #fff; }
 .month-badge { white-space: nowrap; flex: 0 0 auto; }
-.cal-head .mc-cols { gap: 4px 10px; font-size: calc(0.78rem + var(--fs-up)); }
+.cal-head .mc-cols { gap: 4px 15px; font-size: calc(0.78rem + var(--fs-up)); }
 .cal-head:has(.mc-cols) { gap: 8px; }
 .cal-head:has(.mc-cols) .month-badge { padding: 4px 8px; }
