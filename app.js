@@ -153,8 +153,10 @@ function txRow(t) {
             <div class="left">
               <div>${esc(t.content || t.category)}${t.kind === "지출" ? ` <span class="muted" style="font-size:.75rem">${t.expenseType}</span>` : ""}</div>
               ${(() => {
-                const toAsset = t.assetDelta && S.assets[t.assetDelta.assetId];
-                const sub = [t.time, t.content && esc(t.category), t.party && esc(t.party), toAsset && `${t.assetDelta.amount >= 0 ? "입금" : "출금"} ${esc(toAsset.name)}`, t.memo && esc(t.memo)].filter(Boolean).join(" · ");
+                const d = deltaRef(t.assetDelta);
+                const linked = d && S[d.col]?.[d.id];
+                const how = d && (d.col === "debts" ? "결제" : d.amount >= 0 ? "입금" : "출금");
+                const sub = [t.time, t.content && esc(t.category), t.party && esc(t.party), linked && `${how} ${esc(linked.name)}`, t.memo && esc(t.memo)].filter(Boolean).join(" · ");
                 return sub ? `<div class="memo">${sub}</div>` : "";
               })()}
             </div>
@@ -264,12 +266,21 @@ function bindAmount(input) {
 /** 금액칸 단위 표시: 원화는 '원', 외화는 통화 코드 */
 const unitLabel = (cur) => (cur === "KRW" ? "원" : cur);
 
-// ---------------- 수입 → 자산 입금 / 지출 → 자산 출금 ----------------
-const ASSET_LINK = { 수입: { label: "입금 자산", sign: 1, verb: "입금" }, 지출: { label: "출금 자산", sign: -1, verb: "출금" } };
-// 수입을 저장하면 고른 자산 잔액이 늘어난다. 실제로 더한 값(자산 통화 기준)을 내역의 assetDelta에 기록해 두고,
+// ---------------- 수입 → 자산 입금 / 지출 → 자산 출금 또는 부채(신용카드 등) 증가 ----------------
+// 저장하면 고른 자산·부채 잔액을 바꾸고, 실제로 바꾼 값(그 항목 통화 기준)을 내역의 assetDelta {col, id, amount}에 기록한다.
 // 내역을 고치거나 지우면 그 값을 그대로 빼서 되돌린다(그사이 환율이 바뀌어도 정확히 되돌아감).
+// 예전 기록은 {assetId, amount} 형태라 col이 없으면 자산으로 본다.
+const ASSET_LINK = {
+  수입: { label: "입금 자산", cols: ["assets"] },
+  지출: { label: "결제 수단", cols: ["assets", "debts"] }, // 자산에서 출금하거나 신용카드 등 부채로 결제
+};
+/** 잔액 변화 방향: 수입→자산 +, 지출→자산 -, 지출→부채 + */
+const linkSign = (kind, col) => (kind === "수입" ? 1 : col === "debts" ? 1 : -1);
+const deltaRef = (d) => d && { col: d.col || "assets", id: d.id || d.assetId, amount: d.amount };
+const linkKey = (col, id) => `${col}:${id}`;
+const parseLinkKey = (key) => { const [col, id] = (key || "").split(":"); return id ? { col, id } : null; };
 
-/** 내역 금액을 자산 통화로 바꾼다. 환율을 몰라 바꿀 수 없으면 null. */
+/** 내역 금액을 자산·부채 통화로 바꾼다. 환율을 몰라 바꿀 수 없으면 null. */
 function amountInCurrency(rec, cur) {
   if (cur === rec.currency) return rec.amount;
   const krw = rec.currency === "KRW" ? rec.amount : rec.krw;
@@ -279,22 +290,27 @@ function amountInCurrency(rec, cur) {
 }
 const roundFor = (n, cur) => { const f = 10 ** decimals(cur); return Math.round(n * f) / f; };
 
-/** 자산 잔액을 amount만큼 더한다(빼려면 음수). 자산이 지워졌으면 아무것도 하지 않는다. */
-function adjustAsset(id, amount, now) {
-  const a = S.assets[id];
+/** 자산·부채 잔액을 amount만큼 더한다(빼려면 음수). 지워진 항목이면 아무것도 하지 않는다. */
+function adjustHolding(col, id, amount, now) {
+  const a = S[col]?.[id];
   if (!a || a.deleted) return;
   const cur = a.currency || "KRW";
-  S.assets[id] = { ...a, amount: roundFor(a.amount + amount, cur), updatedAt: now };
+  S[col][id] = { ...a, amount: roundFor(a.amount + amount, cur), updatedAt: now };
 }
 
-/** 입금 자산 선택 목록: 종류별로 묶고 현재 잔액을 함께 보여 준다 */
-function assetOptions(selected) {
-  const assets = Object.values(S.assets).filter((a) => !a.deleted).sort(makeOrder(ASSET_TYPES));
-  const groups = ASSET_TYPES.filter((t) => assets.some((a) => a.type === t));
-  return `<option value="">선택 안 함</option>` + groups.map((t) => `
-    <optgroup label="${t}">${assets.filter((a) => a.type === t).map((a) =>
-      `<option value="${a.id}" ${a.id === selected ? "selected" : ""}>${esc(a.name)} · ${formatMoney(a.amount, a.currency || "KRW")}</option>`).join("")}
+/** 선택 목록: 자산(종류별) → 부채(종류별), 현재 잔액을 함께 보여 준다 */
+function holdingOptions(cols, selectedKey) {
+  const html = cols.map((col) => {
+    const types = HOLDINGS[col].types;
+    const items = Object.values(S[col]).filter((a) => !a.deleted).sort(makeOrder(types));
+    return types.filter((t) => items.some((a) => a.type === t)).map((t) => `
+    <optgroup label="${col === "debts" ? `부채 · ${t}` : t}">${items.filter((a) => a.type === t).map((a) => {
+      const key = linkKey(col, a.id);
+      return `<option value="${key}" ${key === selectedKey ? "selected" : ""}>${esc(a.name)} · ${formatMoney(a.amount, a.currency || "KRW")}</option>`;
+    }).join("")}
     </optgroup>`).join("");
+  }).join("");
+  return `<option value="">선택 안 함</option>` + html;
 }
 
 // 내역 추가/수정
@@ -306,7 +322,7 @@ function openTxDialog(existing, presetDate) {
     : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
-  if (existing) draft.assetId = existing.assetDelta?.assetId || "";
+  if (existing) { const d = deltaRef(existing.assetDelta); draft.link = d ? linkKey(d.col, d.id) : ""; }
 
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
@@ -344,7 +360,7 @@ function openTxDialog(existing, presetDate) {
         </div>
         ${ASSET_LINK[draft.kind] ? `
         <div class="field"><label>${ASSET_LINK[draft.kind].label}</label>
-          <select class="input" name="asset">${assetOptions(draft.assetId)}</select>
+          <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link)}</select>
           <div class="fx-hint" data-asset-hint></div>
         </div>` : ""}
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
@@ -385,7 +401,7 @@ function openTxDialog(existing, presetDate) {
       draft.content = $p("[name=content]").value;
       draft.party = $p("[name=party]").value;
       draft.memo = $p("[name=memo]").value;
-      if ($p("[name=asset]")) draft.assetId = $p("[name=asset]").value;
+      if ($p("[name=asset]")) draft.link = $p("[name=asset]").value;
     };
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); });
     curSel.onchange = () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); };
@@ -395,14 +411,16 @@ function openTxDialog(existing, presetDate) {
     const assetSel = $p("[name=asset]");
     const refreshAssetHint = () => {
       if (!assetSel) return;
-      const a = S.assets[assetSel.value];
+      const ref = parseLinkKey(assetSel.value);
+      const a = ref && S[ref.col][ref.id];
       const hint = $p("[data-asset-hint]");
       if (!a) { hint.textContent = ""; return; }
       const cur = curOf(a);
       const add = amountInCurrency({ currency: curSel.value, amount: parseMoney(amt.value, curSel.value), krw: parseAmount(krwIn.value) }, cur);
-      hint.textContent = add === null ? "환율 정보가 없어 이 자산에 반영할 수 없어요" : !add ? "" : ASSET_LINK[draft.kind].sign > 0
-        ? `저장하면 ${a.name} 잔액이 +${formatMoney(roundFor(add, cur), cur)} 늘어나요`
-        : `저장하면 ${a.name} 잔액이 -${formatMoney(roundFor(add, cur), cur)} 줄어들어요`;
+      const what = ref.col === "debts" ? "부채가" : "잔액이";
+      hint.textContent = add === null ? "환율 정보가 없어 반영할 수 없어요" : !add ? "" : linkSign(draft.kind, ref.col) > 0
+        ? `저장하면 ${a.name} ${what} +${formatMoney(roundFor(add, cur), cur)} 늘어나요`
+        : `저장하면 ${a.name} ${what} -${formatMoney(roundFor(add, cur), cur)} 줄어들어요`;
     };
     if (assetSel) {
       assetSel.onchange = refreshAssetHint;
@@ -438,20 +456,22 @@ function openTxDialog(existing, presetDate) {
         deleted: false,
       };
       let delta = null;
-      if (ASSET_LINK[rec.kind] && draft.assetId) {
-        const a = S.assets[draft.assetId];
-        if (!a || a.deleted) return toast("선택한 자산을 찾을 수 없어요.");
+      const ref = ASSET_LINK[rec.kind] && parseLinkKey(draft.link);
+      if (ref && ASSET_LINK[rec.kind].cols.includes(ref.col)) {
+        const a = S[ref.col][ref.id];
+        if (!a || a.deleted) return toast("선택한 항목을 찾을 수 없어요.");
         const add = amountInCurrency(rec, curOf(a));
-        if (add === null) return toast("환율 정보가 없어 자산에 반영할 수 없어요.");
-        delta = { assetId: a.id, amount: ASSET_LINK[rec.kind].sign * roundFor(add, curOf(a)) };
+        if (add === null) return toast("환율 정보가 없어 반영할 수 없어요.");
+        delta = { col: ref.col, id: a.id, amount: linkSign(rec.kind, ref.col) * roundFor(add, curOf(a)) };
       }
-      if (existing?.assetDelta) adjustAsset(existing.assetDelta.assetId, -existing.assetDelta.amount, now);
-      if (delta) { adjustAsset(delta.assetId, delta.amount, now); rec.assetDelta = delta; }
+      const prev = deltaRef(existing?.assetDelta);
+      if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
+      if (delta) { adjustHolding(delta.col, delta.id, delta.amount, now); rec.assetDelta = delta; }
       S.transactions[rec.id] = rec;
       closeModal();
       ui.month = rec.date.slice(0, 7);
       await commit();
-      const target = delta && S.assets[delta.assetId];
+      const target = delta && S[delta.col][delta.id];
       toast(`${rec.kind} ${formatMoney(rec.amount, rec.currency)} ${existing ? "수정" : "추가"}했어요` +
         (target ? ` · ${target.name} ${delta.amount >= 0 ? "+" : "-"}${formatMoney(Math.abs(delta.amount), curOf(target))}` : ""));
     };
@@ -459,11 +479,12 @@ function openTxDialog(existing, presetDate) {
     if (del) del.onclick = async () => {
       if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
       const now = nowISO();
-      if (existing.assetDelta) adjustAsset(existing.assetDelta.assetId, -existing.assetDelta.amount, now);
+      const prev = deltaRef(existing.assetDelta);
+      if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
       closeModal();
       await commit();
-      toast(existing.assetDelta ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요");
+      toast(prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : "삭제했어요");
     };
     if (!existing && !draft.amount) amt.focus();
   };
