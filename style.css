@@ -320,3 +320,7 @@ input[type="date"].input { color-scheme: dark; }
 .detail-cat .asset-group-head:has(+ .detail-sub) { border-bottom: 1px solid var(--line); }
 .detail-sub { padding: 9px 0 9px 10px; color: var(--muted); }
 .detail-sub .name, .detail-sub .amt { font-size: 0.85rem; color: var(--muted); }
+.detail-cat { cursor: pointer; }
+.cat-chev { color: var(--muted); font-size: 0.85rem; margin-left: 2px; }
+.detail-items { border-top: 1px solid var(--line); margin-top: 2px; cursor: default; }
+.detail-cat.open .asset-group-head { border-bottom: 1px solid var(--line); }

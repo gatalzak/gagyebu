@@ -63,7 +63,7 @@ function toast(msg) {
 
 // ---------------- 상태 ----------------
 let S;
-const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null }; // day: 달력에서 고른 날짜(YYYY-MM-DD)
+const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null, openCat: null }; // day: 달력에서 고른 날짜, openCat: 현황(상세)에서 펼친 카테고리
 
 const liveTx = () => Object.values(S.transactions).filter((t) => !t.deleted);
 const monthTx = () => liveTx().filter((t) => t.date.startsWith(ui.month));
@@ -443,10 +443,15 @@ function homeView(part = "summary") {
       const rest = subs[""] || 0;
       // 하위 카테고리가 하나도 없으면 하위 줄을 생략, 섞여 있으면 하위 없는 금액을 '미분류'로
       const rows = named.length ? named.concat(rest ? [["미분류", rest]] : []) : [];
+      // 섹션을 누르면 그 카테고리 내역을 펼친다(다시 누르면 접힘)
+      const key = `${ui.seg}|${c}`;
+      const open = ui.openCat === key;
+      const items = open ? selTx.filter((t) => t.category === c).sort(txNewestFirst) : [];
       return `
-      <section class="asset-group detail-cat">
-        <div class="asset-group-head"><span>${esc(c)}</span><span class="${cls}">${signed(total, sign)}</span></div>
+      <section class="asset-group detail-cat${open ? " open" : ""}" data-detail-cat="${esc(key)}">
+        <div class="asset-group-head"><span>${esc(c)} <span class="cat-chev">${open ? "⌄" : "›"}</span></span><span class="${cls}">${signed(total, sign)}</span></div>
         ${rows.map(([s, v]) => `<div class="asset-row detail-sub"><span class="name">${esc(s)}</span><span class="amt">${signed(v, sign)}</span></div>`).join("")}
+        ${open ? `<div class="detail-items">${items.map((t) => txRow(t, { withDate: true })).join("")}</div>` : ""}
       </section>`;
     })
     .join("");
@@ -484,13 +489,14 @@ function homeView(part = "summary") {
     <div class="seg seg-5" data-role="detail-seg">
       ${Object.keys(segs).map((s) => `<button data-seg="${s}" class="${s === ui.seg ? "on" : ""}">${s}</button>`).join("")}
     </div>
-    <div class="total-bar"><span>합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
+    <div class="total-bar"><span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
     ${catSections || `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
   </section>`;
 }
 
 /** 내역 한 줄 (누르면 수정 창) */
-function txRow(t) {
+/** withDate: 여러 날짜가 섞인 목록(현황(상세) 펼치기)에서는 날짜도 함께 표시 */
+function txRow(t, { withDate = false } = {}) {
   // 뱃지: 카테고리(수입=연한 레드, 지출=연한 블루, 자산이동=연한 옐로우) + 부채로 결제했으면 그 부채 이름(하늘색)
   const kindBadge = t.kind === "수입" ? "b-inc" : t.kind === "지출" ? "b-exp" : "b-mov";
   const d = deltaRef(t.assetDelta);
@@ -501,7 +507,8 @@ function txRow(t) {
   const inA = !isRepay && t.deltas && S.assets[t.deltas.find((x) => x.amount > 0)?.id];
   const route = isRepay ? (from ? `${esc(from.name)}에서 상환` : "")
     : outA || inA ? `${outA ? esc(outA.name) : "?"} → ${inA ? esc(inA.name) : "?"}` : "";
-  const sub = [t.time, t.party ? esc(t.party) : route].filter(Boolean).join(" · ");
+  const when = withDate ? `${Number(t.date.slice(5, 7))}/${Number(t.date.slice(8, 10))} ${t.time || ""}`.trim() : t.time;
+  const sub = [when, t.party ? esc(t.party) : route].filter(Boolean).join(" · ");
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
@@ -1587,13 +1594,15 @@ function bindEvents() {
   window.addEventListener("offline", () => { sync.status = "offline"; renderSyncBar(); });
   $("#view").addEventListener("click", (e) => {
     const seg = e.target.closest("[data-seg]");
-    if (seg) { ui.seg = seg.dataset.seg; render(); return; }
+    if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
     const go = e.target.closest("[data-month-go]");
     if (go) { ui.month = go.dataset.monthGo; ui.tab = "home"; render(); window.scrollTo(0, 0); return; }
     const day = e.target.closest("[data-day]");
     if (day) { ui.day = day.dataset.day; render(); return; }
     const tx = e.target.closest("[data-tx]");
-    if (tx) openTxDialog(S.transactions[tx.dataset.tx]);
+    if (tx) { openTxDialog(S.transactions[tx.dataset.tx]); return; }
+    const cat = e.target.closest("[data-detail-cat]");
+    if (cat) { ui.openCat = ui.openCat === cat.dataset.detailCat ? null : cat.dataset.detailCat; render(); }
   });
   // 자산 창은 닫힐 때 홈 화면을 다시 그릴 필요가 없지만, 다른 창이 닫히면 최신 상태로 그린다.
   new MutationObserver(() => { if (!$("#modal-root").children.length) render(); }).observe($("#modal-root"), { childList: true });
