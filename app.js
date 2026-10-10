@@ -102,6 +102,185 @@ function addSubcat(kind, category, name) {
   const id = uid();
   S.subcats[id] = { id, kind, category, name, order: 999, createdAt: now, updatedAt: now, deleted: false };
 }
+// ---------------- 카테고리 ----------------
+// 카테고리도 기기 간 동기화되는 cats 묶음에 { kind, name, order } 로 저장한다(기본값은 고정 id defcat:…).
+// 내역·하위 카테고리는 카테고리를 '이름'으로 가리키므로, 이름을 바꾸면 그 이름을 쓰는 기록도 함께 바꾼다.
+function seedCats() {
+  let added = 0;
+  for (const [kind, names] of Object.entries(CATEGORIES)) {
+    names.forEach((name, i) => {
+      const id = `defcat:${kind}:${name}`;
+      if (S.cats[id]) return;
+      S.cats[id] = { id, kind, name, order: i, createdAt: SEED_TIME, updatedAt: SEED_TIME, deleted: false };
+      added++;
+    });
+  }
+  return added;
+}
+const catRecords = (kind) => Object.values(S.cats || {})
+  .filter((c) => !c.deleted && c.kind === kind)
+  .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.createdAt.localeCompare(b.createdAt));
+/** 그 구분(수입/지출/자산이동)의 카테고리 이름들 */
+const catsFor = (kind) => catRecords(kind).map((c) => c.name);
+const subcatRecords = (kind, category) => Object.values(S.subcats || {})
+  .filter((s) => !s.deleted && s.kind === kind && s.category === category)
+  .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.createdAt.localeCompare(b.createdAt));
+
+/** 카테고리 이름 바꾸기: 하위 카테고리와 내역의 카테고리 이름도 같이 바꾼다 */
+function renameCategory(kind, from, to, now) {
+  for (const c of Object.values(S.cats)) if (!c.deleted && c.kind === kind && c.name === from) S.cats[c.id] = { ...c, name: to, updatedAt: now };
+  for (const s of Object.values(S.subcats)) if (s.kind === kind && s.category === from) S.subcats[s.id] = { ...s, category: to, updatedAt: now };
+  for (const t of Object.values(S.transactions)) if (!t.deleted && t.kind === kind && t.category === from) S.transactions[t.id] = { ...t, category: to, updatedAt: now };
+}
+/** 하위 카테고리 이름 바꾸기: 내역의 하위 카테고리 이름도 같이 바꾼다 */
+function renameSubcat(id, to, now) {
+  const s = S.subcats[id];
+  for (const t of Object.values(S.transactions)) {
+    if (!t.deleted && t.kind === s.kind && t.category === s.category && t.subcategory === s.name) S.transactions[t.id] = { ...t, subcategory: to, updatedAt: now };
+  }
+  S.subcats[id] = { ...s, name: to, updatedAt: now };
+}
+
+/**
+ * 카테고리 편집 창: 구분별 카테고리 목록 → 카테고리를 누르면 이름·하위 카테고리 편집.
+ * 다 끝나면 onClose()로 원래 창(내역 추가)으로 돌아간다.
+ */
+function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal } = {}) {
+  let kind = startKind;
+
+  const drawList = () => {
+    const cats = catRecords(kind);
+    const panel = openModal({
+      title: "카테고리 편집",
+      body: `
+        <div class="seg" data-role="kind">${KINDS.map((k) => `<button data-v="${k}" class="${k === kind ? "on" : ""}">${k}</button>`).join("")}</div>
+        <section class="asset-group">
+          ${cats.map((c) => {
+            const subs = subcatRecords(kind, c.name).map((s) => s.name);
+            return `<button class="asset-row cat-row" data-cat="${c.id}">
+              <span class="name">${esc(c.name)}</span>
+              <span class="muted cat-subs">${subs.length ? esc(subs.join(", ")) : "하위 없음"}</span>
+              <span class="chev">›</span>
+            </button>`;
+          }).join("") || `<div class="asset-row asset-none">카테고리가 없습니다</div>`}
+        </section>
+        <div class="money-line subcat-add" style="margin-top:12px">
+          <input class="input" name="newCat" placeholder="새 카테고리 이름">
+          <button class="btn subcat-add-btn" data-act="add-cat">추가</button>
+        </div>
+        <button class="btn primary" data-act="done" style="margin-top:16px">완료</button>`,
+    });
+    panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { kind = b.dataset.v; drawList(); }));
+    panel.querySelectorAll("[data-cat]").forEach((b) => (b.onclick = () => drawCat(b.dataset.cat)));
+    panel.querySelector("[data-act=done]").onclick = () => onClose();
+    panel.querySelector("[data-act=add-cat]").onclick = async () => {
+      const name = panel.querySelector("[name=newCat]").value.trim();
+      if (!name) return toast("카테고리 이름을 입력해 주세요.");
+      if (catsFor(kind).includes(name)) return toast("이미 있는 카테고리예요.");
+      const now = nowISO();
+      const id = uid();
+      S.cats[id] = { id, kind, name, order: 999, createdAt: now, updatedAt: now, deleted: false };
+      await saveState(S);
+      scheduleSync();
+      drawList();
+      toast(`'${name}' 카테고리를 추가했어요`);
+    };
+  };
+
+  // 한 카테고리: 이름 바꾸기, 하위 카테고리 추가·이름 바꾸기·삭제, 카테고리 삭제
+  const drawCat = (catId, state = null) => {
+    const cat = S.cats[catId];
+    const s = state || {
+      name: cat.name,
+      subs: subcatRecords(kind, cat.name).map((x) => ({ id: x.id, name: x.name, del: false })),
+      confirmDelete: false,
+    };
+    const panel = openModal({
+      title: "카테고리 편집",
+      body: `
+        <button class="back-link" data-act="back">‹ ${kind} 카테고리 목록</button>
+        <div class="field"><label>카테고리 이름</label><input class="input" name="catName" value="${esc(s.name)}"></div>
+        <div class="field"><label>하위 카테고리</label>
+          <section class="asset-group" style="margin-top:0">
+            ${s.subs.map((x, i) => `
+              <div class="edit-item${x.del ? " removed" : ""}" data-i="${i}">
+                <div class="edit-body"><div class="edit-line">
+                  <input class="input sm" name="sub" value="${esc(x.name)}" ${x.del ? "disabled" : ""}>
+                  <button class="edit-del" data-toggle-del>${x.del ? "되돌리기" : "삭제"}</button>
+                </div></div>
+              </div>`).join("") || `<div class="asset-row asset-none">하위 카테고리가 없습니다</div>`}
+          </section>
+          <div class="money-line subcat-add">
+            <input class="input" name="newSub" placeholder="새 하위 카테고리 이름">
+            <button class="btn subcat-add-btn" data-act="add-sub">추가</button>
+          </div>
+        </div>
+        <div class="btn-row"><button class="btn" data-act="back2">취소</button><button class="btn primary" data-act="save">저장</button></div>
+        <button class="btn danger" data-act="delete" style="margin-top:8px">${s.confirmDelete ? "한 번 더 누르면 카테고리 삭제" : "이 카테고리 삭제"}</button>
+        <p class="note">이름을 바꾸면 이미 입력한 내역의 카테고리 이름도 함께 바뀌어요. 카테고리나 하위 카테고리를 삭제해도 이미 입력한 내역은 그대로 남아요.</p>`,
+    });
+    const $p = (q) => panel.querySelector(q);
+    const read = () => {
+      s.name = $p("[name=catName]").value;
+      panel.querySelectorAll(".edit-item").forEach((el) => {
+        const x = s.subs[Number(el.dataset.i)];
+        if (!x.del) x.name = el.querySelector("[name=sub]").value;
+      });
+    };
+    $p("[data-act=back]").onclick = drawList;
+    $p("[data-act=back2]").onclick = drawList;
+    panel.querySelectorAll("[data-toggle-del]").forEach((b) => (b.onclick = () => {
+      read();
+      const x = s.subs[Number(b.closest(".edit-item").dataset.i)];
+      x.del = !x.del;
+      drawCat(catId, s);
+    }));
+    $p("[data-act=add-sub]").onclick = () => {
+      read();
+      const name = $p("[name=newSub]").value.trim();
+      if (!name) return toast("하위 카테고리 이름을 입력해 주세요.");
+      if (s.subs.some((x) => !x.del && x.name.trim() === name)) return toast("이미 있는 하위 카테고리예요.");
+      s.subs.push({ id: null, name, del: false });
+      drawCat(catId, s);
+    };
+    $p("[data-act=save]").onclick = async () => {
+      read();
+      const newName = s.name.trim();
+      if (!newName) return toast("카테고리 이름을 입력해 주세요.");
+      if (newName !== cat.name && catsFor(kind).includes(newName)) return toast("이미 있는 카테고리 이름이에요.");
+      const live = s.subs.filter((x) => !x.del).map((x) => x.name.trim());
+      if (live.some((n) => !n)) return toast("이름이 빈 하위 카테고리가 있어요.");
+      if (new Set(live).size !== live.length) return toast("하위 카테고리 이름이 겹쳐요.");
+      const now = nowISO();
+      if (newName !== cat.name) renameCategory(kind, cat.name, newName, now);
+      s.subs.forEach((x, i) => {
+        if (x.id && x.del) S.subcats[x.id] = { ...S.subcats[x.id], deleted: true, updatedAt: now };
+        else if (x.id && S.subcats[x.id].name !== x.name.trim()) renameSubcat(x.id, x.name.trim(), now);
+        else if (!x.id && !x.del) {
+          const id = uid();
+          S.subcats[id] = { id, kind, category: newName, name: x.name.trim(), order: 999 + i, createdAt: now, updatedAt: now, deleted: false };
+        }
+      });
+      await saveState(S);
+      scheduleSync();
+      drawList();
+      toast("카테고리를 저장했어요");
+    };
+    $p("[data-act=delete]").onclick = async () => {
+      if (catRecords(kind).length <= 1) return toast("카테고리는 하나 이상 있어야 해요.");
+      if (!s.confirmDelete) { read(); s.confirmDelete = true; return drawCat(catId, s); }
+      const now = nowISO();
+      S.cats[catId] = { ...cat, deleted: true, updatedAt: now };
+      for (const x of subcatRecords(kind, cat.name)) S.subcats[x.id] = { ...x, deleted: true, updatedAt: now };
+      await saveState(S);
+      scheduleSync();
+      drawList();
+      toast(`'${cat.name}' 카테고리를 삭제했어요`);
+    };
+  };
+  drawList();
+}
+
 /** 화면 표시용 '식비 › 외식' */
 const catLabel = (t) => (t.subcategory ? `${t.category} › ${t.subcategory}` : t.category);
 
@@ -586,7 +765,7 @@ function openTxDialog(existing, presetDate) {
   if (existing?.deltas) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
   const draft = existing
     ? { currency: "KRW", ...existing }
-    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: CATEGORIES["지출"][0], currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
+    : { kind: "지출", expenseType: "변동", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
   if (existing) { const d = deltaRef(existing.assetDelta); draft.link = d ? linkKey(d.col, d.id) : ""; }
@@ -594,7 +773,9 @@ function openTxDialog(existing, presetDate) {
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
   const draw = () => {
-    if (!CATEGORIES[draft.kind].includes(draft.category)) draft.category = CATEGORIES[draft.kind][0];
+    const catList = catsFor(draft.kind);
+    if (!catList.includes(draft.category) && !(existing && existing.kind === draft.kind && existing.category === draft.category)) draft.category = catList[0] || "";
+    if (draft.category && !catList.includes(draft.category)) catList.push(draft.category); // 지워진 카테고리를 쓰던 내역
     const foreign = draft.currency !== "KRW";
     const panel = openModal({
       title: existing ? "내역 수정" : "내역 추가",
@@ -634,13 +815,14 @@ function openTxDialog(existing, presetDate) {
         <div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
         <div class="field"><label>카테고리 · 하위 카테고리</label>
           <div class="money-line">
-            <select class="input half" name="category">${CATEGORIES[draft.kind].map((c) => `<option ${c === draft.category ? "selected" : ""}>${c}</option>`).join("")}</select>
+            <select class="input half" name="category">${catList.map((c) => `<option ${c === draft.category ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
             <select class="input half" name="subcategory">
               <option value="">선택 안 함</option>
               ${subcatsFor(draft.kind, draft.category).concat(draft.subcategory && !subcatsFor(draft.kind, draft.category).includes(draft.subcategory) ? [draft.subcategory] : [])
                 .map((s) => `<option ${s === draft.subcategory ? "selected" : ""}>${esc(s)}</option>`).join("")}
               <option value="__add__">+ 직접 추가</option>
             </select>
+            <button class="icon-only cat-edit" data-act="edit-cats" aria-label="카테고리 편집">${PENCIL}</button>
           </div>
           <div class="money-line subcat-add" data-subcat-add hidden>
             <input class="input" name="newSubcat" placeholder="새 하위 카테고리 이름">
@@ -712,6 +894,10 @@ function openTxDialog(existing, presetDate) {
 
     panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { read(); draft.kind = b.dataset.v; draft.subcategory = ""; draw(); }));
     $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draw(); };
+    $p("[data-act=edit-cats]").onclick = () => {
+      read();
+      openCategoryEditor({ kind: draft.kind, onClose: () => draw() });
+    };
     $p("[name=subcategory]").onchange = (e) => {
       const adding = e.target.value === "__add__";
       $p("[data-subcat-add]").hidden = !adding;
@@ -1228,7 +1414,7 @@ async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
-  if (seedSubcats()) await saveState(S);
+  if (seedCats() + seedSubcats()) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();

@@ -260,3 +260,11 @@ input[type="date"].input { color-scheme: dark; }
   background: #2a2a30; border: 1px solid var(--line); color: #fff; font-size: 0.85rem;
   padding: 10px 16px; border-radius: 4px; z-index: 30; white-space: nowrap;
 }
+
+/* 카테고리 편집 */
+.cat-edit { flex: 0 0 auto; padding: 0 2px 0 4px; }
+.cat-row { width: 100%; text-align: left; }
+.cat-row .name { flex: 0 1 auto; }
+.cat-row .cat-subs { flex: 1; min-width: 0; text-align: right; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-row .chev { color: var(--muted); }
+.back-link { color: var(--muted); font-size: 0.82rem; padding: 2px 0 6px; }
