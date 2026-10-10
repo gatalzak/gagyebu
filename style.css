@@ -232,6 +232,7 @@ input[type="date"].input { color-scheme: dark; }
 .edit-item.removed .input { opacity: 0.35; text-decoration: line-through; }
 .edit-item.removed .edit-del { color: var(--text); }
 .asset-row + .asset-row { border-top: 1px solid var(--line-soft); }
+.asset-none { color: var(--muted); font-size: 0.82rem; }
 .asset-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
 .asset-row .amt { white-space: nowrap; font-size: 0.85rem; text-align: right; }
 .fx-sub { display: block; color: var(--muted); font-size: 0.72rem; }

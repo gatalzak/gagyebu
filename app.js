@@ -625,27 +625,26 @@ function openHoldingsDialog(col) {
     if (mode === "add") return drawAdd();
     if (mode === "edit") return drawEdit();
     const assets = sortedAssets();
-    const groups = cfg.types.filter((t) => assets.some((a) => a.type === t));
+    const groups = cfg.types; // 등록된 항목이 없어도 모든 종류 섹션을 보여 준다
     const all = krwTotal(assets);
     const hasForeign = assets.some((a) => curOf(a) !== "KRW");
-    const body = assets.length
-      ? `<div class="asset-total"><span class="muted">${cfg.total}</span><span>${all.missing ? "약 " : ""}${won(all.total)}</span></div>` +
+    const body =
+      `<div class="asset-total"><span class="muted">${cfg.total}</span><span>${all.missing ? "약 " : ""}${won(all.total)}</span></div>` +
         groups.map((t) => {
           const items = assets.filter((a) => a.type === t);
           const g = krwTotal(items);
           return `
           <section class="asset-group">
             <div class="asset-group-head"><span class="sector-badge">${t}</span><span class="sector-total">${won(g.total)}</span></div>
-            ${items.map((a) => {
+            ${items.length ? items.map((a) => {
               const cur = curOf(a);
               const krw = cur === "KRW" ? null : toKRW(a.amount, cur);
               return `<div class="asset-row"><span class="name">${esc(a.name)}</span>
                 <span class="amt">${formatMoney(a.amount, cur)}${cur !== "KRW" ? `<span class="fx-sub">${krw === null ? "환율 없음" : `≈ ${won(krw)}`}</span>` : ""}</span></div>`;
-            }).join("")}
+            }).join("") : `<div class="asset-row asset-none">등록된 ${cfg.subj} 없습니다</div>`}
           </section>`;
         }).join("") +
-        (hasForeign ? `<p class="note fx-note">외화는 ${ratesDate() ? `${ratesDate()} 환율` : "환율"}로 원화 환산해 합계에 넣었어요.${all.missing ? ` 환율을 받지 못한 ${all.missing}개는 합계에서 빠졌어요.` : ""}</p>` : "")
-      : `<div class="empty">등록된 ${cfg.subj} 없어요.<br>오른쪽 위 '${cfg.unit} 등록'으로 추가해 보세요.</div>`;
+        (hasForeign ? `<p class="note fx-note">외화는 ${ratesDate() ? `${ratesDate()} 환율` : "환율"}로 원화 환산해 합계에 넣었어요.${all.missing ? ` 환율을 받지 못한 ${all.missing}개는 합계에서 빠졌어요.` : ""}</p>` : "");
     const panel = openModal({
       cls: `theme-${col}`,
       title: cfg.title,
