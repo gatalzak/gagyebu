@@ -354,7 +354,7 @@ input[type="date"].input { color-scheme: dark; }
 .sync-badge.sb-bad { color: #ff9fae; background: rgba(255, 159, 174, 0.12); border-color: rgba(255, 159, 174, 0.35); }
 .sync-badge.sb-off { color: var(--muted); background: var(--row); border-color: #303035; }
 
-/* 내역: 날짜 접기 */
-.day-head2.foldable { cursor: pointer; }
-.day.folded .day-head2 { border-bottom: 0; padding-bottom: 0; }
+/* 내역: 이전 내역 펼치기/접기, 더 보기 */
+.older-toggle { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 10px; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 4px; font-size: 0.9rem; text-align: left; }
+.older-toggle .muted { font-size: 0.8rem; }
 .day-more { display: block; width: 100%; padding: 10px 0 0; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 0.8rem; text-align: center; }
