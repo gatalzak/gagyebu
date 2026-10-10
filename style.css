@@ -39,7 +39,22 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
 /* 상단 바 */
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 14px; }
 .month-nav { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-#month-title { font-size: 1.05rem; }
+#month-title { font-size: 1.05rem; padding: 2px 2px; border-radius: 3px; }
+#month-title:active { background: var(--row); }
+
+/* 날짜 선택 팝업 */
+.pick-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.pick-title { font-size: 1rem; padding: 4px 10px; border-radius: 3px; }
+.pick-title:active { background: var(--row); }
+.pick-day { position: relative; height: 40px; border-radius: 50%; font-size: 0.9rem; margin: 1px auto; width: 40px; }
+.pick-day.sun { color: #ff8a9b; } .pick-day.sat { color: #7cc4f5; }
+.pick-day.today { outline: 1px solid var(--wine); }
+.pick-day.on { background: var(--wine); color: #fff; }
+.pick-day i { position: absolute; left: 50%; bottom: 5px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--muted); }
+.pick-day.on i { background: #fff; }
+.pick-months { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+.pick-months button { height: 44px; border-radius: 3px; background: var(--row); border: 1px solid #303035; font-size: 0.9rem; }
+.pick-months button.on { background: var(--wine); border-color: var(--wine); color: #fff; }
 .icon-btn { color: #c8c8ce; font-size: 1.3rem; line-height: 1; padding: 2px 4px; }
 .top-actions { display: flex; gap: 4px; }
 .ghost-btn {

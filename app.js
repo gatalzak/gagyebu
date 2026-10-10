@@ -705,10 +705,69 @@ function openBackupDialog() {
   };
 }
 
+// 날짜 고르기: 상단 '2026년 10월'을 누르면 열리는 달력. 날짜를 고르면 그 달·그 날로 이동한다.
+// 제목(연·월)을 누르면 12개월 보기로 바뀌어 먼 달로 빨리 갈 수 있다.
+function openDatePicker() {
+  let view = ui.month;   // 팝업에서 보고 있는 달
+  let monthMode = false; // true: 12개월 보기
+  const today = todayStr();
+  const hasTx = new Set(liveTx().map((t) => t.date));
+
+  const draw = () => {
+    const [y, m] = view.split("-").map(Number);
+    let grid;
+    if (monthMode) {
+      grid = `<div class="pick-months">${Array.from({ length: 12 }, (_, i) => {
+        const v = `${y}-${pad(i + 1)}`;
+        return `<button data-month="${v}" class="${v === ui.month ? "on" : ""}">${i + 1}월</button>`;
+      }).join("")}</div>`;
+    } else {
+      const first = new Date(y, m - 1, 1).getDay();
+      const days = new Date(y, m, 0).getDate();
+      const cells = Array.from({ length: first }, () => `<span></span>`);
+      for (let d = 1; d <= days; d++) {
+        const date = `${view}-${pad(d)}`;
+        const dow = (first + d - 1) % 7;
+        cells.push(`<button data-date="${date}" class="pick-day${date === today ? " today" : ""}${date === ui.day ? " on" : ""}${dow === 0 ? " sun" : dow === 6 ? " sat" : ""}">
+          ${d}${hasTx.has(date) ? `<i></i>` : ""}</button>`);
+      }
+      grid = `
+        <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
+        <div class="cal-grid">${cells.join("")}</div>`;
+    }
+    const panel = openModal({
+      title: "날짜 선택",
+      body: `
+        <div class="pick-nav">
+          <button class="icon-btn" data-step="-1" aria-label="이전">‹</button>
+          <button class="pick-title" data-toggle>${monthMode ? `${y}년` : `${y}년 ${m}월`}</button>
+          <button class="icon-btn" data-step="1" aria-label="다음">›</button>
+        </div>
+        ${grid}
+        <div class="btn-row"><button class="btn" data-today>오늘</button></div>`,
+    });
+    panel.querySelectorAll("[data-step]").forEach((b) => (b.onclick = () => {
+      view = shiftMonth(view, Number(b.dataset.step) * (monthMode ? 12 : 1));
+      draw();
+    }));
+    panel.querySelector("[data-toggle]").onclick = () => { monthMode = !monthMode; draw(); };
+    panel.querySelectorAll("[data-month]").forEach((b) => (b.onclick = () => { view = b.dataset.month; monthMode = false; draw(); }));
+    const go = (date) => {
+      ui.month = date.slice(0, 7);
+      ui.day = date;
+      closeModal(); // 창이 닫히면 화면이 새 달로 다시 그려진다
+    };
+    panel.querySelectorAll("[data-date]").forEach((b) => (b.onclick = () => go(b.dataset.date)));
+    panel.querySelector("[data-today]").onclick = () => go(today);
+  };
+  draw();
+}
+
 // ---------------- 이벤트 ----------------
 function bindEvents() {
   $("#prev").onclick = () => { ui.month = shiftMonth(ui.month, -1); render(); };
   $("#next").onclick = () => { ui.month = shiftMonth(ui.month, 1); render(); };
+  $("#month-title").onclick = openDatePicker;
   document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => { ui.tab = b.dataset.tab; render(); }));
   $("#fab").onclick = () => openTxDialog(null, ui.tab === "calendar" && ui.day ? ui.day : undefined);
   $("#open-assets").onclick = () => openHoldingsDialog("assets");
