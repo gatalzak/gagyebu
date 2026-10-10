@@ -493,6 +493,7 @@ const HOME_ICONS = {
   자산이동: ICO('<path d="M4 8h14"/><path d="M14.5 4.5 18 8l-3.5 3.5"/><path d="M20 16H6"/><path d="M9.5 12.5 6 16l3.5 3.5"/>'), // 옮기기
   단기부채: ICO('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>'), // 카드
 };
+const SUM_ICON = ICO('<path d="M17 5H7l6 7-6 7h10"/>'); // 합계(Σ)
 const homeLabel = (key, text, cls) => `<span class="home-label"><span class="${cls}">${HOME_ICONS[key]}</span>${text}</span>`;
 
 /** part: "summary" = 현황(이번달 현재·단기 부채), "detail" = 현황(상세) */
@@ -605,7 +606,7 @@ function homeView(part = "summary") {
       ${Object.keys(segs).map((s) => `<button data-seg="${s}" class="${s === ui.seg ? "on" : ""}">${s}</button>`).join("")}
     </div>
     <div class="total-bar">
-      <div class="tb-main"><span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
+      <div class="tb-main"><span class="home-label"><span class="${cls}">${SUM_ICON}</span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
       ${ui.seg === "단기 부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${signed(v, "-")}</span></div>` : "";
