@@ -426,3 +426,9 @@ input[type="date"].input { color-scheme: dark; }
 .pv-close { position: absolute; top: 16px; right: 18px; color: #fff; font-size: 1.3rem; }
 .tx .tx-photo { display: inline-flex; align-items: center; color: var(--muted); }
 .tx .tx-photo svg { width: 16px; height: 16px; }
+
+/* 내역 창 잔액 안내: 왼쪽 정렬, 구분색으로 강조(수입 초록·지출 레드·자산이동 옐로우) */
+.fx-hint.tx-hint { text-align: left; word-break: keep-all; } /* 한글은 단어 단위로 줄바꿈 */
+.fx-hint.tx-hint.inc { color: var(--inc); }
+.fx-hint.tx-hint.exp { color: var(--exp); }
+.fx-hint.tx-hint.mov { color: var(--mov); }

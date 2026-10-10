@@ -1150,17 +1150,17 @@ function openTxDialog(existing, presetDate, preset = null) {
         ${ASSET_LINK[draft.kind] ? `
         <div class="field"><label>${ASSET_LINK[draft.kind].label}</label>
           <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
-          <div class="fx-hint" data-asset-hint></div>
+          <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
         </div>` : ""}
         ${draft.kind === "자산이동" ? `
         <div class="field"><label>출금 자산</label>
           <select class="input" name="fromAsset">${holdingOptions(["assets"], draft.fromAsset, { balance: false })}</select>
-          <div class="fx-hint" data-from-hint></div>
+          <div class="fx-hint tx-hint mov" data-from-hint></div>
         </div>
         <div class="flow-arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v15"/><path d="M6.5 13.5 12 19l5.5-5.5"/></svg></div>
         <div class="field flow-to"><label>입금 자산</label>
           <select class="input" name="toAsset">${holdingOptions(["assets"], draft.toAsset, { balance: false })}</select>
-          <div class="fx-hint" data-to-hint></div>
+          <div class="fx-hint tx-hint mov" data-to-hint></div>
         </div>` : ""}
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
         ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
