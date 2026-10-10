@@ -346,3 +346,10 @@ input[type="date"].input { color-scheme: dark; }
 /* 백업/복원: 초기화 */
 .check-line { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.85rem; color: #d0d0d6; }
 .check-line input { width: 18px; height: 18px; accent-color: var(--wine); }
+
+/* 백업/복원: 동기화 상태 뱃지 */
+.sync-badge { align-self: center; font-size: 0.78rem; line-height: 1.4; padding: 3px 9px; border-radius: 3px; border: 1px solid; }
+.sync-badge.sb-ok { color: #9fe0b5; background: rgba(159, 224, 181, 0.12); border-color: rgba(159, 224, 181, 0.35); }
+.sync-badge.sb-busy { color: #f3dc94; background: rgba(243, 220, 148, 0.12); border-color: rgba(243, 220, 148, 0.35); }
+.sync-badge.sb-bad { color: #ff9fae; background: rgba(255, 159, 174, 0.12); border-color: rgba(255, 159, 174, 0.35); }
+.sync-badge.sb-off { color: var(--muted); background: var(--row); border-color: #303035; }

@@ -1585,6 +1585,18 @@ function openHoldingsDialog(col) {
 }
 
 // 백업/복원 (파일로 내보내기·가져오기)
+/** 동기화 상태 뱃지: 동기화됨 초록, 진행 중 옐로우, 끊김·실패 레드, 오프라인 회색 */
+const SYNC_BADGE = {
+  ok: ["동기화됨", "sb-ok"],
+  syncing: ["동기화 중…", "sb-busy"],
+  offline: ["오프라인", "sb-off"],
+  "need-login": ["연결 끊김", "sb-bad"],
+  error: ["동기화 실패", "sb-bad"],
+};
+function syncBadge() {
+  const [text, cls] = SYNC_BADGE[sync.status] || ["연결됨", "sb-ok"];
+  return `<span class="sync-badge ${cls}">${text}</span>`;
+}
 function syncSection() {
   if (!isConfigured()) return `<p class="note">구글 드라이브 동기화 설정 전이에요. 지금은 이 기기에만 저장되고, 아래처럼 파일로 옮길 수 있어요.</p>`;
   if (!isConnected()) return `
@@ -1592,7 +1604,7 @@ function syncSection() {
     <button class="btn primary" data-connect style="margin-top:10px">구글 드라이브 연결</button>`;
   const last = S.meta.lastSync ? new Date(S.meta.lastSync).toLocaleString("ko-KR") : "아직 없음";
   return `
-    <div class="asset-total"><span class="muted">상태</span><span>${SYNC_TEXT[sync.status] || "연결됨"}</span></div>
+    <div class="asset-total"><span class="muted">상태</span>${syncBadge()}</div>
     <div class="asset-total"><span class="muted">마지막 동기화</span><span>${last}</span></div>
     ${sync.status === "error" && sync.error ? `<p class="note">오류: ${esc(sync.error)}</p>` : ""}
     <div class="btn-row">
