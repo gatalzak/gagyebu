@@ -1,6 +1,7 @@
 import { loadState, saveState, mergeInto, uid, nowISO } from "./store.js";
 import { CURRENCIES, CURRENCY_NAMES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates, ratesDate, decimals } from "./fx.js";
-import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, refreshIfNeeded, syncNow } from "./sync.js";
+import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, refreshIfNeeded, syncNow, syncDrivePhotos } from "./sync.js";
+import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
 import { makeXlsx } from "./xlsx.js";
 
 // ---------------- 기본 목록 ----------------
@@ -386,6 +387,26 @@ function scheduleSync(delay = 1500) {
 async function runSync() {
   const pulled = await syncNow(S);
   if (pulled && !$("#modal-root").children.length) render();
+  if (sync.status === "ok") await syncDrivePhotos(liveTx().flatMap((t) => t.photos || [])); // 영수증 사진은 따로
+}
+
+// ---------------- 영수증 사진 ----------------
+const CAMERA = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.6-2.2h6.8L17 8h3v11H4z"/><circle cx="12" cy="13.3" r="3.4"/></svg>`;
+const pendingPhotos = new Map(); // 저장 전(내역 창에서 막 고른) 사진 id → Blob
+/** 썸네일·크게 보기에 쓸 Blob (저장 전 사진 → 기기에 저장된 사진 순) */
+async function photoBlob(id) {
+  return pendingPhotos.get(id) || (await getPhoto(id).catch(() => null))?.blob || null;
+}
+/** 사진 크게 보기: 화면 위에 덮어 띄우고, 누르면 닫힌다(내역 창은 그대로) */
+async function openPhotoViewer(id) {
+  const blob = await photoBlob(id);
+  if (!blob) return toast("아직 이 기기에 사진이 없어요. 동기화되면 보여요.");
+  const url = URL.createObjectURL(blob);
+  const el = document.createElement("div");
+  el.className = "photo-viewer";
+  el.innerHTML = `<img src="${url}" alt="영수증 사진"><span class="pv-close">✕</span>`;
+  el.onclick = () => { URL.revokeObjectURL(url); el.remove(); };
+  document.body.appendChild(el);
 }
 
 // ---------------- 화면 그리기 ----------------
@@ -669,7 +690,7 @@ function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}</div>
+              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
@@ -1160,7 +1181,15 @@ function openTxDialog(existing, presetDate, preset = null) {
             <button class="btn subcat-add-btn" data-act="add-subcat">추가</button>
           </div>
         </div>` : ""}
-        ${draft.kind !== "자산이동" ? `<div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>` : ""}
+        ${draft.kind !== "자산이동" ? `<div class="field"><label>메모</label>
+          <div class="money-line">
+            <input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}">
+            <button class="icon-only photo-btn" data-act="add-photo" aria-label="영수증 사진 추가">${CAMERA}</button>
+          </div>
+          <input type="file" accept="image/*" multiple data-photo-file hidden>
+          ${draft.photos?.length ? `<div class="photo-strip">${draft.photos.map((id) => `
+            <div class="photo-thumb" data-photo="${id}"><span class="pt-wait">사진</span><img alt="영수증 사진" hidden><button class="photo-del" data-photo-del="${id}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : ""}
+        </div>` : ""}
         ${existing ? `<button class="btn fav-add-btn" data-act="add-fav">${STAR} 자주 쓰는 내역으로 등록</button>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
@@ -1310,6 +1339,7 @@ function openTxDialog(existing, presetDate, preset = null) {
         content: (draft.content || "").trim(),
         party: (draft.party || "").trim(),
         memo: draft.memo.trim(),
+        ...(!isMove && draft.photos?.length ? { photos: [...draft.photos] } : {}),
         createdAt: existing?.createdAt || now,
         updatedAt: now,
         deleted: false,
@@ -1328,6 +1358,11 @@ function openTxDialog(existing, presetDate, preset = null) {
       revertDeltas(existing, now); // 이전 자산이동 반영 되돌리기
       if (delta) { adjustHolding(delta.col, delta.id, delta.amount, now); rec.assetDelta = delta; }
       if (deltas?.length) { deltas.forEach((x) => adjustHolding(x.col, x.id, x.amount, now)); rec.deltas = deltas; }
+      // 영수증 사진: 새로 고른 것은 기기에 저장, 뺀 것은 기기에서 지움
+      for (const id of rec.photos || []) {
+        if (pendingPhotos.has(id)) { await putPhoto({ id, blob: pendingPhotos.get(id), uploaded: false }); pendingPhotos.delete(id); }
+      }
+      for (const id of existing?.photos || []) if (!(rec.photos || []).includes(id)) await deletePhoto(id).catch(() => {});
       S.transactions[rec.id] = rec;
       closeModal();
       ui.month = rec.date.slice(0, 7);
@@ -1344,10 +1379,51 @@ function openTxDialog(existing, presetDate, preset = null) {
       if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
       revertDeltas(existing, now);
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
+      for (const id of existing.photos || []) await deletePhoto(id).catch(() => {});
       closeModal();
       await commit();
       toast(prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : existing.deltas?.length ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요");
     };
+    // 영수증 사진: 카메라 버튼 → 촬영/앨범, 썸네일 누르면 크게, ✕로 빼기 (저장해야 반영)
+    const photoFile = $p("[data-photo-file]");
+    if (photoFile) {
+      $p("[data-act=add-photo]").onclick = () => photoFile.click();
+      photoFile.onchange = async () => {
+        const files = [...photoFile.files];
+        if (!files.length) return;
+        read();
+        toast("사진을 줄이는 중…");
+        const ids = [];
+        for (const f of files) {
+          try {
+            const blob = await shrinkImage(f);
+            const id = uid();
+            pendingPhotos.set(id, blob);
+            ids.push(id);
+          } catch { toast("사진을 읽지 못했어요"); }
+        }
+        draft.photos = [...(draft.photos || []), ...ids];
+        draw();
+      };
+      panel.querySelectorAll("[data-photo]").forEach(async (el) => {
+        const blob = await photoBlob(el.dataset.photo);
+        if (!blob) { el.querySelector(".pt-wait").textContent = "동기화 대기"; return; }
+        const img = el.querySelector("img");
+        img.src = URL.createObjectURL(blob);
+        img.onload = () => URL.revokeObjectURL(img.src);
+        img.hidden = false;
+        el.querySelector(".pt-wait").remove();
+      });
+      panel.querySelectorAll("[data-photo]").forEach((el) => (el.onclick = (e) => {
+        if (e.target.closest("[data-photo-del]")) return;
+        openPhotoViewer(el.dataset.photo);
+      }));
+      panel.querySelectorAll("[data-photo-del]").forEach((b) => (b.onclick = () => {
+        read();
+        draft.photos = draft.photos.filter((x) => x !== b.dataset.photoDel);
+        draw();
+      }));
+    }
     // 자주 쓰는 내역: 수정 창에서 등록, 추가 창의 별을 눌러 불러오기
     const addFav = $p("[data-act=add-fav]");
     if (addFav) addFav.onclick = async () => {

@@ -3,6 +3,7 @@
 // 같은 내역은 updatedAt이 최신인 쪽이 이기고, 서로 다른 내역은 모두 남는다(통째로 덮어쓰지 않음).
 // 권한은 drive.file: 이 앱이 만든 파일만 볼 수 있고 드라이브의 다른 파일에는 접근하지 못한다.
 import { mergeInto, saveState, COLLECTIONS } from "./store.js";
+import { syncPhotos } from "./photos.js";
 import { GOOGLE_CLIENT_ID } from "./config.js";
 
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -218,4 +219,14 @@ export function syncNow(state) {
     }
   })();
   return running;
+}
+
+/** 영수증 사진을 드라이브와 맞춘다(올리기·받기). 받아 온 사진 수를 돌려준다. 실패해도 조용히 0. */
+export async function syncDrivePhotos(neededIds) {
+  if (!isConfigured() || !isConnected() || !navigator.onLine || !token() || !neededIds.length) return 0;
+  try {
+    return await syncPhotos(api, neededIds);
+  } catch {
+    return 0;
+  }
 }

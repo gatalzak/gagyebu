@@ -412,3 +412,17 @@ input[type="date"].input { color-scheme: dark; }
 /* 백업/복원: 엑셀 내보내기 (기간 고르기 + 버튼) */
 .money-line .excel-range { flex: 1; min-width: 0; }
 .money-line .excel-btn { flex: 0 0 auto; width: auto; min-height: 44px; padding: 0 14px; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; }
+
+/* 영수증 사진 */
+.money-line .photo-btn { flex: 0 0 44px; justify-content: center; border: 1px solid #303035; border-radius: 3px; background: var(--row); }
+.photo-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.photo-thumb { position: relative; width: 64px; height: 64px; border-radius: 3px; overflow: hidden; background: var(--row); border: 1px solid #303035; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pt-wait { font-size: calc(0.66rem + var(--fs-up)); color: var(--muted); text-align: center; padding: 2px; }
+.photo-del { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 11px; line-height: 20px; }
+.photo-viewer { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.92); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.photo-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.pv-close { position: absolute; top: 16px; right: 18px; color: #fff; font-size: 1.3rem; }
+.tx .tx-photo { display: inline-flex; align-items: center; color: var(--muted); }
+.tx .tx-photo svg { width: 16px; height: 16px; }

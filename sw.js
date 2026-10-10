@@ -1,8 +1,8 @@
 // 오프라인에서도 열리도록 화면 파일을 저장해 둔다.
 // 온라인이면 항상 새 파일을 먼저 받아서(network-first) 업데이트가 바로 반영된다.
-const CACHE = "gagyebu-v104";
+const CACHE = "gagyebu-v105";
 const FILES = [
-  "./", "index.html", "style.css", "app.js", "store.js", "sync.js", "fx.js", "xlsx.js", "config.js", "manifest.webmanifest",
+  "./", "index.html", "style.css", "app.js", "store.js", "sync.js", "fx.js", "xlsx.js", "photos.js", "config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
 ];
 
