@@ -530,7 +530,7 @@ function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges"><span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span>${debt ? `<span class="cat-badge b-cred">${esc(debt.name)}</span>` : ""}</div>
+              <div class="badges">${t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}<span class="cat-badge ${kindBadge}">${esc(catLabel(t))}</span>${debt ? `<span class="cat-badge b-cred">${esc(debt.name)}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
             </div>
