@@ -408,3 +408,7 @@ input[type="date"].input { color-scheme: dark; }
 .cal-head .mc-cols { gap: 4px 15px; font-size: calc(0.78rem + var(--fs-up)); }
 .cal-head:has(.mc-cols) { gap: 8px; }
 .cal-head:has(.mc-cols) .month-badge { padding: 4px 8px; }
+
+/* 백업/복원: 엑셀 내보내기 (기간 고르기 + 버튼) */
+.money-line .excel-range { flex: 1; min-width: 0; }
+.money-line .excel-btn { flex: 0 0 auto; width: auto; min-height: 44px; padding: 0 14px; white-space: nowrap; }

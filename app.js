@@ -1,6 +1,7 @@
 import { loadState, saveState, mergeInto, uid, nowISO } from "./store.js";
 import { CURRENCIES, CURRENCY_NAMES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates, ratesDate, decimals } from "./fx.js";
 import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, refreshIfNeeded, syncNow } from "./sync.js";
+import { makeXlsx } from "./xlsx.js";
 
 // ---------------- 기본 목록 ----------------
 const KINDS = ["수입", "지출", "자산이동"];
@@ -438,6 +439,38 @@ async function exportBackup() {
   await saveState(S);
   renderBackupBar();
   toast("백업 파일을 저장했어요");
+}
+
+/** 내역을 엑셀(.xlsx)로 내려받는다. range: "month"(보고 있는 달) | "year"(그 해) | "all" */
+function exportExcel(range) {
+  const [y, m] = ui.month.split("-");
+  const list = liveTx()
+    .filter((t) => range === "all" || t.date.startsWith(range === "year" ? `${y}-` : ui.month))
+    .sort((a, b) => (a.date + (a.time || "") + a.createdAt).localeCompare(b.date + (b.time || "") + b.createdAt));
+  if (!list.length) return toast("내보낼 내역이 없어요");
+  const holdingName = (t) => {
+    if (t.kind === "자산이동") return moveRoute(t);
+    const d = deltaRef(t.assetDelta);
+    const h = d && S[d.col]?.[d.id];
+    return h ? `${t.kind === "수입" ? "입금" : d.col === "debts" ? "결제" : "출금"} ${h.name}` : "";
+  };
+  const rows = [["날짜", "시간", "구분", "지출 종류", "카테고리", "하위 카테고리", "내용", "거래처", "금액", "통화", "원화 금액", "입금·출금·결제", "단기 부채", "메모"]];
+  for (const t of list) {
+    const sd = shortDebtType(t);
+    rows.push([
+      t.date, t.time || "", t.kind, t.kind === "지출" ? `${t.expenseType || ""}지출` : "",
+      t.category || "", t.subcategory || "", t.content || "", t.party || "",
+      t.amount, t.currency || "KRW", txKRW(t), holdingName(t), sd ? SHORT_DEBT[sd].label : "", t.memo || "",
+    ]);
+  }
+  const label = range === "all" ? "전체" : range === "year" ? `${y}년` : `${y}년${Number(m)}월`;
+  const blob = makeXlsx("내역", rows, [11, 7, 8, 9, 12, 12, 22, 16, 12, 6, 12, 24, 12, 20]);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `클로드가계부_${label}_${todayStr()}.xlsx`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast(`엑셀 파일을 저장했어요 · ${list.length}건`);
 }
 
 function render() {
@@ -1765,6 +1798,15 @@ function openBackupDialog() {
       <div class="section-title">내보내기</div>
       <p class="note">마지막 백업: ${S.meta.lastBackup ? new Date(S.meta.lastBackup).toLocaleString("ko-KR") : "아직 없음"} · 30일마다 알려 드려요.</p>
       <button class="btn primary" data-export style="margin-top:10px">백업 파일 저장</button>
+      <p class="note" style="margin-top:16px">엑셀 파일은 표로 보거나 정리할 때 쓰는 용도예요. 복원에는 백업 파일을 쓰세요.</p>
+      <div class="money-line" style="margin-top:10px">
+        <select class="input excel-range" name="excelRange">
+          <option value="month">${Number(ui.month.slice(5))}월 내역</option>
+          <option value="year">${ui.month.slice(0, 4)}년 내역</option>
+          <option value="all">전체 내역</option>
+        </select>
+        <button class="btn excel-btn" data-excel>엑셀 파일 저장</button>
+      </div>
       <div class="section-title">가져오기</div>
       <p class="note">백업 파일의 내역을 지금 데이터에 <b style="font-weight:400;color:#fff">합쳐요</b>. 같은 내역은 최신 것으로 바뀌고, 지금 데이터는 지워지지 않아요.</p>
       <input type="file" accept=".json,application/json" data-file hidden>
@@ -1783,6 +1825,7 @@ function openBackupDialog() {
     toast(sync.status === "ok" ? "동기화했어요" : SYNC_TEXT[sync.status]);
   });
   panel.querySelector("[data-export]").onclick = async () => { await exportBackup(); openBackupDialog(); };
+  panel.querySelector("[data-excel]").onclick = () => exportExcel(panel.querySelector("[name=excelRange]").value);
   const file = panel.querySelector("[data-file]");
   panel.querySelector("[data-import]").onclick = () => file.click();
   // 내역 초기화: 두 번 눌러야 실행. 삭제 표시로 남겨 다른 기기에도 반영된다.
