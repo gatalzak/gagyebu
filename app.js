@@ -8,8 +8,8 @@ const EXPENSE_TYPES = ["고정", "변동"]; // 화면 표시 순서(고정지출
 const CATEGORIES = {
   수입: ["월급", "부수입", "용돈", "이자/배당", "환급", "기타"],
   지출: ["식비", "카페/간식", "교통", "주거/통신", "생활용품", "쇼핑", "의료/건강", "문화/여가", "교육", "경조사", "보험", "기타"],
-  자산이동: ["은행 → 은행", "현금 → 은행", "은행 → 현금", "은행 → 증권", "증권 → 은행", "증권 → 증권"],
 };
+// 자산이동은 카테고리를 쓰지 않는다(출금 → 입금 자산으로 구분). 예전 기록의 카테고리는 cleanMoveCategories가 비운다.
 // 처음에 넣어 두는 하위 카테고리 (이용자가 더하거나 지울 수 있음)
 const DEFAULT_SUBCATS = {
   지출: {
@@ -129,6 +129,23 @@ function retireOldCats() {
         S.cats[c.id] = { ...c, deleted: true, updatedAt: RETIRE_TIME };
         n++;
       }
+    }
+  }
+  return n;
+}
+
+/** 자산이동의 예전 카테고리 정리: 내역·자주 쓰는 내역의 카테고리를 비우고, 자산이동 카테고리·하위 카테고리는 지운다 */
+function cleanMoveCategories() {
+  let n = 0;
+  const now = nowISO();
+  for (const col of ["transactions", "favorites"]) {
+    for (const t of Object.values(S[col] || {})) {
+      if (!t.deleted && t.kind === "자산이동" && (t.category || t.subcategory)) { S[col][t.id] = { ...t, category: "", subcategory: "", updatedAt: now }; n++; }
+    }
+  }
+  for (const col of ["cats", "subcats"]) {
+    for (const c of Object.values(S[col] || {})) {
+      if (!c.deleted && c.kind === "자산이동") { S[col][c.id] = { ...c, deleted: true, updatedAt: now }; n++; }
     }
   }
   return n;
@@ -975,7 +992,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         time: draft.time || "",
         kind: "자산이동",
         expenseType: "",
-        category: d.type === "신용카드" ? "카드대금" : "부채상환",
+        category: "",
         currency: dcur,
         amount: draft.amount,
         ...(dcur !== "KRW" ? { krw: Math.round(krw) } : {}),
@@ -1899,7 +1916,7 @@ async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
-  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes()) await saveState(S);
+  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories()) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();
