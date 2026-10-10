@@ -149,8 +149,9 @@ function renameSubcat(id, to, now) {
  * 카테고리 편집 창: 구분별 카테고리 목록 → 카테고리를 누르면 이름·하위 카테고리 편집.
  * 다 끝나면 onClose()로 원래 창(내역 추가)으로 돌아간다.
  */
-function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal } = {}) {
+function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "변동", onClose = closeModal } = {}) {
   let kind = startKind;
+  let etab = startEtype; // 지출일 때 보고 있는 탭: 고정 | 변동
 
   const drawList = () => {
     const cats = catRecords(kind);
@@ -158,10 +159,10 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
       title: "카테고리 편집",
       body: `
         <div class="seg" data-role="kind">${KINDS.map((k) => `<button data-v="${k}" class="${k === kind ? "on" : ""}">${k}</button>`).join("")}</div>
-        ${(kind === "지출" ? [["고정", "고정지출"], ["변동", "변동지출"]] : [[null, null]]).map(([et, title]) => {
+        ${kind === "지출" ? `<div class="tabs sub-tabs" data-role="etab">${EXPENSE_TYPES.map((k) => `<button data-v="${k}" class="${k === etab ? "active" : ""}">${k}지출</button>`).join("")}</div>` : ""}
+        ${[kind === "지출" ? etab : null].map((et) => {
           const list = cats.filter((c) => !et || catEtype(c) === et);
           return `<section class="asset-group">
-          ${title ? `<div class="asset-group-head"><span>${title}</span></div>` : ""}
           ${list.map((c) => {
             const subs = subcatRecords(kind, c.name).map((s) => s.name);
             return `<button class="asset-row cat-row" data-cat="${c.id}">
@@ -174,12 +175,12 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
         }).join("")}
         <div class="money-line subcat-add" style="margin-top:12px">
           <input class="input" name="newCat" placeholder="새 카테고리 이름">
-          ${kind === "지출" ? `<select class="input etype-select" name="newCatEtype"><option>변동</option><option>고정</option></select>` : ""}
           <button class="btn subcat-add-btn" data-act="add-cat">추가</button>
         </div>
         <button class="btn primary" data-act="done" style="margin-top:16px">완료</button>`,
     });
     panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { kind = b.dataset.v; drawList(); }));
+    panel.querySelectorAll("[data-role=etab] button").forEach((b) => (b.onclick = () => { etab = b.dataset.v; drawList(); }));
     panel.querySelectorAll("[data-cat]").forEach((b) => (b.onclick = () => drawCat(b.dataset.cat)));
     panel.querySelector("[data-act=done]").onclick = () => onClose();
     panel.querySelector("[data-act=add-cat]").onclick = async () => {
@@ -188,7 +189,7 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
       if (catsFor(kind).includes(name)) return toast("이미 있는 카테고리예요.");
       const now = nowISO();
       const id = uid();
-      const etype = kind === "지출" ? panel.querySelector("[name=newCatEtype]").value : null;
+      const etype = kind === "지출" ? etab : null; // 지금 보고 있는 탭(고정/변동)에 추가
       S.cats[id] = { id, kind, name, order: 999, ...(etype ? { etype } : {}), createdAt: now, updatedAt: now, deleted: false };
       await saveState(S);
       scheduleSync();
@@ -285,6 +286,7 @@ function openCategoryEditor({ kind: startKind = "지출", onClose = closeModal }
       });
       await saveState(S);
       scheduleSync();
+      if (s.etype) etab = s.etype;
       drawList();
       toast("카테고리를 저장했어요");
     };
@@ -918,7 +920,7 @@ function openTxDialog(existing, presetDate) {
     $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draw(); };
     $p("[data-act=edit-cats]").onclick = () => {
       read();
-      openCategoryEditor({ kind: draft.kind, onClose: () => draw() });
+      openCategoryEditor({ kind: draft.kind, etype: draft.expenseType || "변동", onClose: () => draw() });
     };
     $p("[name=subcategory]").onchange = (e) => {
       const adding = e.target.value === "__add__";

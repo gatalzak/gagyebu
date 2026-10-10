@@ -268,4 +268,7 @@ input[type="date"].input { color-scheme: dark; }
 .cat-row .cat-subs { flex: 1; min-width: 0; text-align: right; font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-row .chev { color: var(--muted); }
 .back-link { color: var(--muted); font-size: 0.82rem; padding: 2px 0 6px; }
-.subcat-add .etype-select { flex: 0 0 82px; }
+/* 카테고리 편집: 지출의 고정/변동 탭 */
+.tabs.sub-tabs { margin: 12px 0 0; }
+.tabs.sub-tabs button { font-size: 0.88rem; padding: 6px 0 8px; }
+.tabs.sub-tabs + .asset-group { margin-top: 10px; }
