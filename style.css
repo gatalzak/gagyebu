@@ -299,3 +299,16 @@ input[type="date"].input { color-scheme: dark; }
 .cal-sum { text-align: right; line-height: 1.6; white-space: nowrap; }
 /* 달력 '10월' 상자 표시 (내역의 요일 뱃지와 같은 계열) */
 .month-badge { display: inline-block; padding: 4px 12px; border-radius: 3px; background: var(--row); border: 1px solid #3a3a40; color: #fff; font-size: 1rem; line-height: 1.4; }
+
+/* 월별 */
+.month-row { display: block; width: 100%; text-align: left; padding: 12px 2px; }
+.month-row + .month-row { border-top: 1px solid var(--line-soft); }
+.month-row.sel .mr-label { color: #fff; border-color: var(--wine); }
+.mr-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.mr-label { font-size: 0.82rem; color: #d0d0d6; padding: 2px 8px; border-radius: 3px; background: var(--row); border: 1px solid #303035; white-space: nowrap; }
+.mr-sum { text-align: right; font-size: 0.8rem; line-height: 1.6; white-space: nowrap; }
+.mr-bars { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+.bar { display: block; height: 4px; border-radius: 2px; min-width: 2px; }
+.inc-bar { background: var(--inc); opacity: 0.8; }
+.exp-bar { background: var(--exp); opacity: 0.8; }
+.mr-note { font-size: 0.72rem; margin-top: 10px; }

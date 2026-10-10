@@ -364,7 +364,7 @@ function render() {
   else if (ui.tab === "detail") view.innerHTML = homeView("detail");
   else if (ui.tab === "list") view.innerHTML = listView();
   else if (ui.tab === "calendar") view.innerHTML = calendarView();
-  else view.innerHTML = `<div class="card"><div class="empty">월별 화면은 준비 중이에요.</div></div>`;
+  else view.innerHTML = monthlyView();
 }
 
 /** 단기부채로 잡는 결제 수단(부채 종류)과 화면 표시 글자 */
@@ -570,6 +570,50 @@ function calendarView() {
     ${dayHead(ui.day, sel)}
     ${sel.length ? sel.map(txRow).join("") : `<div class="empty" style="padding:16px 0">이 날의 내역이 없어요.<br>+ 버튼을 누르면 이 날짜로 추가돼요.</div>`}
   </section>` : ""}`;
+}
+
+/** 합계 두 줄: 1줄 수입·지출, 2줄 신용·마통 (없는 것은 생략) */
+function totalsTwoLines(items) {
+  const inc = sum(items.filter((t) => t.kind === "수입"));
+  const exp = sum(items.filter(isPlainExpense));
+  const line1 = [inc && `<span class="inc">${signed(inc, "+")}</span>`, exp && `<span class="exp">${signed(exp, "-")}</span>`].filter(Boolean).join(" ");
+  const line2 = shortDebtTotals(items);
+  return `${line1 ? `<div>${line1}</div>` : ""}${line2 ? `<div>${line2}</div>` : ""}`;
+}
+
+// 월별: 상단 연도 합계, 아래 달마다 합계와 수입·지출 비교 막대. 달을 누르면 그 달 현황으로 이동.
+function monthlyView() {
+  const year = Number(ui.month.slice(0, 4));
+  const now = new Date();
+  const lastMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12; // 올해는 이번 달까지만
+  const yearTx = liveTx().filter((t) => t.date.startsWith(`${year}-`));
+  const months = [];
+  for (let m = lastMonth; m >= 1; m--) {
+    const key = `${year}-${pad(m)}`;
+    const items = yearTx.filter((t) => t.date.startsWith(key));
+    months.push({ m, key, items, inc: sum(items.filter((t) => t.kind === "수입")), exp: sum(items.filter(isPlainExpense)) + sum(items.filter(isShortDebt)) });
+  }
+  const max = Math.max(1, ...months.map((x) => Math.max(x.inc, x.exp)));
+  const yearTotals = totalsTwoLines(yearTx);
+  return `
+  <section class="card">
+    <div class="card-head cal-head"><span class="month-badge">${year}년</span><div class="cal-sum">${yearTotals || `<div class="muted">내역 없음</div>`}</div></div>
+    ${months.map((x) => {
+      const totals = totalsTwoLines(x.items);
+      return `
+      <button class="month-row${x.key === ui.month ? " sel" : ""}" data-month-go="${x.key}">
+        <div class="mr-top">
+          <span class="mr-label">${x.m}월</span>
+          <div class="mr-sum">${totals || `<span class="muted">내역 없음</span>`}</div>
+        </div>
+        ${x.items.length ? `<div class="mr-bars">
+          ${x.inc ? `<span class="bar inc-bar" style="width:${(x.inc / max) * 100}%"></span>` : ""}
+          ${x.exp ? `<span class="bar exp-bar" style="width:${(x.exp / max) * 100}%"></span>` : ""}
+        </div>` : ""}
+      </button>`;
+    }).join("")}
+    <p class="note mr-note">막대: 위 수입, 아래 지출(신용·마통 포함). 달을 누르면 그 달 현황으로 이동해요.</p>
+  </section>`;
 }
 
 function listView() {
@@ -1529,6 +1573,8 @@ function bindEvents() {
   $("#view").addEventListener("click", (e) => {
     const seg = e.target.closest("[data-seg]");
     if (seg) { ui.seg = seg.dataset.seg; render(); return; }
+    const go = e.target.closest("[data-month-go]");
+    if (go) { ui.month = go.dataset.monthGo; ui.tab = "home"; render(); window.scrollTo(0, 0); return; }
     const day = e.target.closest("[data-day]");
     if (day) { ui.day = day.dataset.day; render(); return; }
     const tx = e.target.closest("[data-tx]");
