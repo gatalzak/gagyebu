@@ -342,3 +342,7 @@ input[type="date"].input { color-scheme: dark; }
 .fav-row .fav-del { flex: 0 0 56px; width: 56px; min-height: 36px; font-size: 0.8rem; }
 .icon-only.on { color: var(--wine); }
 .fav-note { font-size: 0.72rem; margin-top: 12px; }
+
+/* 백업/복원: 초기화 */
+.check-line { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 0.85rem; color: #d0d0d6; }
+.check-line input { width: 18px; height: 18px; accent-color: var(--wine); }

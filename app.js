@@ -1612,7 +1612,11 @@ function openBackupDialog() {
       <div class="section-title">가져오기</div>
       <p class="note">백업 파일의 내역을 지금 데이터에 <b style="font-weight:400;color:#fff">합쳐요</b>. 같은 내역은 최신 것으로 바뀌고, 지금 데이터는 지워지지 않아요.</p>
       <input type="file" accept=".json,application/json" data-file hidden>
-      <button class="btn" data-import style="margin-top:10px">백업 파일 불러오기</button>`,
+      <button class="btn" data-import style="margin-top:10px">백업 파일 불러오기</button>
+      <div class="section-title">초기화</div>
+      <p class="note">모든 내역(수입·지출·자산이동·상환)을 지워요. 카테고리·자산·부채·자주 쓰는 내역은 남아요. 드라이브에 연결된 다른 기기에서도 지워지고, 되돌릴 수 없어요.</p>
+      <label class="check-line"><input type="checkbox" data-reset-holdings checked> 자산·부채 잔액도 내역 입력 전으로 되돌리기</label>
+      <button class="btn danger" data-reset style="margin-top:10px">내역 초기화</button>`,
   });
   panel.querySelector("[data-connect]")?.addEventListener("click", connect);
   panel.querySelector("[data-disconnect]")?.addEventListener("click", () => { disconnect(); openBackupDialog(); });
@@ -1632,6 +1636,27 @@ function openBackupDialog() {
   };
   const file = panel.querySelector("[data-file]");
   panel.querySelector("[data-import]").onclick = () => file.click();
+  // 내역 초기화: 두 번 눌러야 실행. 삭제 표시로 남겨 다른 기기에도 반영된다.
+  const resetBtn = panel.querySelector("[data-reset]");
+  let resetArmed = false;
+  resetBtn.onclick = async () => {
+    const list = liveTx();
+    if (!list.length) return toast("지울 내역이 없어요");
+    if (!resetArmed) { resetArmed = true; resetBtn.textContent = `한 번 더 누르면 ${list.length}건 모두 삭제`; return; }
+    const revert = panel.querySelector("[data-reset-holdings]").checked;
+    const now = nowISO();
+    for (const t of list) {
+      if (revert) {
+        const prev = deltaRef(t.assetDelta);
+        if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
+        revertDeltas(t, now);
+      }
+      S.transactions[t.id] = { ...t, deleted: true, updatedAt: now };
+    }
+    closeModal();
+    await commit();
+    toast(`내역 ${list.length}건을 지웠어요${revert ? " · 잔액도 되돌렸어요" : ""}`);
+  };
   file.onchange = async () => {
     try {
       const data = JSON.parse(await file.files[0].text());
