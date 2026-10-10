@@ -149,12 +149,16 @@ function renameCategory(kind, from, to, now) {
   for (const c of Object.values(S.cats)) if (!c.deleted && c.kind === kind && c.name === from) S.cats[c.id] = { ...c, name: to, updatedAt: now };
   for (const s of Object.values(S.subcats)) if (s.kind === kind && s.category === from) S.subcats[s.id] = { ...s, category: to, updatedAt: now };
   for (const t of Object.values(S.transactions)) if (!t.deleted && t.kind === kind && t.category === from) S.transactions[t.id] = { ...t, category: to, updatedAt: now };
+  for (const f of Object.values(S.favorites || {})) if (!f.deleted && f.kind === kind && f.category === from) S.favorites[f.id] = { ...f, category: to, updatedAt: now };
 }
 /** 하위 카테고리 이름 바꾸기: 내역의 하위 카테고리 이름도 같이 바꾼다 */
 function renameSubcat(id, to, now) {
   const s = S.subcats[id];
   for (const t of Object.values(S.transactions)) {
     if (!t.deleted && t.kind === s.kind && t.category === s.category && t.subcategory === s.name) S.transactions[t.id] = { ...t, subcategory: to, updatedAt: now };
+  }
+  for (const f of Object.values(S.favorites || {})) {
+    if (!f.deleted && f.kind === s.kind && f.category === s.category && f.subcategory === s.name) S.favorites[f.id] = { ...f, subcategory: to, updatedAt: now };
   }
   S.subcats[id] = { ...s, name: to, updatedAt: now };
 }
@@ -921,9 +925,9 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
 // 내역 추가/수정
 // 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
 // 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
-function openTxDialog(existing, presetDate) {
+function openTxDialog(existing, presetDate, preset = null) {
   if (existing?.deltas?.some((d) => d.col === "debts")) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
-  const draft = existing
+  const draft = preset ? { ...preset } : existing
     ? { currency: "KRW", ...existing }
     : { kind: "지출", expenseType: "고정", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출", "고정")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
   let confirmDelete = false;
@@ -932,8 +936,10 @@ function openTxDialog(existing, presetDate) {
   // 자산이동: 출금 자산 → 입금 자산
   const prevOut = existing?.deltas?.find((d) => d.col === "assets" && d.amount < 0);
   const prevIn = existing?.deltas?.find((d) => d.col === "assets" && d.amount > 0);
-  draft.fromAsset = prevOut ? linkKey("assets", prevOut.id) : "";
-  draft.toAsset = prevIn ? linkKey("assets", prevIn.id) : "";
+  if (!preset) {
+    draft.fromAsset = prevOut ? linkKey("assets", prevOut.id) : "";
+    draft.toAsset = prevIn ? linkKey("assets", prevIn.id) : "";
+  }
 
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
@@ -944,6 +950,7 @@ function openTxDialog(existing, presetDate) {
     const foreign = draft.currency !== "KRW";
     const panel = openModal({
       title: existing ? "내역 수정" : "내역 추가",
+      headExtra: existing ? "" : `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
       body: `
         <div class="seg" data-role="kind">${KINDS.map((k) => `<button data-v="${k}" class="${k === draft.kind ? "on" : ""}">${k}</button>`).join("")}</div>
         ${draft.kind === "지출" ? `
@@ -1005,6 +1012,7 @@ function openTxDialog(existing, presetDate) {
           </div>
         </div>
         ${draft.kind !== "자산이동" ? `<div class="field"><label>메모</label><input class="input" name="memo" placeholder="자유롭게 메모" value="${esc(draft.memo)}"></div>` : ""}
+        ${existing ? `<button class="btn fav-add-btn" data-act="add-fav">${STAR} 자주 쓰는 내역으로 등록</button>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
           <button class="btn primary" data-act="save">저장</button>
@@ -1189,7 +1197,110 @@ function openTxDialog(existing, presetDate) {
       await commit();
       toast(prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : existing.deltas?.length ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요");
     };
+    // 자주 쓰는 내역: 수정 창에서 등록, 추가 창의 별을 눌러 불러오기
+    const addFav = $p("[data-act=add-fav]");
+    if (addFav) addFav.onclick = async () => {
+      read();
+      const f = favFromDraft(draft);
+      if (!f.amount) return toast("금액을 입력해 주세요.");
+      const same = liveFavs().find((x) => favKey(x) === favKey(f));
+      if (same) return toast("이미 자주 쓰는 내역에 있어요.");
+      const now = nowISO();
+      const id = uid();
+      S.favorites[id] = { id, ...f, createdAt: now, updatedAt: now, deleted: false };
+      await saveState(S);
+      scheduleSync();
+      toast("자주 쓰는 내역으로 등록했어요");
+    };
+    const favBtn = $p("[data-act=favs]");
+    if (favBtn) favBtn.onclick = () => {
+      read();
+      openFavorites({
+        onPick: (f) => openTxDialog(null, null, applyFav(draft, f)),
+        onBack: () => openTxDialog(null, null, draft),
+      });
+    };
     if (!existing && !draft.amount) amt.focus();
+  };
+  draw();
+}
+
+// ---------------- 자주 쓰는 내역 ----------------
+const STAR = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.8l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/></svg>`;
+const FAV_FIELDS = ["kind", "expenseType", "category", "subcategory", "currency", "amount", "krw", "content", "party", "memo", "link", "fromAsset", "toAsset"];
+const liveFavs = () => Object.values(S.favorites || {}).filter((f) => !f.deleted).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+function favFromDraft(d) {
+  const f = {};
+  for (const k of FAV_FIELDS) f[k] = d[k] ?? "";
+  if (f.kind !== "지출") f.expenseType = "";
+  if (f.kind !== "자산이동") { f.fromAsset = ""; f.toAsset = ""; } else { f.link = ""; f.party = ""; f.memo = ""; }
+  if (f.currency === "KRW") f.krw = 0;
+  return f;
+}
+const favKey = (f) => FAV_FIELDS.map((k) => (k === "krw" ? "" : String(f[k] ?? ""))).join("|");
+/** 연결된 자산·부채가 지워졌으면 비운다 */
+function liveLink(key) {
+  const r = key && parseLinkKey(key);
+  return r && S[r.col]?.[r.id] && !S[r.col][r.id].deleted ? key : "";
+}
+/** 지금 창의 날짜·시간은 그대로 두고 나머지를 자주 쓰는 내역 값으로 채운다 */
+function applyFav(draft, f) {
+  const d = { ...draft };
+  for (const k of FAV_FIELDS) d[k] = f[k] ?? "";
+  if (d.kind === "지출" && !d.expenseType) d.expenseType = "고정";
+  d.link = liveLink(d.link);
+  d.fromAsset = liveLink(d.fromAsset);
+  d.toAsset = liveLink(d.toAsset);
+  d.krw = 0; // 외화면 오늘 환율로 다시 계산
+  return d;
+}
+function favViaText(f) {
+  const name = (key) => { const r = key && parseLinkKey(key); const h = r && S[r.col]?.[r.id]; return h && !h.deleted ? esc(h.name) : ""; };
+  if (f.kind === "자산이동") { const a = name(f.fromAsset), b = name(f.toAsset); return a || b ? `${a || "?"} → ${b || "?"}` : ""; }
+  const n = name(f.link);
+  return n ? `${f.kind === "수입" ? "입금" : "결제"} ${n}` : "";
+}
+
+/** 자주 쓰는 내역 목록: 누르면 onPick, ✕는 onBack(내역 추가 창으로). 편집 아이콘으로 삭제 모드 */
+function openFavorites({ onPick, onBack }) {
+  let editing = false;
+  const draw = () => {
+    const favs = liveFavs();
+    const panel = openModal({
+      title: "자주 쓰는 내역",
+      headExtra: favs.length ? `<button class="icon-only${editing ? " on" : ""}" data-act="edit" aria-label="편집">${PENCIL}</button>` : "",
+      body: favs.length ? favs.map((f) => {
+        const badge = f.kind === "수입" ? "b-inc" : f.kind === "지출" ? "b-exp" : "b-mov";
+        const cat = esc(f.category || "") + (f.subcategory ? ` › ${esc(f.subcategory)}` : "");
+        const via = favViaText(f);
+        const sd = shortDebtType({ kind: f.kind, assetDelta: parseLinkKey(f.link) });
+        return `
+        <div class="fav-row">
+          <button class="tx" data-fav="${f.id}">
+            <div class="left">
+              <div class="badges">${f.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${cat ? `<span class="cat-badge ${badge}">${cat}</span>` : ""}</div>
+              ${f.content ? `<div class="tx-content">${esc(f.content)}</div>` : ""}
+              ${[f.party ? esc(f.party) : "", via].filter(Boolean).map((x) => `<div class="memo">${x}</div>`).join("")}
+            </div>
+            <span class="amt ${sd ? "cred" : KIND_CLASS[f.kind]}">${sd ? SHORT_DEBT[sd].short + " " : ""}${f.currency && f.currency !== "KRW" ? `${KIND_SIGN[f.kind]}${formatMoney(f.amount, f.currency)}` : signed(f.amount, KIND_SIGN[f.kind])}</span>
+          </button>
+          ${editing ? `<button class="btn danger fav-del" data-del="${f.id}">삭제</button>` : ""}
+        </div>`;
+      }).join("") + `<p class="note fav-note">${editing ? "삭제할 내역의 '삭제'를 누르세요." : "누르면 내역 추가 창에 그대로 채워져요. 날짜·시간은 지금 값이 유지돼요."}</p>`
+        : `<div class="empty">자주 쓰는 내역이 없어요.<br>내역을 연 뒤 '자주 쓰는 내역으로 등록'을 눌러 추가하세요.</div>`,
+    });
+    panel.querySelector("[data-close]").onclick = onBack;
+    const edit = panel.querySelector("[data-act=edit]");
+    if (edit) edit.onclick = () => { editing = !editing; draw(); };
+    panel.querySelectorAll("[data-fav]").forEach((b) => (b.onclick = () => { if (!editing) onPick(S.favorites[b.dataset.fav]); }));
+    panel.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => {
+      const f = S.favorites[b.dataset.del];
+      S.favorites[f.id] = { ...f, deleted: true, updatedAt: nowISO() };
+      await saveState(S);
+      scheduleSync();
+      toast("삭제했어요");
+      draw();
+    }));
   };
   draw();
 }

@@ -331,3 +331,14 @@ input[type="date"].input { color-scheme: dark; }
 .group-title { display: flex; justify-content: space-between; align-items: center; margin: 30px 2px 2px; }
 .total-bar + .group-title { margin-top: 22px; }
 .group-title .cat-badge { font-size: 0.8rem; }
+
+/* 자주 쓰는 내역 */
+.star-btn { color: #f3dc94; }
+.fav-add-btn { margin-top: 16px; display: flex; align-items: center; justify-content: center; gap: 6px; color: #f3dc94; }
+.fav-add-btn + .btn-row { margin-top: 8px; }
+.fav-row { display: flex; align-items: center; gap: 8px; }
+.fav-row .tx { flex: 1; min-width: 0; }
+.fav-row + .fav-row { border-top: 1px solid var(--line-soft); }
+.fav-row .fav-del { flex: 0 0 56px; width: 56px; min-height: 36px; font-size: 0.8rem; }
+.icon-only.on { color: var(--wine); }
+.fav-note { font-size: 0.72rem; margin-top: 12px; }
