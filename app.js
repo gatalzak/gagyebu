@@ -839,7 +839,7 @@ function openHoldingsDialog(col) {
       cls: `theme-${col}`,
       title: cfg.title,
       headExtra: `<button class="${col === "debts" ? "red-btn" : "green-btn"}" data-add>${cfg.unit} 등록</button>` +
-        (col === "debts" ? `<button class="red-btn" data-repay>부채 상환</button>` : "") +
+        (col === "debts" ? `<button class="green-btn" data-repay>부채 상환</button>` : "") +
         (assets.length ? `<button class="icon-only" data-edit aria-label="${cfg.unit} 편집">${PENCIL}</button>` : ""),
       body: body + `<button class="btn" data-close-btn style="margin-top:18px">닫기</button>`,
     });
