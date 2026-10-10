@@ -168,10 +168,10 @@ function listView() {
 }
 
 // ---------------- 팝업 창 ----------------
-function openModal({ title, headExtra = "", body }) {
+function openModal({ title, headExtra = "", body, cls = "" }) {
   $("#modal-root").innerHTML = `
     <div class="overlay" data-overlay>
-      <div class="panel" role="dialog" aria-label="${esc(title)}">
+      <div class="panel ${cls}" role="dialog" aria-label="${esc(title)}">
         <div class="panel-head">
           <h2>${esc(title)}</h2>
           <div class="head-actions">${headExtra}<button class="x-btn" data-close aria-label="닫기">✕</button></div>
@@ -394,8 +394,9 @@ function openHoldingsDialog(col) {
         (hasForeign ? `<p class="note fx-note">외화는 ${ratesDate() ? `${ratesDate()} 환율` : "환율"}로 원화 환산해 합계에 넣었어요.${all.missing ? ` 환율을 받지 못한 ${all.missing}개는 합계에서 빠졌어요.` : ""}</p>` : "")
       : `<div class="empty">등록된 ${cfg.subj} 없어요.<br>오른쪽 위 '${cfg.unit} 등록'으로 추가해 보세요.</div>`;
     const panel = openModal({
+      cls: `theme-${col}`,
       title: cfg.title,
-      headExtra: `<button class="green-btn" data-add>${cfg.unit} 등록</button>` +
+      headExtra: `<button class="${col === "debts" ? "red-btn" : "green-btn"}" data-add>${cfg.unit} 등록</button>` +
         (assets.length ? `<button class="icon-only" data-edit aria-label="${cfg.unit} 편집">${PENCIL}</button>` : ""),
       body: body + `<button class="btn" data-close-btn style="margin-top:18px">닫기</button>`,
     });
@@ -413,6 +414,7 @@ function openHoldingsDialog(col) {
   const drawEdit = () => {
     const groups = cfg.types.filter((t) => drafts.some((d) => S[col][d.id].type === t));
     const panel = openModal({
+      cls: `theme-${col}`,
       title: `${cfg.unit} 편집`,
       body: groups.map((t) => `
         <section class="asset-group">
@@ -497,6 +499,7 @@ function openHoldingsDialog(col) {
   // 새로 등록 (기본 원화, 외화 선택 가능)
   const drawAdd = () => {
     const panel = openModal({
+      cls: `theme-${col}`,
       title: `${cfg.unit} 등록`,
       body: `
         <div class="field" style="margin-top:4px"><label>종류</label>

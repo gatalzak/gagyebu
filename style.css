@@ -15,7 +15,8 @@
   --green-bg: #1f3a2a;
   --green-line: #2b5039;
   --green-text: #cfeedd;
-  --sector: #f3dc94;   /* 나의 자산 종류 뱃지·합계 */
+  --sector: #f3dc94;          /* 종류 뱃지·합계 기본색 */
+  --sector-rgb: 243, 220, 148;
   --app-width: 390px;
   color-scheme: dark;
 }
@@ -119,6 +120,10 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
 .x-btn { font-size: 1.1rem; color: #ddd; padding: 2px 4px; }
 .panel-body { padding: 8px 20px 20px; }
 
+.red-btn {
+  background: #3a1d24; border: 1px solid #5e2a35; color: #ffc9d2;
+  border-radius: 3px; font-size: 0.78rem; padding: 6px 10px; line-height: 1;
+}
 .green-btn {
   background: var(--green-bg); border: 1px solid var(--green-line); color: var(--green-text);
   border-radius: 3px; font-size: 0.78rem; padding: 6px 10px; line-height: 1;
@@ -154,9 +159,12 @@ input[type="date"].input { color-scheme: dark; }
 /* 종류(섹터) 이름은 옐로우 뱃지, 섹터 합계는 옐로우 글자 → 아래 자산 목록과 구분 */
 .sector-badge {
   display: inline-block; padding: 3px 9px; border-radius: 3px; font-size: 0.8rem; line-height: 1.4;
-  color: var(--sector); background: rgba(243, 220, 148, 0.12); border: 1px solid rgba(243, 220, 148, 0.35);
+  color: var(--sector); background: rgba(var(--sector-rgb), 0.12); border: 1px solid rgba(var(--sector-rgb), 0.35);
 }
 .sector-total { color: var(--sector); }
+/* 나의 자산은 연한 초록, 나의 부채는 연한 레드 */
+.panel.theme-assets { --sector: #9fe0b5; --sector-rgb: 159, 224, 181; }
+.panel.theme-debts { --sector: #ff9fae; --sector-rgb: 255, 159, 174; }
 .asset-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; }
 .icon-only { color: #c8c8ce; display: flex; align-items: center; padding: 4px; }
 
