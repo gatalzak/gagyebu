@@ -260,6 +260,9 @@ function bindAmount(input) {
   });
 }
 
+/** 금액칸 단위 표시: 원화는 '원', 외화는 통화 코드 */
+const unitLabel = (cur) => (cur === "KRW" ? "원" : cur);
+
 // 내역 추가/수정
 // 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
 // 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
@@ -291,8 +294,11 @@ function openTxDialog(existing, presetDate) {
         </div>
         <div class="field"><label>금액</label>
           <div class="money-line">
-            <select class="input cur-select" name="currency">${CURRENCIES.map((c) => `<option value="${c}" ${c === draft.currency ? "selected" : ""}>${c === "KRW" ? "원" : c}</option>`).join("")}</select>
-            <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, draft.currency)}">
+            <div class="amount-wrap">
+              <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, draft.currency)}">
+              <span class="amount-unit" data-unit>${unitLabel(draft.currency)}</span>
+            </div>
+            <select class="input cur-select" name="currency">${CURRENCIES.map((c) => `<option value="${c}" ${c === draft.currency ? "selected" : ""}>${c}</option>`).join("")}</select>
           </div>
         </div>
         <div class="field" data-krw-field ${foreign ? "" : "hidden"}><label>원화 금액 <span class="muted" data-rate></span></label>
@@ -315,6 +321,8 @@ function openTxDialog(existing, presetDate) {
     // 외화면 원화 금액 칸을 보여 주고, 직접 고치지 않았으면 환율로 채운다
     const refreshKRW = () => {
       const cur = curSel.value;
+      $p("[data-unit]").textContent = unitLabel(cur);
+      $p(".amount-wrap").dataset.long = cur !== "KRW";
       $p("[data-krw-field]").hidden = cur === "KRW";
       if (cur === "KRW") return;
       const r = rateKRW(cur);
