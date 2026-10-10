@@ -101,6 +101,9 @@ function render() {
   else view.innerHTML = `<div class="card"><div class="empty">월별 화면은 준비 중이에요.</div></div>`;
 }
 
+/** 지출(신용카드 제외) */
+const isPlainExpense = (t) => t.kind === "지출" && !isCardExpense(t);
+
 /** 신용카드(부채 종류)로 결제한 지출인지 — 카드가 나중에 지워져도 종류는 남아 있어 그대로 구분된다 */
 function isCardExpense(t) {
   if (t.kind !== "지출") return false;
@@ -123,14 +126,14 @@ function homeView() {
   card.forEach((t) => { const id = deltaRef(t.assetDelta).id; byCard[id] = (byCard[id] || 0) + txKRW(t); });
   const cardRows = Object.entries(byCard)
     .sort((a, b) => b[1] - a[1])
-    .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || "신용카드")}</span><span class="exp">${signed(v, "-")}</span></div>`)
+    .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || "신용카드")}</span><span class="cred">${signed(v, "-")}</span></div>`)
     .join("");
 
   const segs = {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
-    신용카드: [card, "exp", "-"],
+    신용카드: [card, "cred", "-"],
     자산이동: [mov, "mov", ""],
   };
   const [selTx, cls, sign] = segs[ui.seg];
@@ -143,7 +146,7 @@ function homeView() {
 
   return `
   <section class="card">
-    <div class="card-head"><span>이번달 현재</span><span>${won(sum(inc) - sum(exp))}</span></div>
+    <div class="card-head"><span>이번달 현재</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
     <div class="row"><div class="row-main"><span>수입</span><span class="inc">${signed(sum(inc), "+")}</span></div></div>
     <div class="row">
       <div class="row-main"><span>지출</span><span class="exp">${signed(sum(fixed) + sum(variable), "-")}</span></div>
@@ -151,7 +154,7 @@ function homeView() {
       <div class="row-sub"><span>└ 변동지출</span><span class="exp">${signed(sum(variable), "-")}</span></div>
     </div>
     <div class="row">
-      <div class="row-main"><span>신용카드 사용</span><span class="exp">${signed(sum(card), "-")}</span></div>
+      <div class="row-main"><span>신용카드 사용</span><span class="cred">${signed(sum(card), "-")}</span></div>
       ${cardRows}
     </div>
     <div class="row"><div class="row-main"><span>자산이동</span><span class="mov">${won(sum(mov))}</span></div></div>
@@ -182,18 +185,19 @@ function txRow(t) {
                 return sub ? `<div class="memo">${sub}</div>` : "";
               })()}
             </div>
-            <span class="amt ${KIND_CLASS[t.kind]}">${t.currency && t.currency !== "KRW"
+            <span class="amt ${isCardExpense(t) ? "cred" : KIND_CLASS[t.kind]}">${isCardExpense(t) ? "신용 " : ""}${t.currency && t.currency !== "KRW"
               ? `${KIND_SIGN[t.kind]}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
               : signed(t.amount, KIND_SIGN[t.kind])}</span>
           </button>`;
 }
 
-/** 하루 수입·지출 합계 (없는 쪽은 생략) */
+/** 하루 수입·지출·신용카드 합계 (없는 쪽은 생략) */
 function dayTotals(items) {
   const dayInc = sum(items.filter((t) => t.kind === "수입"));
-  const dayExp = sum(items.filter((t) => t.kind === "지출"));
-  return [dayInc && `<span class="inc">${signed(dayInc, "+")}</span>`, dayExp && `<span class="exp">${signed(dayExp, "-")}</span>`]
-    .filter(Boolean).join(" ");
+  const dayExp = sum(items.filter(isPlainExpense));
+  const dayCred = sum(items.filter(isCardExpense));
+  return [dayInc && `<span class="inc">${signed(dayInc, "+")}</span>`, dayExp && `<span class="exp">${signed(dayExp, "-")}</span>`,
+    dayCred && `<span class="cred">신용 ${signed(dayCred, "-")}</span>`].filter(Boolean).join(" ");
 }
 
 // 달력 칸 안의 금액은 좁아서 '12.5만'처럼 줄여 쓴다
@@ -210,7 +214,8 @@ function calendarView() {
   monthTx().forEach((t) => (byDay[t.date] ||= []).push(t));
   const tx = monthTx();
   const monthInc = sum(tx.filter((t) => t.kind === "수입"));
-  const monthExp = sum(tx.filter((t) => t.kind === "지출"));
+  const monthExp = sum(tx.filter(isPlainExpense));
+  const monthCred = sum(tx.filter(isCardExpense));
 
   const cells = [];
   for (let i = 0; i < first; i++) cells.push(`<div class="cal-cell blank"></div>`);
@@ -218,21 +223,23 @@ function calendarView() {
     const date = `${ui.month}-${pad(d)}`;
     const items = byDay[date] || [];
     const inc = sum(items.filter((t) => t.kind === "수입"));
-    const exp = sum(items.filter((t) => t.kind === "지출"));
+    const exp = sum(items.filter(isPlainExpense));
+    const cred = sum(items.filter(isCardExpense));
     const dow = (first + d - 1) % 7;
     cells.push(`
       <button class="cal-cell${date === ui.day ? " sel" : ""}${date === today ? " today" : ""}${dow === 0 ? " sun" : dow === 6 ? " sat" : ""}" data-day="${date}">
         <span class="cal-num">${d}</span>
         ${inc ? `<span class="cal-amt inc">+${compact(inc)}</span>` : ""}
         ${exp ? `<span class="cal-amt exp">-${compact(exp)}</span>` : ""}
-        ${!inc && !exp && items.length ? `<span class="cal-dot"></span>` : ""}
+        ${cred ? `<span class="cal-amt cred">-${compact(cred)}</span>` : ""}
+        ${!inc && !exp && !cred && items.length ? `<span class="cal-dot"></span>` : ""}
       </button>`);
   }
 
   const sel = ui.day ? (byDay[ui.day] || []).sort(txNewestFirst) : [];
   return `
   <section class="card">
-    <div class="card-head"><span>${m}월</span><span class="cal-sum"><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span></span></div>
+    <div class="card-head"><span>${m}월</span><span class="cal-sum"><span class="inc">${signed(monthInc, "+")}</span> <span class="exp">${signed(monthExp, "-")}</span>${monthCred ? ` <span class="cred">신용 ${signed(monthCred, "-")}</span>` : ""}</span></div>
     <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
     <div class="cal-grid">${cells.join("")}</div>
   </section>
