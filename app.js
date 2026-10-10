@@ -1101,7 +1101,8 @@ function openTxDialog(existing, presetDate, preset = null) {
           <select class="input" name="fromAsset">${holdingOptions(["assets"], draft.fromAsset, { balance: false })}</select>
           <div class="fx-hint" data-from-hint></div>
         </div>
-        <div class="field"><label>입금 자산</label>
+        <div class="flow-arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v15"/><path d="M6.5 13.5 12 19l5.5-5.5"/></svg></div>
+        <div class="field flow-to"><label>입금 자산</label>
           <select class="input" name="toAsset">${holdingOptions(["assets"], draft.toAsset, { balance: false })}</select>
           <div class="fx-hint" data-to-hint></div>
         </div>` : ""}

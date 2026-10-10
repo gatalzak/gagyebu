@@ -395,3 +395,7 @@ input[type="date"].input { color-scheme: dark; }
 .group-title { margin: 36px 2px 0; }
 .total-bar + .group-title { margin-top: 28px; }
 .group-title + .detail-cat { margin-top: 12px; }
+
+/* 내역 창 자산이동: 출금 자산 ↓ 입금 자산 */
+.flow-arrow { display: flex; justify-content: center; margin: 10px 0 -6px; color: var(--mov); }
+.field.flow-to { margin-top: 0; }
