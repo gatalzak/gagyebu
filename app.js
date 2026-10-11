@@ -396,6 +396,7 @@ function scheduleSync(delay = 1500) {
 }
 async function runSync() {
   const pulled = await syncNow(S);
+  if (pulled && migrateBalances()) { await saveState(S); scheduleSync(); } // 예전 버전 기기에서 온 자산·부채
   if (pulled && !$("#modal-root").children.length) render();
   if (sync.status === "ok") await syncDrivePhotos(liveTx().flatMap((t) => t.photos || [])); // 영수증 사진은 따로
 }
@@ -924,12 +925,43 @@ function amountInCurrency(rec, cur) {
 }
 const roundFor = (n, cur) => { const f = 10 ** decimals(cur); return Math.round(n * f) / f; };
 
-/** 자산·부채 잔액을 amount만큼 더한다(빼려면 음수). 지워진 항목이면 아무것도 하지 않는다. */
-function adjustHolding(col, id, amount, now) {
-  const a = S[col]?.[id];
-  if (!a || a.deleted) return;
-  const cur = a.currency || "KRW";
-  S[col][id] = { ...a, amount: roundFor(a.amount + amount, cur), updatedAt: now };
+// ---------------- 잔액 계산 ----------------
+// 잔액은 저장해 두고 더하고 빼는 대신, 항상 '기준 금액(base) + 이 자산·부채에 연결된 살아 있는 내역의 변화 합'으로 계산한다.
+// 내역은 기록만 하고 잔액 숫자를 고치지 않으므로, 폰·PC에서 동시에 입력해도 동기화 순서와 상관없이 잔액이 맞는다.
+// base가 없는 예전 기록은 migrateBalances가 한 번 계산해 넣는다(그 전까지는 예전 amount를 그대로 보여 줌).
+let linkCache = null;
+/** "col:id" → 연결된 내역 변화 합 (한 번 그리는 동안만 기억) */
+function linkedTotals() {
+  if (linkCache) return linkCache;
+  const m = new Map();
+  const add = (col, id, v) => { const k = `${col}:${id}`; m.set(k, (m.get(k) || 0) + v); };
+  for (const t of liveTx()) {
+    const d = deltaRef(t.assetDelta);
+    if (d) add(d.col, d.id, d.amount);
+    for (const x of t.deltas || []) add(x.col, x.id, x.amount);
+  }
+  linkCache = m;
+  queueMicrotask(() => (linkCache = null));
+  return m;
+}
+const linkedSum = (col, id) => linkedTotals().get(`${col}:${id}`) || 0;
+/** 지금 잔액 */
+function balanceOf(col, a) {
+  if (a.base === undefined) return a.amount || 0;
+  return roundFor(a.base + linkedSum(col, a.id), curOf(a));
+}
+/** 예전 방식(amount에 직접 더하기)으로 저장된 자산·부채에 기준 금액을 넣는다 */
+function migrateBalances() {
+  let n = 0;
+  const now = nowISO();
+  for (const col of ["assets", "debts"]) {
+    for (const a of Object.values(S[col])) {
+      if (a.deleted || a.base !== undefined) continue;
+      S[col][a.id] = { ...a, base: roundFor((a.amount || 0) - linkedSum(col, a.id), curOf(a)), updatedAt: now };
+      n++;
+    }
+  }
+  return n;
 }
 
 /** 선택 목록: 자산(종류별) → 부채(종류별), 현재 잔액을 함께 보여 준다 */
@@ -940,7 +972,7 @@ function holdingOptions(cols, selectedKey, { balance = true } = {}) {
     return types.filter((t) => items.some((a) => a.type === t)).map((t) => `
     <optgroup label="${col === "debts" ? `부채 · ${t}` : t}">${items.filter((a) => a.type === t).map((a) => {
       const key = linkKey(col, a.id);
-      return `<option value="${key}" ${key === selectedKey ? "selected" : ""}>${esc(a.name)}${balance ? ` · ${formatMoney(a.amount, a.currency || "KRW")}` : ""}</option>`;
+      return `<option value="${key}" ${key === selectedKey ? "selected" : ""}>${esc(a.name)}${balance ? ` · ${formatMoney(balanceOf(col, a), curOf(a))}` : ""}</option>`;
     }).join("")}
     </optgroup>`).join("");
   }).join("");
@@ -951,11 +983,6 @@ function holdingOptions(cols, selectedKey, { balance = true } = {}) {
 // 나의 부채 → 부채 상환: 고른 부채를 줄이고, 고른 자산(통장 등)에서 같은 금액을 뺀다.
 // 자산이동 내역으로 기록하고, 실제로 바꾼 값들을 내역의 deltas에 남겨 수정·삭제 때 정확히 되돌린다.
 // 지출이 아니므로(이미 부채로 잡힌 돈을 갚는 것) 지출·이번달 현재에는 영향을 주지 않는다.
-
-/** 내역에 기록된 잔액 변화(상환은 여러 개)를 모두 되돌린다 */
-function revertDeltas(t, now) {
-  (t?.deltas || []).forEach((d) => adjustHolding(d.col, d.id, -d.amount, now));
-}
 
 /**
  * existing: 수정할 상환 내역(없으면 새로)
@@ -981,7 +1008,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
     const d = ref && S.debts[ref.id];
     if (!d) return null;
     const already = prevDebt && prevDebt.id === ref.id ? -prevDebt.amount : 0;
-    return d.amount + already;
+    return balanceOf("debts", d) + already;
   };
 
   const draw = () => {
@@ -1038,7 +1065,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
       const a = aRef && S.assets[aRef.id];
       if (!a || !debt) { $p("[data-asset-hint]").textContent = ""; return; }
       const out = amountInCurrency({ currency: cur, amount: pay, krw: toKRW(pay, cur) }, curOf(a));
-      $p("[data-asset-hint]").textContent = out === null ? "환율 정보가 없어 반영할 수 없어요" : pay ? `${a.name}에서 -${formatMoney(roundFor(out, curOf(a)), curOf(a))} 빠져나가요${out > a.amount ? " (잔액보다 많아요)" : ""}` : "";
+      $p("[data-asset-hint]").textContent = out === null ? "환율 정보가 없어 반영할 수 없어요" : pay ? `${a.name}에서 -${formatMoney(roundFor(out, curOf(a)), curOf(a))} 빠져나가요${out > balanceOf("assets", a) ? " (잔액보다 많아요)" : ""}` : "";
     };
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, cur); amountTouched = true; hints(); });
     $p("[name=asset]").onchange = hints;
@@ -1072,8 +1099,6 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         if (out === null) return toast("환율 정보가 없어 반영할 수 없어요.");
         deltas.push({ col: "assets", id: a.id, amount: -roundFor(out, curOf(a)) });
       }
-      revertDeltas(existing, now);
-      deltas.forEach((x) => adjustHolding(x.col, x.id, x.amount, now));
       const rec = {
         id: existing?.id || uid(),
         date: draft.date,
@@ -1102,7 +1127,6 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
     if (del) del.onclick = async () => {
       if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
       const now = nowISO();
-      revertDeltas(existing, now);
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
       await saveState(S);
       scheduleSync();
@@ -1376,11 +1400,9 @@ function openTxDialog(existing, presetDate, preset = null) {
         if (add === null) return toast("환율 정보가 없어 반영할 수 없어요.");
         delta = { col: ref.col, id: a.id, amount: linkSign(rec.kind, ref.col) * roundFor(add, curOf(a)) };
       }
-      const prev = deltaRef(existing?.assetDelta);
-      if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
-      revertDeltas(existing, now); // 이전 자산이동 반영 되돌리기
-      if (delta) { adjustHolding(delta.col, delta.id, delta.amount, now); rec.assetDelta = delta; }
-      if (deltas?.length) { deltas.forEach((x) => adjustHolding(x.col, x.id, x.amount, now)); rec.deltas = deltas; }
+      // 잔액은 내역에서 계산하므로 변화만 기록한다(예전 값은 내역을 바꾸면 자연히 빠짐)
+      if (delta) rec.assetDelta = delta;
+      if (deltas?.length) rec.deltas = deltas;
       // 영수증 사진: 새로 고른 것은 기기에 저장, 뺀 것은 기기에서 지움
       for (const id of rec.photos || []) {
         if (pendingPhotos.has(id)) { await putPhoto({ id, blob: pendingPhotos.get(id), uploaded: false }); pendingPhotos.delete(id); }
@@ -1399,8 +1421,6 @@ function openTxDialog(existing, presetDate, preset = null) {
       if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
       const now = nowISO();
       const prev = deltaRef(existing.assetDelta);
-      if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
-      revertDeltas(existing, now);
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
       for (const id of existing.photos || []) await deletePhoto(id).catch(() => {});
       closeModal();
@@ -1563,10 +1583,10 @@ const currencyOptions = (sel) =>
   CURRENCIES.map((c) => `<option value="${c}" ${c === sel ? "selected" : ""}>${c === "KRW" ? "원 (KRW)" : `${c} · ${CURRENCY_NAMES[c]}`}</option>`).join("");
 
 /** 원화 환산 합계. 환율을 모르는 외화가 있으면 missing에 개수를 센다. */
-function krwTotal(assets) {
+function krwTotal(assets, col) {
   let total = 0, missing = 0;
   for (const a of assets) {
-    const v = toKRW(a.amount, curOf(a));
+    const v = toKRW(balanceOf(col, a), curOf(a));
     if (v === null) missing++;
     else total += v;
   }
@@ -1661,21 +1681,22 @@ function openHoldingsDialog(col) {
     if (mode === "edit") return drawEdit();
     const assets = sortedAssets();
     const groups = cfg.types; // 등록된 항목이 없어도 모든 종류 섹션을 보여 준다
-    const all = krwTotal(assets);
+    const all = krwTotal(assets, col);
     const hasForeign = assets.some((a) => curOf(a) !== "KRW");
     const body =
       `<div class="asset-total"><span class="muted">${cfg.total}</span><span>${all.missing ? "약 " : ""}${won(all.total)}</span></div>` +
         groups.map((t) => {
           const items = assets.filter((a) => a.type === t);
-          const g = krwTotal(items);
+          const g = krwTotal(items, col);
           return `
           <section class="asset-group">
             <div class="asset-group-head"><span class="sector-badge">${t}</span><span class="sector-total">${won(g.total)}</span></div>
             ${items.length ? items.map((a) => {
               const cur = curOf(a);
-              const krw = cur === "KRW" ? null : toKRW(a.amount, cur);
+              const bal = balanceOf(col, a);
+              const krw = cur === "KRW" ? null : toKRW(bal, cur);
               return `<div class="asset-row"><span class="name">${esc(a.name)}</span>
-                <span class="amt">${formatMoney(a.amount, cur)}${cur !== "KRW" ? `<span class="fx-sub">${krw === null ? "환율 없음" : `≈ ${won(krw)}`}</span>` : ""}</span></div>`;
+                <span class="amt">${formatMoney(bal, cur)}${cur !== "KRW" ? `<span class="fx-sub">${krw === null ? "환율 없음" : `≈ ${won(krw)}`}</span>` : ""}</span></div>`;
             }).join("") : `<div class="asset-row asset-none">등록된 ${cfg.subj} 없습니다</div>`}
           </section>`;
         }).join("") +
@@ -1694,7 +1715,7 @@ function openHoldingsDialog(col) {
     panel.querySelector("[data-close-btn]").onclick = closeModal;
     const edit = panel.querySelector("[data-edit]");
     if (edit) edit.onclick = () => {
-      drafts = sortedAssets().map((a) => ({ id: a.id, type: a.type, name: a.name, currency: curOf(a), amount: a.amount, del: false }));
+      drafts = sortedAssets().map((a) => ({ id: a.id, type: a.type, name: a.name, currency: curOf(a), amount: balanceOf(col, a), del: false }));
       mode = "edit";
       draw();
     };
@@ -1783,7 +1804,7 @@ function openHoldingsDialog(col) {
       for (const d of drafts) {
         if (d.isNew) {
           const i = (pos[d.type] = (pos[d.type] ?? -1) + 1);
-          S[col][d.id] = { id: d.id, type: d.type, order: 10000 + i, name: d.name.trim(), currency: d.currency, amount: d.amount, createdAt: now, updatedAt: now, deleted: false };
+          S[col][d.id] = { id: d.id, type: d.type, order: 10000 + i, name: d.name.trim(), currency: d.currency, amount: d.amount, base: d.amount, createdAt: now, updatedAt: now, deleted: false };
           changed++;
           continue;
         }
@@ -1795,8 +1816,11 @@ function openHoldingsDialog(col) {
         }
         const i = (pos[a.type] = (pos[a.type] ?? -1) + 1);
         const order = d.type === a.type ? i : 10000 + i; // 종류를 옮긴 자산은 새 섹션의 맨 뒤로
-        if (a.type !== d.type || a.name !== d.name.trim() || curOf(a) !== d.currency || a.amount !== d.amount || a.order !== order) {
-          S[col][d.id] = { ...a, type: d.type, name: d.name.trim(), currency: d.currency, amount: d.amount, order, updatedAt: now };
+        const was = balanceOf(col, a);
+        if (a.type !== d.type || a.name !== d.name.trim() || curOf(a) !== d.currency || was !== d.amount || a.order !== order) {
+          // 잔액을 고쳤으면 기준 금액을 다시 맞춘다(입력한 잔액 = 기준 금액 + 연결된 내역 합)
+          const base = was !== d.amount || a.base === undefined ? roundFor(d.amount - linkedSum(col, a.id), d.currency) : a.base;
+          S[col][d.id] = { ...a, type: d.type, name: d.name.trim(), currency: d.currency, amount: d.amount, base, order, updatedAt: now };
           changed++;
         }
       }
@@ -1844,6 +1868,7 @@ function openHoldingsDialog(col) {
         name,
         currency: cur.value,
         amount: parseMoney(amt.value, cur.value),
+        base: parseMoney(amt.value, cur.value), // 처음 등록한 잔액이 기준 금액
         createdAt: now,
         updatedAt: now,
         deleted: false,
@@ -1936,14 +1961,11 @@ function openBackupDialog() {
     if (!resetArmed) { resetArmed = true; resetBtn.textContent = `한 번 더 누르면 ${list.length}건 모두 삭제`; return; }
     const revert = panel.querySelector("[data-reset-holdings]").checked;
     const now = nowISO();
-    for (const t of list) {
-      if (revert) {
-        const prev = deltaRef(t.assetDelta);
-        if (prev) adjustHolding(prev.col, prev.id, -prev.amount, now);
-        revertDeltas(t, now);
-      }
-      S.transactions[t.id] = { ...t, deleted: true, updatedAt: now };
-    }
+    // 잔액은 내역에서 계산되므로 내역을 지우면 저절로 되돌아간다. 되돌리지 않으려면 지금 잔액을 기준 금액으로 고정.
+    const keep = revert ? null : ["assets", "debts"].flatMap((col) => Object.values(S[col]).filter((a) => !a.deleted).map((a) => [col, a.id, balanceOf(col, a)]));
+    for (const t of list) S.transactions[t.id] = { ...t, deleted: true, updatedAt: now };
+    linkCache = null;
+    if (keep) for (const [col, id, bal] of keep) S[col][id] = { ...S[col][id], base: roundFor(bal - linkedSum(col, id), curOf(S[col][id])), amount: bal, updatedAt: now };
     closeModal();
     await commit();
     toast(`내역 ${list.length}건을 지웠어요${revert ? " · 잔액도 되돌렸어요" : ""}`);
@@ -2071,7 +2093,7 @@ async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
-  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories()) await saveState(S);
+  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories() + migrateBalances()) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();
