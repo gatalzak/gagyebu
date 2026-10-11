@@ -518,3 +518,20 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .repay-tip .tip-em { font-weight: 400; color: #f3dc94; }
 .repay-tip .repay-link { color: #f3dc94; border: 1px solid #6b5a2a; border-radius: 3px; padding: 5px 12px; margin-top: 6px; margin-left: auto; background: rgba(243, 220, 148, 0.06); }
 .repay-tip.warn { border-color: #6b5a2a; background: rgba(243, 220, 148, 0.08); color: #f3dc94; }
+
+/* 새 내역 1단계: 내역 성격 고르기 (화면 전체) */
+.overlay:has(.kind-picker) { padding: 0; }
+.panel.kind-picker { width: var(--app-width); min-height: 100dvh; border: 0; border-radius: 0; padding-top: env(safe-area-inset-top); }
+.kp-intro { margin: 4px 0 18px; font-size: 1.05rem; line-height: 1.6; color: var(--text); word-break: keep-all; }
+.kp-em { color: #f3dc94; }
+.kp-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.kp-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 14px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+.kp-item:active { background: rgba(255, 255, 255, 0.04); }
+.kp-num { color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); width: 16px; flex: none; }
+.kp-ico { display: inline-flex; flex: none; }
+.kp-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.kp-name { font-size: 1.05rem; }
+.kp-desc { font-size: calc(0.78rem + var(--fs-up)); color: var(--muted); word-break: keep-all; line-height: 1.4; }
+.kp-go { color: var(--muted); font-size: 1.2rem; flex: none; }
+.kp-lead { margin: 0 0 10px; }
+.debt-mode-note { margin-top: 8px; word-break: keep-all; }

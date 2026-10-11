@@ -1212,6 +1212,20 @@ function balanceOf(col, a) {
   return roundFor(a.base + linkedSum(col, a.id), curOf(a));
 }
 /** 예전 방식(amount에 직접 더하기)으로 저장된 자산·부채에 기준 금액을 넣는다 */
+/** 2026-10-11~12 버그로 deltas 없이 저장된 대출 실행 내역에 부채 증가분을 되살린다(입금 자산은 알 수 없어 빠짐) */
+function repairLoanTxs() {
+  let n = 0;
+  for (const t of Object.values(S.transactions)) {
+    if (t.deleted || t.kind !== "자산이동" || t.deltas?.length || t.assetDelta || t.fromAsset) continue;
+    const d = Object.values(S.debts).find((x) => !x.deleted && x.name === t.content && x.base === 0
+      && Math.abs(new Date(x.createdAt) - new Date(t.createdAt)) < 60000);
+    if (!d) continue;
+    S.transactions[t.id] = { ...t, deltas: [{ col: "debts", id: d.id, amount: t.amount }], updatedAt: nowISO() };
+    n++;
+  }
+  return n;
+}
+
 function migrateBalances() {
   let n = 0;
   const now = nowISO();
@@ -1234,12 +1248,12 @@ function holdingHelp(cols) {
 }
 
 /** 선택 목록: 자산(종류별) → 부채(종류별), 현재 잔액을 함께 보여 준다 */
-function holdingOptions(cols, selectedKey, { balance = true, withCard = false } = {}) {
+function holdingOptions(cols, selectedKey, { balance = true, withCard = false, onlyType = "" } = {}) {
   const html = cols.map((col) => {
-    const types = HOLDINGS[col].types;
-    const items = Object.values(S[col]).filter((a) => !a.deleted).sort(makeOrder(types));
+    const types = HOLDINGS[col].types.filter((t) => !onlyType || t === onlyType);
+    const items = Object.values(S[col]).filter((a) => !a.deleted && (!onlyType || debtType(a) === onlyType)).sort(makeOrder(types));
     return types.filter((t) => items.some((a) => a.type === t)).map((t) => `
-    <optgroup label="${col === "debts" ? `부채 · ${t}` : t}">${items.filter((a) => a.type === t).map((a) => {
+    <optgroup label="${col === "debts" ? `부채 · ${t}` : t}">${items.filter((a) => (col === "debts" ? debtType(a) : a.type) === t).map((a) => {
       const key = linkKey(col, a.id);
       return `<option value="${key}" ${key === selectedKey ? "selected" : ""}>${esc(a.name)}${withCard && a.card ? ` | ${esc(a.card)}` : ""}${balance ? ` · ${formatMoney(balanceOf(col, a), curOf(a))}` : ""}</option>`;
     }).join("")}
@@ -1488,28 +1502,34 @@ function saveLoanTx({ existing = null, debt, asset, amount, date, time, memo }) 
   S.transactions[id] = {
     id, date, time: time || "", kind: "자산이동", expenseType: "", category: "", subcategory: "",
     currency: dcur, amount, ...(dcur !== "KRW" ? { krw: Math.round(krw) } : {}),
-    content: debt.name, party: "", // 뱃지에 '대출 실행'이 있으므로 내용은 부채 이름만 memo: (memo || "").trim(), deltas,
+    content: debt.name, party: "", // 뱃지에 '대출 실행'이 있으므로 내용은 부채 이름만
+    memo: (memo || "").trim(), deltas,
     createdAt: existing?.createdAt || now, updatedAt: now, deleted: false,
   };
   return null;
 }
 
-/** 대출 실행 기록 고치기·삭제 */
-function openLoanDialog({ existing }) {
-  const prevDebt = existing.deltas.find((d) => d.col === "debts");
-  const prevAsset = existing.deltas.find((d) => d.col === "assets");
-  const draft = { debt: linkKey("debts", prevDebt.id), asset: prevAsset ? linkKey("assets", prevAsset.id) : "", amount: existing.amount,
-    date: existing.date, time: existing.time || "", memo: existing.memo || "" };
+/** 부채 발생(대출 실행·돈 빌림) 기록하기 / 고치기·삭제 */
+function openLoanDialog({ existing = null, presetDate = "", onBack = null } = {}) {
+  const prevDebt = existing?.deltas.find((d) => d.col === "debts");
+  const prevAsset = existing?.deltas.find((d) => d.col === "assets");
+  const draft = existing
+    ? { debt: linkKey("debts", prevDebt.id), asset: prevAsset ? linkKey("assets", prevAsset.id) : "", amount: existing.amount,
+      date: existing.date, time: existing.time || "", memo: existing.memo || "" }
+    : { debt: "", asset: "", amount: 0, date: presetDate || todayStr(), time: nowTime(), memo: "" };
   let confirmDelete = false;
   const draw = () => {
     const debt = S.debts[parseLinkKey(draft.debt)?.id];
     const cur = debt ? curOf(debt) : "KRW";
     const panel = openModal({
       cls: "theme-debts",
-      title: "대출 실행 수정",
+      title: existing ? "대출 실행 수정" : "부채 발생",
       body: `
-        <div class="field" style="margin-top:4px"><label>대출(부채)</label>
-          <select class="input" name="debt">${holdingOptions(["debts"], draft.debt, { balance: false }).replace("선택 안 함", "부채를 골라 주세요")}</select></div>
+        ${existing ? "" : `<p class="note kp-lead">이미 등록된 부채(대출·마이너스 통장·지인에게 빌린 돈 등)가 늘어났을 때 기록해요.</p>`}
+        <div class="field" style="margin-top:4px"><label>${existing ? "대출(부채)" : "늘어난 부채"}</label>
+          <select class="input" name="debt">${holdingOptions(["debts"], draft.debt, { balance: false }).replace("선택 안 함", "부채를 골라 주세요")}</select>
+          ${existing ? "" : `<div class="holding-help"><span>처음 생긴 부채라면</span><button class="reg-link" data-new-debt>+ 새 부채 등록</button></div>
+          <p class="note" style="margin-top:4px">새 부채는 등록하면서 '받은 돈 입금 자산'을 고르면 부채 발생까지 함께 기록돼요.</p>`}</div>
         <div class="field"><label>받은 돈 입금 자산</label>
           <select class="input" name="asset">${holdingOptions(["assets"], draft.asset, { balance: false })}</select></div>
         <div class="field"><label>날짜 · 시간</label>
@@ -1517,15 +1537,15 @@ function openLoanDialog({ existing }) {
             <input class="input" type="date" name="date" value="${draft.date}">
             <input class="input time-input" type="time" name="time" value="${draft.time}">
           </div></div>
-        <div class="field"><label>대출 금액</label>
+        <div class="field"><label>${existing ? "대출 금액" : "늘어난 금액"}</label>
           <div class="amount-wrap" data-long="${cur !== "KRW"}">
             <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, cur)}">
             <span class="amount-unit">${unitLabel(cur)}</span>
           </div></div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 주택 구입 자금" value="${esc(draft.memo)}"></div>
-        <p class="note">대출 실행은 수입이 아니에요. 부채와 입금 자산이 같이 늘어나요.</p>
+        <p class="note">부채 발생(대출 실행)은 수입이 아니에요. 부채와 입금 자산이 같이 늘어나요.</p>
         <div class="btn-row">
-          <button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>
+          ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
           <button class="btn primary" data-act="save">저장</button>
         </div>`,
     });
@@ -1538,20 +1558,26 @@ function openLoanDialog({ existing }) {
     const amt = $p("[name=amount]");
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, cur); });
     $p("[name=debt]").onchange = () => { read(); draw(); };
+    if (onBack) $p("[data-close]").onclick = onBack;
+    const newDebt = $p("[data-new-debt]");
+    if (newDebt) newDebt.onclick = () => {
+      read();
+      openHoldingsDialog("debts", { startAdd: true, onDone: (id) => { if (id) { closeModal(); render(); } else openLoanDialog({ presetDate, onBack }); } });
+    };
     $p("[data-act=save]").onclick = async () => {
       read();
       const d = S.debts[parseLinkKey(draft.debt)?.id];
-      if (!d || d.deleted) return toast("대출(부채)을 골라 주세요.");
-      if (draft.amount <= 0) return toast("대출 금액을 입력해 주세요.");
+      if (!d || d.deleted) return toast("부채를 골라 주세요.");
+      if (draft.amount <= 0) return toast("금액을 입력해 주세요.");
       const aRef = parseLinkKey(draft.asset);
       const a = aRef && S.assets[aRef.id];
       const err = saveLoanTx({ existing, debt: d, asset: a && !a.deleted ? a : null, amount: draft.amount, date: draft.date, time: draft.time, memo: draft.memo });
       if (err) return toast(err);
       closeModal();
       await commit();
-      toast("대출 실행 기록을 고쳤어요");
+      toast(existing ? "대출 실행 기록을 고쳤어요" : `${d.name} ${formatMoney(draft.amount, curOf(d))} 부채 발생을 기록했어요`);
     };
-    $p("[data-act=delete]").onclick = async () => {
+    if (existing) $p("[data-act=delete]").onclick = async () => {
       if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: nowISO() };
       closeModal();
@@ -1565,12 +1591,66 @@ function openLoanDialog({ existing }) {
 // 내역 추가/수정
 // 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
 // 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
+/** 새 내역의 기본값 (kind·expenseType 등을 덮어쓸 수 있음) */
+function newTxDraft(presetDate, over = {}) {
+  const d = { kind: "지출", expenseType: "고정", date: presetDate || todayStr(), time: nowTime(), currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "", ...over };
+  d.category = d.kind === "자산이동" ? "" : catsFor(d.kind, d.kind === "지출" ? d.expenseType : null)[0] || "";
+  return d;
+}
+
+/** 새 내역 추가 1단계: 내역 성격부터 고른다 (수정할 때는 이 화면 없이 바로 입력 창) */
+const PICK_ITEMS = [
+  { key: "income", cls: "inc", icon: "수입", name: "수입", desc: "급여·용돈·이자처럼 들어온 돈" },
+  { key: "fixed", cls: "exp", icon: "지출", name: "고정지출", desc: "월세·통신비·보험료처럼 매달 나가는 돈" },
+  { key: "var", cls: "exp", icon: "지출", name: "변동지출", desc: "식비·쇼핑처럼 그때그때 쓴 돈 (현금·체크카드·계좌이체)" },
+  { key: "move", cls: "mov", icon: "자산이동", name: "자산이동", desc: "내 통장·현금·증권 사이에서 옮긴 돈" },
+  { key: "card", cls: "cred", icon: "단기부채", name: "신용카드 사용", desc: "*신용카드 사용은 지출이 아닌 부채로 잡혀요" },
+  { key: "minus", cls: "cred", icon: "단기부채", name: "마이너스 통장 사용", desc: "*마이너스 통장에서 쓴 돈도 지출이 아닌 부채로 잡혀요" },
+  { key: "borrow", cls: "cred", icon: "대출실행", name: "부채 발생", desc: "대출을 받거나 돈을 빌림 · 수입이 아니에요" },
+  { key: "repay", cls: "repay", icon: "부채상환", name: "부채 상환", desc: "카드 대금·마통·대출금 갚기 · 지출이 아니에요" },
+];
+function openKindPicker(presetDate) {
+  const panel = openModal({
+    cls: "kind-picker",
+    title: "내역 추가",
+    headExtra: `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
+    body: `
+      <p class="kp-intro">내역을 추가하시나요?<br>그러면 아래에서 <span class="kp-em">내역 성격</span>부터 정해 주세요.</p>
+      <div class="kp-list">${PICK_ITEMS.map((it, i) => `
+        <button class="kp-item" data-pick="${it.key}">
+          <span class="kp-num">${"①②③④⑤⑥⑦⑧"[i]}</span>
+          <span class="kp-ico ${it.cls}">${HOME_ICONS[it.icon]}</span>
+          <span class="kp-text"><span class="kp-name ${it.cls}">${it.name}</span><span class="kp-desc">${it.desc}</span></span>
+          <span class="kp-go">›</span>
+        </button>`).join("")}</div>`,
+  });
+  const back = () => openKindPicker(presetDate);
+  // 그 종류 부채가 하나뿐이면 미리 골라 둔다
+  const onlyDebt = (type) => {
+    const list = Object.values(S.debts).filter((a) => !a.deleted && debtType(a) === type);
+    return list.length === 1 ? linkKey("debts", list[0].id) : "";
+  };
+  const start = {
+    income: () => openTxDialog(null, null, newTxDraft(presetDate, { kind: "수입" })),
+    fixed: () => openTxDialog(null, null, newTxDraft(presetDate, { kind: "지출", expenseType: "고정" })),
+    var: () => openTxDialog(null, null, newTxDraft(presetDate, { kind: "지출", expenseType: "변동" })),
+    move: () => openTxDialog(null, null, newTxDraft(presetDate, { kind: "자산이동" })),
+    card: () => openTxDialog(null, null, newTxDraft(presetDate, { kind: "지출", expenseType: "변동", debtMode: "신용카드", link: onlyDebt("신용카드") })),
+    minus: () => openTxDialog(null, null, newTxDraft(presetDate, { kind: "지출", expenseType: "변동", debtMode: "마이너스통장", link: onlyDebt("마이너스통장") })),
+    borrow: () => openLoanDialog({ presetDate, onBack: back }),
+    repay: () => openRepayDialog({ preset: presetDate ? { date: presetDate } : null, onDone: () => { closeModal(); render(); } }),
+  };
+  panel.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => start[b.dataset.pick]()));
+  panel.querySelector("[data-act=favs]").onclick = () => openFavorites({
+    onPick: (f) => openTxDialog(null, null, applyFav(newTxDraft(presetDate), f)),
+    onBack: back,
+  });
+}
+
 function openTxDialog(existing, presetDate, preset = null) {
   if (existing && isRepayTx(existing)) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
   if (existing && isLoanTx(existing)) return openLoanDialog({ existing }); // 대출 실행 기록은 대출 창에서
-  const draft = preset ? { ...preset } : existing
-    ? { currency: "KRW", ...existing }
-    : { kind: "지출", expenseType: "고정", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출", "고정")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
+  const draft = preset ? { ...preset } : existing ? { currency: "KRW", ...existing } : newTxDraft(presetDate);
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
   if (existing) { const d = deltaRef(existing.assetDelta); draft.link = d ? linkKey(d.col, d.id) : ""; }
@@ -1590,8 +1670,10 @@ function openTxDialog(existing, presetDate, preset = null) {
     if (!catList.includes(draft.category) && !(existing && existing.kind === draft.kind && existing.category === draft.category)) draft.category = catList[0] || "";
     if (draft.category && !catList.includes(draft.category)) catList.push(draft.category); // 지워진 카테고리를 쓰던 내역
     const foreign = draft.currency !== "KRW";
+    const debtMode = draft.kind === "지출" ? draft.debtMode || "" : ""; // 신용카드 사용·마이너스통장 사용
+    const linkCfg = debtMode ? { label: `사용한 ${SHORT_DEBT[debtMode].label}`, cols: ["debts"] } : ASSET_LINK[draft.kind];
     const panel = openModal({
-      title: existing ? "내역 수정" : "내역 추가",
+      title: existing ? "내역 수정" : debtMode ? `${SHORT_DEBT[debtMode].title}` : "내역 추가",
       headExtra: existing ? "" : `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
       body: `
         <div class="seg" data-role="kind">${KINDS.map((k) => `<button data-v="${k}" class="${k === draft.kind ? "on" : ""}">${k}</button>`).join("")}</div>
@@ -1621,11 +1703,12 @@ function openTxDialog(existing, presetDate, preset = null) {
           </div>
         </div>
         ${ASSET_LINK[draft.kind] ? `
-        <div class="field"><label>${ASSET_LINK[draft.kind].label} <span class="req">*</span></label>
-          <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
+        <div class="field"><label>${linkCfg.label} <span class="req">*</span></label>
+          <select class="input" name="asset">${holdingOptions(linkCfg.cols, draft.link, { balance: false, onlyType: debtMode })}</select>
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
-          ${holdingHelp(ASSET_LINK[draft.kind].cols)}
-          ${draft.kind === "지출" ? `<div class="repay-tip" data-repay-tip>
+          ${holdingHelp(linkCfg.cols)}
+          ${debtMode ? `<p class="note debt-mode-note">${SHORT_DEBT[debtMode].label} 사용은 지출이 아니라 <span class="cred">단기 부채</span>로 잡혀요. 나중에 대금을 낼 때는 '부채 상환'으로 기록해요.</p>` : ""}
+          ${draft.kind === "지출" && !debtMode ? `<div class="repay-tip" data-repay-tip>
             <span>신용카드 대금·마이너스 통장 대금·대출금을 갚는 거라면 지출이 아니라 <b class="tip-em">부채 상환</b>이에요. 부채 상환으로 내역을 저장해주세요.</span>
             <button class="reg-link repay-link" data-go-repay>부채 상환 바로가기</button>
           </div>` : ""}
@@ -1756,7 +1839,7 @@ function openTxDialog(existing, presetDate, preset = null) {
       refreshAssetHint();
     }
 
-    panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { read(); draft.kind = b.dataset.v; draft.subcategory = ""; draw(); }));
+    panel.querySelectorAll("[data-role=kind] button").forEach((b) => (b.onclick = () => { read(); draft.kind = b.dataset.v; draft.subcategory = ""; draft.debtMode = ""; draw(); }));
     if ($p("[name=category]")) {
     $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draw(); };
     $p("[data-act=edit-cats]").onclick = () => {
@@ -2652,7 +2735,7 @@ function bindEvents() {
   $("#next").onclick = () => { ui.month = shiftMonth(ui.month, 1); render(); };
   $("#month-title").onclick = openDatePicker;
   document.querySelectorAll("nav.tabs button").forEach((b) => (b.onclick = () => { ui.tab = b.dataset.tab; render(); }));
-  $("#fab").onclick = () => openTxDialog(null, ui.tab === "calendar" && ui.day ? ui.day : undefined);
+  $("#fab").onclick = () => openKindPicker(ui.tab === "calendar" && ui.day ? ui.day : undefined);
   $("#open-assets").onclick = () => openHoldingsDialog("assets");
   $("#open-debts").onclick = () => openHoldingsDialog("debts");
   $("#open-backup").onclick = openBackupDialog;
@@ -2701,7 +2784,7 @@ async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
-  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories() + migrateBalances() + freezeCatEtypes()) await saveState(S);
+  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories() + repairLoanTxs() + migrateBalances() + freezeCatEtypes()) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();
