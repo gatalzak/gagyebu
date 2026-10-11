@@ -365,6 +365,16 @@ function moveRoute(t) {
   return `${name(out)} → ${name(into)}`;
 }
 const MOVE_NONE = "자산 미지정";
+/** 부채 상환 내역을 갚은 부채별로 묶어 ['KB신용카드 대금 상환', 합계] (큰 순서) */
+function repayTotals(list) {
+  const by = {};
+  list.forEach((t) => {
+    const d = t.deltas?.find((x) => x.col === "debts");
+    const label = `${S.debts[d?.id]?.name || "부채"} 대금 상환`;
+    by[label] = (by[label] || 0) + txKRW(t);
+  });
+  return Object.entries(by).sort((a, b) => b[1] - a[1]);
+}
 /** 자산이동 내역을 경로별로 묶어 [경로, 합계] (큰 순서) */
 function routeTotals(list) {
   const by = {};
@@ -591,8 +601,8 @@ function homeView(part = "summary") {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
-    "단기 부채": [shortDebt, "cred", ""], // 단기 부채는 부호 없이(갚아야 할 돈)
     자산이동: [mov, "mov", ""],
+    "단기 부채": [shortDebt, "cred", ""], // 단기 부채는 부호 없이(갚아야 할 돈)
     "부채 상환": [repay, "repay", ""],
   };
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
@@ -659,7 +669,7 @@ function homeView(part = "summary") {
     </div>
     ${repay.length ? `<div class="row">
       <div class="row-main">${homeLabel("부채상환", "부채 상환", "repay")}<span class="repay">${won(sum(repay))}</span></div>
-      ${routeTotals(repay).map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}
+      ${repayTotals(repay).map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}
     </div>` : ""}
   </section>
   <section class="card">
@@ -679,7 +689,7 @@ function homeView(part = "summary") {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${won(v)}</span></div>` : "";
       }).join("") : ""}
-      ${ui.seg === "자산이동" || ui.seg === "부채 상환" ? routeTotals(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
+      ${ui.seg === "자산이동" || ui.seg === "부채 상환" ? (ui.seg === "부채 상환" ? repayTotals : routeTotals)(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
     </div>
     ${selTx.length ? catSections : `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
   </section>`;
