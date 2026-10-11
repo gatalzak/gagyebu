@@ -1230,7 +1230,7 @@ function holdingHelp(cols) {
   const has = cols.some((col) => Object.values(S[col]).some((a) => !a.deleted));
   const msg = has ? "찾는 항목이 없나요?" : cols.includes("debts") ? "등록된 자산·부채가 없어요. 등록해 두면 잔액이 자동으로 바뀌어요." : "등록된 자산이 없어요. 등록해 두면 잔액이 자동으로 바뀌어요.";
   return `<div class="holding-help${has ? "" : " no-holding"}"><span>${msg}</span>
-    ${cols.map((col) => `<button class="reg-link" data-reg="${col}">+ ${col === "debts" ? "부채(카드 등)" : "자산"} 등록</button>`).join("")}</div>`;
+    ${cols.map((col) => `<button class="reg-link" data-reg="${col}">+ ${col === "debts" ? "부채(신용카드 등)" : "자산"} 등록</button>`).join("")}</div>`;
 }
 
 /** 선택 목록: 자산(종류별) → 부채(종류별), 현재 잔액을 함께 보여 준다 */
@@ -1621,7 +1621,7 @@ function openTxDialog(existing, presetDate, preset = null) {
           </div>
         </div>
         ${ASSET_LINK[draft.kind] ? `
-        <div class="field"><label>${ASSET_LINK[draft.kind].label}${draft.kind === "지출" ? ' <span class="req">*</span>' : ""}</label>
+        <div class="field"><label>${ASSET_LINK[draft.kind].label} <span class="req">*</span></label>
           <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
           ${holdingHelp(ASSET_LINK[draft.kind].cols)}
@@ -1813,7 +1813,7 @@ function openTxDialog(existing, presetDate, preset = null) {
         if (!draft.toAsset) return bad("[name=toAsset]", "입금 자산을 골라 주세요.");
       }
       // 화면 위에서부터 순서대로 확인
-      if (draft.kind === "지출" && !draft.link) return bad("[name=asset]", "출금 되는 자산을 골라 주세요.");
+      if (ASSET_LINK[draft.kind] && !draft.link) return bad("[name=asset]", `${ASSET_LINK[draft.kind].label}을 골라 주세요.`);
       if (draft.kind === "지출" && $p("[data-pay-field]") && !$p("[data-pay-field]").hidden && !draft.pay) return bad("[name=pay]", "결제 수단을 골라 주세요.");
       if (!(draft.content || "").trim()) return bad("[name=content]", "내용을 입력해 주세요.");
       if (draft.kind !== "자산이동" && !draft.category) return bad("[name=category]", "카테고리를 골라 주세요.");
