@@ -723,7 +723,7 @@ function txRow(t, { withDate = false } = {}) {
           <button class="tx" data-tx="${t.id}">
             <div class="left">
               <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : isLoan ? `<span class="cat-badge b-cred">대출 실행</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
-              ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
+              ${t.content ? `<div class="tx-content">${esc(isLoan ? t.content.replace(/ 대출 실행$/, "") : t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
             </div>
@@ -1279,7 +1279,7 @@ function saveLoanTx({ existing = null, debt, asset, amount, date, time, memo }) 
   S.transactions[id] = {
     id, date, time: time || "", kind: "자산이동", expenseType: "", category: "", subcategory: "",
     currency: dcur, amount, ...(dcur !== "KRW" ? { krw: Math.round(krw) } : {}),
-    content: `${debt.name} 대출 실행`, party: "", memo: (memo || "").trim(), deltas,
+    content: debt.name, party: "", // 뱃지에 '대출 실행'이 있으므로 내용은 부채 이름만 memo: (memo || "").trim(), deltas,
     createdAt: existing?.createdAt || now, updatedAt: now, deleted: false,
   };
   return null;
