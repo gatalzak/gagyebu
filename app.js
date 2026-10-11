@@ -9,7 +9,7 @@ const KINDS = ["수입", "지출", "자산이동"];
 const EXPENSE_TYPES = ["고정", "변동"]; // 화면 표시 순서(고정지출이 앞)
 const CATEGORIES = {
   수입: ["월급", "부수입", "용돈", "이자/배당", "환급", "기타"],
-  지출: ["식비", "카페/간식", "교통", "주거/통신", "생활용품", "쇼핑", "의료/건강", "문화/여가", "교육", "경조사", "보험", "기타"],
+  지출: ["식비", "카페/간식", "교통", "주거/통신", "생활용품", "쇼핑", "의료/건강", "문화/여가", "교육", "경조사", "보험", "금융/이자", "기타"],
 };
 // 자산이동은 카테고리를 쓰지 않는다(출금 → 입금 자산으로 구분). 예전 기록의 카테고리는 cleanMoveCategories가 비운다.
 // 처음에 넣어 두는 하위 카테고리 (이용자가 더하거나 지울 수 있음)
@@ -115,7 +115,8 @@ function addSubcat(kind, category, name) {
 // 카테고리도 기기 간 동기화되는 cats 묶음에 { kind, name, order } 로 저장한다(기본값은 고정 id defcat:…).
 // 내역·하위 카테고리는 카테고리를 '이름'으로 가리키므로, 이름을 바꾸면 그 이름을 쓰는 기록도 함께 바꾼다.
 // 지출 카테고리는 고정지출/변동지출 중 하나에 속한다(etype). 예전 기본 카테고리는 이 목록으로 판단.
-const DEFAULT_FIXED = new Set(["주거/통신", "보험", "교육"]);
+const DEFAULT_FIXED = new Set(["주거/통신", "보험", "교육", "금융/이자"]);
+const INTEREST_CAT = "금융/이자"; // 대출 이자를 기록하는 지출 카테고리
 const catEtype = (c) => c.etype || (DEFAULT_FIXED.has(c.name) ? "고정" : "변동");
 
 // 예전 기본 자산이동 카테고리: 이용자가 손대지 않았으면(만든 그대로) 정리한다.
@@ -355,11 +356,11 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
 }
 
 /** 화면 표시용 '식비 › 외식' */
-/** 자산이동 경로 '출금 자산 → 입금 자산'(상환은 '출금 자산 → 부채'). 연결된 자산이 없으면 "" (이스케이프 전 글자) */
+/** 자산이동 경로 '출금 자산 → 입금 자산'(상환은 '출금 자산 → 부채', 대출 실행은 '부채 → 입금 자산'). 연결된 자산이 없으면 "" (이스케이프 전 글자) */
 function moveRoute(t) {
   const ds = t.deltas || [];
-  const out = ds.find((x) => x.col === "assets" && x.amount < 0);
-  const into = ds.find((x) => x.col === "assets" && x.amount > 0) || ds.find((x) => x.col === "debts");
+  const out = ds.find((x) => x.col === "assets" && x.amount < 0) || ds.find((x) => x.col === "debts" && x.amount > 0);
+  const into = ds.find((x) => x.col === "assets" && x.amount > 0) || ds.find((x) => x.col === "debts" && x.amount < 0);
   if (!out && !into) return "";
   const name = (x) => (x && S[x.col]?.[x.id]?.name) || "?";
   return `${name(out)} → ${name(into)}`;
@@ -490,7 +491,7 @@ function exportExcel(range) {
   for (const t of list) {
     const sd = shortDebtType(t);
     rows.push([
-      t.date, t.time || "", isRepayTx(t) ? "부채상환" : t.kind, t.kind === "지출" ? `${t.expenseType || ""}지출` : "",
+      t.date, t.time || "", isRepayTx(t) ? "부채상환" : isLoanTx(t) ? "대출실행" : t.kind, t.kind === "지출" ? `${t.expenseType || ""}지출` : "",
       t.category || "", t.subcategory || "", t.content || "", t.party || "",
       t.amount, t.currency || "KRW", txKRW(t), holdingName(t), sd ? SHORT_DEBT[sd].label : "", t.memo || "",
     ]);
@@ -539,9 +540,11 @@ function shortDebtType(t) {
 const isShortDebt = (t) => !!shortDebtType(t);
 
 /** 부채 상환(내 자산 → 부채): 자산이동과 따로 집계한다 */
-const isRepayTx = (t) => !!t.deltas?.some((x) => x.col === "debts");
+const isRepayTx = (t) => !!t.deltas?.some((x) => x.col === "debts" && x.amount < 0);
+/** 대출 실행(부채 + , 받은 돈은 자산 +): 수입이 아니라 빌린 돈 */
+const isLoanTx = (t) => !!t.deltas?.some((x) => x.col === "debts" && x.amount > 0);
 /** 순수 자산이동(내 자산끼리) */
-const isMoveTx = (t) => t.kind === "자산이동" && !isRepayTx(t);
+const isMoveTx = (t) => t.kind === "자산이동" && !isRepayTx(t) && !isLoanTx(t);
 
 /** 금액 앞 부호: 수입 +, 지출 -, 자산이동·단기 부채(신용·마통 등)는 없음 */
 const txSign = (t) => (isShortDebt(t) ? "" : KIND_SIGN[t.kind]);
@@ -563,6 +566,7 @@ const HOME_ICONS = {
   수입: ICO('<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>'),      // 들어오는 돈
   지출: ICO('<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/>'),        // 나가는 돈
   자산이동: ICO('<path d="M4 8h14"/><path d="M14.5 4.5 18 8l-3.5 3.5"/><path d="M20 16H6"/><path d="M9.5 12.5 6 16l3.5 3.5"/>'), // 옮기기
+  대출실행: ICO('<path d="M4 9.5 12 5l8 4.5"/><path d="M6 10v7M10 10v7M14 10v7M18 10v7"/><path d="M4 19.5h16"/>'), // 은행
   부채상환: ICO('<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.2l2.5 2.5 5-5"/>'), // 갚음(체크)
   단기부채: ICO('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>'), // 카드
 };
@@ -576,6 +580,7 @@ function homeView(part = "summary") {
   const exp = tx.filter((t) => t.kind === "지출");
   const mov = tx.filter(isMoveTx);
   const repay = tx.filter(isRepayTx); // 부채 상환: 자산이동과 따로
+  const loans = tx.filter(isLoanTx); // 대출 실행: 수입이 아니라 빌린 돈
   // 신용카드·마이너스통장으로 결제한 지출은 단기부채로 따로 묶고, 지출(고정·변동)에서는 뺀다
   const shortDebt = exp.filter(isShortDebt);
   const fixed = exp.filter((t) => isPlainExpense(t) && t.expenseType === "고정");
@@ -672,6 +677,10 @@ function homeView(part = "summary") {
       <div class="row-main">${homeLabel("부채상환", "부채 상환", "repay")}<span class="repay">${won(sum(repay))}</span></div>
       ${repayTotals(repay).map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}
     </div>` : ""}
+    ${loans.length ? `<div class="row">
+      <div class="row-main">${homeLabel("대출실행", "대출 실행", "cred")}<span class="cred">${won(sum(loans))}</span></div>
+      ${routeTotals(loans).map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}
+    </div>` : ""}
   </section>
   <section class="card home-debt">
     <div class="card-head">${homeLabel("단기부채", "단기 부채 (이번 달)", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
@@ -703,7 +712,7 @@ function txRow(t, { withDate = false } = {}) {
   const kindBadge = t.kind === "수입" ? "b-inc" : t.kind === "지출" ? "b-exp" : "b-mov";
   const d = deltaRef(t.assetDelta);
   const debt = d?.col === "debts" ? S.debts[d.id] : null;
-  const isRepay = t.deltas?.some((x) => x.col === "debts");
+  const isRepay = isRepayTx(t), isLoan = isLoanTx(t);
   const route = esc(moveRoute(t)); // 자산이동: 출금 자산 → 입금 자산(상환은 → 부채)
   const when = withDate ? `${Number(t.date.slice(5, 7))}/${Number(t.date.slice(8, 10))} ${t.time || ""}`.trim() : t.time;
   const sub = [when, t.party ? esc(t.party) : ""].filter(Boolean).join(" · ");
@@ -713,12 +722,12 @@ function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
+              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : isLoan ? `<span class="cat-badge b-cred">대출 실행</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
-              ${via ? `<div class="memo${isRepay ? " repay" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
+              ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
             </div>
-            <span class="amt ${isShortDebt(t) ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : ""}${t.currency && t.currency !== "KRW"
+            <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "대출 " : ""}${t.currency && t.currency !== "KRW"
               ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
               : signed(t.amount, txSign(t))}</span>
           </button>`;
@@ -896,7 +905,7 @@ function txMatches(t, words) {
   const d = deltaRef(t.assetDelta);
   const linked = d && S[d.col]?.[d.id];
   const text = [
-    t.content, t.party, t.memo, t.category, t.subcategory, isRepayTx(t) ? "부채상환 상환" : t.kind,
+    t.content, t.party, t.memo, t.category, t.subcategory, isRepayTx(t) ? "부채상환 상환" : isLoanTx(t) ? "대출실행 대출" : t.kind,
     t.kind === "지출" ? `${t.expenseType || ""}지출` : "", linked?.name, d?.col === "debts" ? debtType(linked) : "",
     moveRoute(t), t.currency && t.currency !== "KRW" ? t.currency : "",
   ].filter(Boolean).join(" ").toLowerCase();
@@ -1057,7 +1066,11 @@ function holdingOptions(cols, selectedKey, { balance = true } = {}) {
 function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal } = {}) {
   const prevDebt = existing?.deltas?.find((d) => d.col === "debts");
   const prevAsset = existing?.deltas?.find((d) => d.col === "assets");
+  // 이자: 상환과 같이 낸 이자는 '금융/이자' 고정지출로 따로 기록하고 상환 내역에 연결해 둔다
+  const prevInterest = existing?.interestTx && S.transactions[existing.interestTx];
+  const liveInterest = prevInterest && !prevInterest.deleted ? prevInterest : null;
   const draft = {
+    interest: liveInterest?.amount || 0,
     debt: existing ? linkKey("debts", prevDebt?.id) : presetDebt ? linkKey("debts", presetDebt) : "",
     asset: prevAsset ? linkKey("assets", prevAsset.id) : "",
     amount: existing?.amount || 0,
@@ -1098,11 +1111,18 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
             <input class="input time-input" type="time" name="time" value="${draft.time}">
           </div>
         </div>
-        <div class="field"><label>상환 금액</label>
+        <div class="field"><label>상환 금액 <span class="muted">(원금)</span></label>
           <div class="amount-wrap" data-long="${cur !== "KRW"}">
             <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, cur)}">
             <span class="amount-unit">${unitLabel(cur)}</span>
           </div>
+        </div>
+        <div class="field"><label>이자 <span class="muted">(선택 · 대출 원리금 낼 때)</span></label>
+          <div class="amount-wrap" data-long="${cur !== "KRW"}">
+            <input class="input amount-input" name="interest" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.interest, cur)}">
+            <span class="amount-unit">${unitLabel(cur)}</span>
+          </div>
+          <p class="note" style="margin-top:6px">원금은 부채에서 빠지고, 이자는 지출(${INTEREST_CAT})로 기록돼요.</p>
         </div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 10월 카드값" value="${esc(draft.memo)}"></div>
         <div class="btn-row">
@@ -1115,6 +1135,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
       draft.debt = $p("[name=debt]").value;
       draft.asset = $p("[name=asset]").value;
       draft.amount = parseMoney($p("[name=amount]").value, cur);
+      draft.interest = parseMoney($p("[name=interest]").value, cur);
       draft.date = $p("[name=date]").value;
       draft.time = $p("[name=time]").value;
       draft.memo = $p("[name=memo]").value;
@@ -1129,15 +1150,22 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
       const aRef = parseLinkKey($p("[name=asset]").value);
       const a = aRef && S.assets[aRef.id];
       if (!a || !debt) { $p("[data-asset-hint]").textContent = ""; return; }
-      const out = amountInCurrency({ currency: cur, amount: pay, krw: toKRW(pay, cur) }, curOf(a));
-      $p("[data-asset-hint]").textContent = out === null ? "환율 정보가 없어 반영할 수 없어요" : pay ? `${a.name}에서 -${formatMoney(roundFor(out, curOf(a)), curOf(a))} 빠져나가요${out > balanceOf("assets", a) ? " (잔액보다 많아요)" : ""}` : "";
+      const intr = parseMoney($p("[name=interest]").value, cur);
+      const total = pay + intr;
+      const out = amountInCurrency({ currency: cur, amount: total, krw: toKRW(total, cur) }, curOf(a));
+      $p("[data-asset-hint]").textContent = out === null ? "환율 정보가 없어 반영할 수 없어요" : total
+        ? `${a.name}에서 -${formatMoney(roundFor(out, curOf(a)), curOf(a))} 빠져나가요${intr ? ` (원금 ${formatMoney(pay, cur)} + 이자 ${formatMoney(intr, cur)})` : ""}${out > balanceOf("assets", a) ? " (잔액보다 많아요)" : ""}`
+        : "";
     };
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, cur); amountTouched = true; hints(); });
+    const intIn = $p("[name=interest]");
+    intIn.addEventListener("input", () => { intIn.value = formatInput(intIn.value, cur); hints(); });
     $p("[name=asset]").onchange = hints;
     $p("[name=debt]").onchange = () => {
       read();
       const ref = parseLinkKey(draft.debt);
-      if (ref && !amountTouched) draft.amount = Math.max(0, debtBalance(ref)); // 처음엔 남은 부채 전액으로 채움
+      // 카드·마통 등 단기 부채는 처음엔 남은 전액으로 채움(대출은 원금 일부를 갚으므로 비워 둠)
+      if (ref && !amountTouched) draft.amount = SHORT_DEBT[debtType(S.debts[ref.id])] ? Math.max(0, debtBalance(ref)) : 0;
       draw();
     };
     hints();
@@ -1164,6 +1192,34 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         if (out === null) return toast("환율 정보가 없어 반영할 수 없어요.");
         deltas.push({ col: "assets", id: a.id, amount: -roundFor(out, curOf(a)) });
       }
+      // 이자: 같은 출금 자산에서 나간 고정지출(금융/이자)로 기록. 비우면 기존 이자 기록은 지운다.
+      let interestId = liveInterest?.id || null;
+      if (draft.interest > 0) {
+        const ikrw = dcur === "KRW" ? draft.interest : toKRW(draft.interest, dcur);
+        if (ikrw === null) return toast("환율 정보가 없어 반영할 수 없어요.");
+        let iDelta = null;
+        if (aRef) {
+          const a = S.assets[aRef.id];
+          const iout = amountInCurrency({ currency: dcur, amount: draft.interest, krw: ikrw }, curOf(a));
+          if (iout === null) return toast("환율 정보가 없어 반영할 수 없어요.");
+          iDelta = { col: "assets", id: a.id, amount: -roundFor(iout, curOf(a)) };
+        }
+        interestId ||= uid();
+        S.transactions[interestId] = {
+          ...(liveInterest || {}),
+          id: interestId, date: draft.date, time: draft.time || "", kind: "지출", expenseType: "고정",
+          category: liveInterest?.category || INTEREST_CAT, subcategory: liveInterest?.subcategory || "",
+          currency: dcur, amount: draft.interest, ...(dcur !== "KRW" ? { krw: Math.round(ikrw) } : {}),
+          content: `${d.name} 이자`, party: liveInterest?.party || "", memo: liveInterest?.memo || "",
+          ...(iDelta ? { assetDelta: iDelta } : {}),
+          repayOf: existing?.id || null,
+          createdAt: liveInterest?.createdAt || now, updatedAt: now, deleted: false,
+        };
+        if (!iDelta) delete S.transactions[interestId].assetDelta;
+      } else if (liveInterest) {
+        S.transactions[liveInterest.id] = { ...liveInterest, deleted: true, updatedAt: now };
+        interestId = null;
+      }
       const rec = {
         id: existing?.id || uid(),
         date: draft.date,
@@ -1178,25 +1234,120 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         party: "",
         memo: draft.memo.trim(),
         deltas,
+        ...(interestId ? { interestTx: interestId } : {}),
         createdAt: existing?.createdAt || now,
         updatedAt: now,
         deleted: false,
       };
+      if (interestId) S.transactions[interestId].repayOf = rec.id;
       S.transactions[rec.id] = rec;
       await saveState(S);
       scheduleSync();
       onDone();
-      toast(`${d.name} ${formatMoney(draft.amount, dcur)} 상환했어요`);
+      toast(`${d.name} ${formatMoney(draft.amount, dcur)} 상환했어요${draft.interest > 0 ? ` · 이자 ${formatMoney(draft.interest, dcur)} → 지출` : ""}`);
     };
     const del = $p("[data-act=delete]");
     if (del) del.onclick = async () => {
       if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
       const now = nowISO();
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
+      if (liveInterest) S.transactions[liveInterest.id] = { ...liveInterest, deleted: true, updatedAt: now }; // 함께 낸 이자 기록도
       await saveState(S);
       scheduleSync();
       onDone();
-      toast("상환 기록을 삭제했어요 · 잔액도 되돌렸어요");
+      toast(`상환 기록을 삭제했어요${liveInterest ? " · 이자 기록도" : ""} · 잔액도 되돌렸어요`);
+    };
+  };
+  draw();
+}
+
+// ---------------- 대출 실행 ----------------
+// 대출을 받으면 부채(+)와 받은 돈이 들어간 자산(+)이 함께 늘어난다. 수입이 아니므로 수입·지출 합계에는 넣지 않는다.
+/** 대출 실행 내역 만들기/고치기 (rec: 기존 내역 또는 null) */
+function saveLoanTx({ existing = null, debt, asset, amount, date, time, memo }) {
+  const now = nowISO();
+  const dcur = curOf(debt);
+  const krw = dcur === "KRW" ? amount : toKRW(amount, dcur);
+  if (krw === null) return "환율 정보가 없어 반영할 수 없어요.";
+  const deltas = [{ col: "debts", id: debt.id, amount }];
+  if (asset) {
+    const inn = amountInCurrency({ currency: dcur, amount, krw }, curOf(asset));
+    if (inn === null) return "환율 정보가 없어 반영할 수 없어요.";
+    deltas.push({ col: "assets", id: asset.id, amount: roundFor(inn, curOf(asset)) });
+  }
+  const id = existing?.id || uid();
+  S.transactions[id] = {
+    id, date, time: time || "", kind: "자산이동", expenseType: "", category: "", subcategory: "",
+    currency: dcur, amount, ...(dcur !== "KRW" ? { krw: Math.round(krw) } : {}),
+    content: `${debt.name} 대출 실행`, party: "", memo: (memo || "").trim(), deltas,
+    createdAt: existing?.createdAt || now, updatedAt: now, deleted: false,
+  };
+  return null;
+}
+
+/** 대출 실행 기록 고치기·삭제 */
+function openLoanDialog({ existing }) {
+  const prevDebt = existing.deltas.find((d) => d.col === "debts");
+  const prevAsset = existing.deltas.find((d) => d.col === "assets");
+  const draft = { debt: linkKey("debts", prevDebt.id), asset: prevAsset ? linkKey("assets", prevAsset.id) : "", amount: existing.amount,
+    date: existing.date, time: existing.time || "", memo: existing.memo || "" };
+  let confirmDelete = false;
+  const draw = () => {
+    const debt = S.debts[parseLinkKey(draft.debt)?.id];
+    const cur = debt ? curOf(debt) : "KRW";
+    const panel = openModal({
+      cls: "theme-debts",
+      title: "대출 실행 수정",
+      body: `
+        <div class="field" style="margin-top:4px"><label>대출(부채)</label>
+          <select class="input" name="debt">${holdingOptions(["debts"], draft.debt, { balance: false }).replace("선택 안 함", "부채를 골라 주세요")}</select></div>
+        <div class="field"><label>받은 돈 입금 자산</label>
+          <select class="input" name="asset">${holdingOptions(["assets"], draft.asset, { balance: false })}</select></div>
+        <div class="field"><label>날짜 · 시간</label>
+          <div class="money-line">
+            <input class="input" type="date" name="date" value="${draft.date}">
+            <input class="input time-input" type="time" name="time" value="${draft.time}">
+          </div></div>
+        <div class="field"><label>대출 금액</label>
+          <div class="amount-wrap" data-long="${cur !== "KRW"}">
+            <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, cur)}">
+            <span class="amount-unit">${unitLabel(cur)}</span>
+          </div></div>
+        <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 주택 구입 자금" value="${esc(draft.memo)}"></div>
+        <p class="note">대출 실행은 수입이 아니에요. 부채와 입금 자산이 같이 늘어나요.</p>
+        <div class="btn-row">
+          <button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>
+          <button class="btn primary" data-act="save">저장</button>
+        </div>`,
+    });
+    const $p = (q) => panel.querySelector(q);
+    const read = () => {
+      draft.debt = $p("[name=debt]").value; draft.asset = $p("[name=asset]").value;
+      draft.amount = parseMoney($p("[name=amount]").value, cur);
+      draft.date = $p("[name=date]").value; draft.time = $p("[name=time]").value; draft.memo = $p("[name=memo]").value;
+    };
+    const amt = $p("[name=amount]");
+    amt.addEventListener("input", () => { amt.value = formatInput(amt.value, cur); });
+    $p("[name=debt]").onchange = () => { read(); draw(); };
+    $p("[data-act=save]").onclick = async () => {
+      read();
+      const d = S.debts[parseLinkKey(draft.debt)?.id];
+      if (!d || d.deleted) return toast("대출(부채)을 골라 주세요.");
+      if (draft.amount <= 0) return toast("대출 금액을 입력해 주세요.");
+      const aRef = parseLinkKey(draft.asset);
+      const a = aRef && S.assets[aRef.id];
+      const err = saveLoanTx({ existing, debt: d, asset: a && !a.deleted ? a : null, amount: draft.amount, date: draft.date, time: draft.time, memo: draft.memo });
+      if (err) return toast(err);
+      closeModal();
+      await commit();
+      toast("대출 실행 기록을 고쳤어요");
+    };
+    $p("[data-act=delete]").onclick = async () => {
+      if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
+      S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: nowISO() };
+      closeModal();
+      await commit();
+      toast("대출 실행 기록을 삭제했어요 · 잔액도 되돌렸어요");
     };
   };
   draw();
@@ -1206,7 +1357,8 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
 // 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
 // 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
 function openTxDialog(existing, presetDate, preset = null) {
-  if (existing?.deltas?.some((d) => d.col === "debts")) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
+  if (existing && isRepayTx(existing)) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
+  if (existing && isLoanTx(existing)) return openLoanDialog({ existing }); // 대출 실행 기록은 대출 창에서
   const draft = preset ? { ...preset } : existing
     ? { currency: "KRW", ...existing }
     : { kind: "지출", expenseType: "고정", date: presetDate || todayStr(), time: nowTime(), category: catsFor("지출", "고정")[0] || "", currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "" };
@@ -1913,6 +2065,10 @@ function openHoldingsDialog(col) {
         <div class="field"><label>통화</label><select class="input" name="currency">${currencyOptions("KRW")}</select></div>
         <div class="field"><label>금액</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
           <div class="fx-hint" data-hint></div></div>
+        ${col === "debts" ? `<div class="field"><label>받은 돈 입금 자산 <span class="muted">(선택)</span></label>
+          <select class="input" name="loanAsset">${holdingOptions(["assets"], "", { balance: false })}</select>
+          <p class="note" style="margin-top:6px">새로 대출을 받아 통장에 들어왔다면 고르세요. 부채와 입금 자산이 같이 늘고 '대출 실행' 내역이 남아요(수입 아님). 예전부터 있던 빚이면 비워 두세요.</p>
+        </div>` : ""}
         <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
     });
     const cur = panel.querySelector("[name=currency]");
@@ -1926,24 +2082,32 @@ function openHoldingsDialog(col) {
       const now = nowISO();
       const type = panel.querySelector("[name=type]").value;
       const last = Math.max(-1, ...liveList().filter((a) => a.type === type && a.order != null && a.order < NO_ORDER).map((a) => a.order));
+      const value = parseMoney(amt.value, cur.value);
+      const loanRef = col === "debts" && parseLinkKey(panel.querySelector("[name=loanAsset]")?.value);
+      const loanAsset = loanRef && S.assets[loanRef.id];
       const rec = {
         id: uid(),
         type,
         order: last + 1,
         name,
         currency: cur.value,
-        amount: parseMoney(amt.value, cur.value),
-        base: parseMoney(amt.value, cur.value), // 처음 등록한 잔액이 기준 금액
+        amount: value,
+        base: loanAsset && value > 0 ? 0 : value, // 처음 등록한 잔액이 기준 금액(새 대출이면 0 + 대출 실행 내역)
         createdAt: now,
         updatedAt: now,
         deleted: false,
       };
       S[col][rec.id] = rec;
+      if (loanAsset && value > 0) {
+        const err = saveLoanTx({ debt: rec, asset: loanAsset, amount: value, date: todayStr(), time: nowTime(), memo: "" });
+        if (err) { delete S[col][rec.id]; return toast(err); }
+      }
       await saveState(S);
       scheduleSync();
       mode = null;
       draw();
-      toast("등록했어요");
+      toast(loanAsset && value > 0 ? `등록했어요 · ${loanAsset.name}에 ${formatMoney(value, cur.value)} 입금으로 기록` : "등록했어요");
+      render();
     };
   };
   draw();

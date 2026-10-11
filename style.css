@@ -459,3 +459,6 @@ input[type="date"].input { color-scheme: dark; }
 .search-clear { position: absolute; right: 6px; width: 32px; height: 32px; color: var(--muted); font-size: 0.9rem; }
 .search-clear[hidden] { display: none; }
 .search-summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 2px 10px; font-size: calc(0.82rem + var(--fs-up)); white-space: nowrap; }
+
+/* 내역: 대출 실행 경로(핑크) */
+.tx .memo.cred { color: var(--cred); }
