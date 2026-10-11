@@ -535,3 +535,9 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .kp-go { color: var(--muted); font-size: 1.2rem; flex: none; }
 .kp-lead { margin: 0 0 10px; }
 .debt-mode-note { margin-top: 8px; word-break: keep-all; }
+
+/* 입력 창 맨 위: 내역 성격 */
+.nature-field { margin-top: 4px; }
+.nature-sel.inc { color: var(--inc); } .nature-sel.exp { color: var(--exp); } .nature-sel.mov { color: var(--mov); }
+.nature-sel.cred { color: var(--cred); } .nature-sel.repay { color: var(--repay); }
+.nature-sel option { color: var(--text); }
