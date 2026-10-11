@@ -467,3 +467,7 @@ input[type="date"].input { color-scheme: dark; }
 .row-sub { gap: 10px; }
 .row-sub > span:first-child { min-width: 0; word-break: keep-all; }
 .row-sub > span:last-child { flex: 0 0 auto; white-space: nowrap; }
+
+/* 현황 탭 안의 작은 탭(종합/상세) */
+.tabs.sub-tabs.home-parts { margin: 0 0 14px; }
+.tabs.sub-tabs.home-parts button { flex: 1; }

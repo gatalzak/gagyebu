@@ -76,7 +76,7 @@ function toast(msg) {
 
 // ---------------- 상태 ----------------
 let S;
-const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null, openCat: null, olderOpen: null, dayMore: {}, q: "" }; // day: 달력에서 고른 날짜, openCat: 현황(상세)에서 펼친 카테고리, olderOpen: 내역 탭 이전 내역을 펼친 달, dayMore: 더 보기를 연 날짜
+const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null, openCat: null, olderOpen: null, dayMore: {}, q: "", homePart: "summary" }; // homePart: 현황 탭 안의 종합(summary) / 상세(detail) // day: 달력에서 고른 날짜, openCat: 현황(상세)에서 펼친 카테고리, olderOpen: 내역 탭 이전 내역을 펼친 달, dayMore: 더 보기를 연 날짜
 
 const liveTx = () => Object.values(S.transactions).filter((t) => !t.deleted);
 const monthTx = () => liveTx().filter((t) => t.date.startsWith(ui.month));
@@ -521,10 +521,10 @@ function render() {
   renderBackupBar();
   const [y, m] = ui.month.split("-");
   $("#month-title").textContent = `${y}년 ${Number(m)}월`;
-  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === ui.tab));
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === ui.tab));
   const view = $("#view");
-  if (ui.tab === "home") view.innerHTML = homeView("summary");
-  else if (ui.tab === "detail") view.innerHTML = homeView("detail");
+  if (ui.tab === "home") view.innerHTML = homeTabs() + homeView(ui.homePart);
+  else if (ui.tab === "settle") view.innerHTML = settleView();
   else if (ui.tab === "list") { view.innerHTML = listView(); bindSearch(); }
   else if (ui.tab === "calendar") view.innerHTML = calendarView();
   else view.innerHTML = monthlyView();
@@ -583,7 +583,18 @@ const HOME_ICONS = {
 const SUM_ICON = ICO('<path d="M17 5H7l6 7-6 7h10"/>'); // 합계(Σ)
 const homeLabel = (key, text, cls) => `<span class="home-label"><span class="${cls}">${HOME_ICONS[key]}</span>${text}</span>`;
 
-/** part: "summary" = 현황(이번 달 현재·단기 부채), "detail" = 현황(상세) */
+/** 현황 탭 안의 작은 탭: 현황(종합) / 현황(상세) */
+function homeTabs() {
+  return `<div class="tabs sub-tabs home-parts">${[["summary", "현황(종합)"], ["detail", "현황(상세)"]]
+    .map(([k, label]) => `<button data-home-part="${k}" class="${ui.homePart === k ? "active" : ""}">${label}</button>`).join("")}</div>`;
+}
+
+/** 결산 탭 (내용은 정하는 중) */
+function settleView() {
+  return `<div class="card"><div class="empty">결산 화면은 준비 중이에요.</div></div>`;
+}
+
+/** part: "summary" = 현황(종합), "detail" = 현황(상세) */
 function homeView(part = "summary") {
   const tx = monthTx();
   const inc = tx.filter((t) => t.kind === "수입");
@@ -675,7 +686,7 @@ function homeView(part = "summary") {
   </section>`;
   const summary = `
   <section class="card">
-    <div class="card-head"><span>이번 달 현재</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
+    <div class="card-head"><span>이번 달 현재 (수입-지출)</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
     <div class="row"><div class="row-main">${homeLabel("수입", "수입", "inc")}<span class="inc">${signed(sum(inc), "+")}</span></div></div>
     <div class="row">
       <div class="row-main">${homeLabel("지출", "지출", "exp")}<span class="exp">${signed(sum(fixed) + sum(variable), "-")}</span></div>
@@ -690,7 +701,6 @@ function homeView(part = "summary") {
   if (part === "summary") return summary;
   return `
   <section class="card">
-    <div class="card-head plain"><span>현황(상세)</span></div>
     <div class="seg seg-6" data-role="detail-seg">
       ${Object.keys(segs).map((s) => `<button data-seg="${s}" class="${s === ui.seg ? "on" : ""}">${s}</button>`).join("")}
     </div>
@@ -2291,7 +2301,7 @@ function bindEvents() {
   $("#prev").onclick = () => { ui.month = shiftMonth(ui.month, -1); render(); };
   $("#next").onclick = () => { ui.month = shiftMonth(ui.month, 1); render(); };
   $("#month-title").onclick = openDatePicker;
-  document.querySelectorAll(".tabs button").forEach((b) => (b.onclick = () => { ui.tab = b.dataset.tab; render(); }));
+  document.querySelectorAll("nav.tabs button").forEach((b) => (b.onclick = () => { ui.tab = b.dataset.tab; render(); }));
   $("#fab").onclick = () => openTxDialog(null, ui.tab === "calendar" && ui.day ? ui.day : undefined);
   $("#open-assets").onclick = () => openHoldingsDialog("assets");
   $("#open-debts").onclick = () => openHoldingsDialog("debts");
@@ -2311,6 +2321,8 @@ function bindEvents() {
   $("#view").addEventListener("click", (e) => {
     const seg = e.target.closest("[data-seg]");
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
+    const part = e.target.closest("[data-home-part]");
+    if (part) { ui.homePart = part.dataset.homePart; render(); return; }
     const older = e.target.closest("[data-older-toggle]");
     if (older) {
       const opening = ui.olderOpen !== ui.month;
