@@ -1626,7 +1626,7 @@ function openTxDialog(existing, presetDate, preset = null) {
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
           ${holdingHelp(ASSET_LINK[draft.kind].cols)}
           ${draft.kind === "지출" ? `<div class="repay-tip" data-repay-tip>
-            <span>신용카드 대금·대출금을 갚는 거라면 지출이 아니라 <b class="tip-em">부채 상환</b>이에요. 부채 상환으로 내역을 저장해주세요.</span>
+            <span>신용카드 대금·마이너스 통장 대금·대출금을 갚는 거라면 지출이 아니라 <b class="tip-em">부채 상환</b>이에요. 부채 상환으로 내역을 저장해주세요.</span>
             <button class="reg-link repay-link" data-go-repay>부채 상환 바로가기</button>
           </div>` : ""}
         </div>

@@ -516,5 +516,5 @@ input[type="date"], input[type="time"] { cursor: pointer; }
   font-size: calc(0.78rem + var(--fs-up)); color: var(--muted); word-break: keep-all; }
 .repay-tip > span { flex: 1 1 100%; }
 .repay-tip .tip-em { font-weight: 400; color: #f3dc94; }
-.repay-tip .repay-link { color: #f3dc94; border: 1px solid #6b5a2a; border-radius: 3px; padding: 5px 12px; margin-top: 6px; background: rgba(243, 220, 148, 0.06); }
+.repay-tip .repay-link { color: #f3dc94; border: 1px solid #6b5a2a; border-radius: 3px; padding: 5px 12px; margin-top: 6px; margin-left: auto; background: rgba(243, 220, 148, 0.06); }
 .repay-tip.warn { border-color: #6b5a2a; background: rgba(243, 220, 148, 0.08); color: #f3dc94; }
