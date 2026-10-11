@@ -1621,12 +1621,12 @@ function openTxDialog(existing, presetDate, preset = null) {
           </div>
         </div>
         ${ASSET_LINK[draft.kind] ? `
-        <div class="field"><label>${ASSET_LINK[draft.kind].label}</label>
+        <div class="field"><label>${ASSET_LINK[draft.kind].label}${draft.kind === "지출" ? ' <span class="req">*</span>' : ""}</label>
           <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
           ${holdingHelp(ASSET_LINK[draft.kind].cols)}
         </div>
-        ${draft.kind === "지출" ? `<div class="field" data-pay-field hidden><label>결제 수단</label>
+        ${draft.kind === "지출" ? `<div class="field" data-pay-field hidden><label>결제 수단 <span class="req">*</span></label>
           <select class="input" name="pay"></select></div>` : ""}` : ""}
         ${draft.kind === "자산이동" ? `
         <div class="field"><label>출금 자산 <span class="req">*</span></label>
@@ -1639,8 +1639,8 @@ function openTxDialog(existing, presetDate, preset = null) {
           <select class="input" name="toAsset">${holdingOptions(["assets"], draft.toAsset, { balance: false })}</select>
           <div class="fx-hint tx-hint inc" data-to-hint></div>
         </div>` : ""}
-        <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
-        ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
+        <div class="field"><label>내용 <span class="req">*</span></label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
+        ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명 / 통장에 입력된 내역 이름" : "예: 김밥천국 / 통장에 입력된 내역 이름"}" value="${esc(draft.party || "")}"></div>
         ` : ""}
         ${draft.kind !== "자산이동" ? `<div class="field"><label>카테고리 · 하위 카테고리 <span class="req">*</span></label>
           <div class="money-line">
@@ -1811,7 +1811,12 @@ function openTxDialog(existing, presetDate, preset = null) {
       if (draft.kind === "자산이동") {
         if (!draft.fromAsset) return bad("[name=fromAsset]", "출금 자산을 골라 주세요.");
         if (!draft.toAsset) return bad("[name=toAsset]", "입금 자산을 골라 주세요.");
-      } else if (!draft.category) return bad("[name=category]", "카테고리를 골라 주세요.");
+      }
+      // 화면 위에서부터 순서대로 확인
+      if (draft.kind === "지출" && !draft.link) return bad("[name=asset]", "출금 되는 자산을 골라 주세요.");
+      if (draft.kind === "지출" && $p("[data-pay-field]") && !$p("[data-pay-field]").hidden && !draft.pay) return bad("[name=pay]", "결제 수단을 골라 주세요.");
+      if (!(draft.content || "").trim()) return bad("[name=content]", "내용을 입력해 주세요.");
+      if (draft.kind !== "자산이동" && !draft.category) return bad("[name=category]", "카테고리를 골라 주세요.");
       const now = nowISO();
       const isMove = draft.kind === "자산이동";
       let deltas = null;
