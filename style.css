@@ -541,3 +541,11 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .nature-sel.inc { color: var(--inc); } .nature-sel.exp { color: var(--exp); } .nature-sel.mov { color: var(--mov); }
 .nature-sel.cred { color: var(--cred); } .nature-sel.repay { color: var(--repay); }
 .nature-sel option { color: var(--text); }
+
+/* 부채 등록: 시작 잔액 안내 / 상환: 앱 쓰기 전 사용분 */
+.start-bal-note { margin-top: 6px; word-break: keep-all; }
+.start-fix { margin-top: 8px; padding: 8px 10px; border: 1px solid #6b5a2a; border-radius: 3px; background: rgba(243, 220, 148, 0.08);
+  font-size: calc(0.78rem + var(--fs-up)); color: #f3dc94; word-break: keep-all; }
+.start-fix p { margin: 0 0 6px; }
+.start-fix .check-line { display: flex; align-items: center; gap: 8px; color: var(--text); }
+.start-fix input[type=checkbox] { width: 18px; height: 18px; accent-color: #f3dc94; flex: none; }

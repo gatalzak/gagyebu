@@ -1296,6 +1296,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
   };
   let confirmDelete = false;
   let amountTouched = !!existing || !!preset?.amount; // 넘겨받은 금액은 부채를 골라도 덮어쓰지 않음
+  let addStart = true; // 부채보다 많이 갚으면 '시작 잔액에 더하기' (기본 체크)
 
   /** 부채 잔액(이 내역이 이미 갚은 만큼은 되돌린 상태로 계산) */
   const debtBalance = (ref) => {
@@ -1317,6 +1318,10 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         <div class="field"><label>상환할 부채</label>
           <select class="input" name="debt">${holdingOptions(["debts"], draft.debt).replace("선택 안 함", "부채를 골라 주세요")}</select>
           <div class="fx-hint" data-debt-hint></div>
+          <div class="start-fix" data-start-fix hidden>
+            <p data-start-msg></p>
+            <label class="check-line"><input type="checkbox" name="addStart" ${addStart ? "checked" : ""}> 네, 앱 쓰기 전 사용분이에요 · 시작 잔액에 더하기</label>
+          </div>
         </div>
         <div class="field"><label>출금 자산</label>
           <select class="input" name="asset">${holdingOptions(["assets"], draft.asset)}</select>
@@ -1361,10 +1366,14 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
     const hints = () => {
       const bal = debtBalance(debtRef);
       const pay = parseMoney(amt.value, cur);
+      const over = debt ? roundFor(pay - bal, cur) : 0;
+      $p("[data-start-fix]").hidden = !(over > 0);
+      if (over > 0) $p("[data-start-msg]").textContent = `${debt.name}에 기록된 부채보다 ${formatMoney(over, cur)} 많아요. 앱을 쓰기 전에 사용한 대금(예: 지난달 카드값)인가요?`;
+      const fixOn = over > 0 && $p("[name=addStart]").checked;
       const aRef = parseLinkKey($p("[name=asset]").value);
       const addInt = aRef ? 0 : parseMoney($p("[name=interest]").value, cur); // 출금 자산이 없으면 이자는 부채에 더해짐(마통 이자 자동 차감)
       $p("[data-debt-hint]").textContent = debt
-        ? `현재 ${formatMoney(bal, cur)} → ${pay ? "상환 후" : "기록 후"} ${formatMoney(roundFor(bal - pay + addInt, cur), cur)}${addInt ? ` (이자 ${formatMoney(addInt, cur)} 더해짐)` : ""}${pay > bal ? " (잔액보다 많아요)" : ""}`
+        ? `현재 ${formatMoney(bal, cur)} → ${pay ? "상환 후" : "기록 후"} ${formatMoney(roundFor(bal - pay + addInt + (fixOn ? over : 0), cur), cur)}${addInt ? ` (이자 ${formatMoney(addInt, cur)} 더해짐)` : ""}${over > 0 && !fixOn ? " (잔액보다 많아요)" : ""}`
         : "";
       const a = aRef && S.assets[aRef.id];
       if (!a || !debt) { $p("[data-asset-hint]").textContent = ""; return; }
@@ -1383,6 +1392,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
     const intIn = $p("[name=interest]");
     intIn.addEventListener("input", () => { intIn.value = formatInput(intIn.value, cur); hints(); });
     $p("[name=asset]").addEventListener("change", hints);
+    $p("[name=addStart]").onchange = (e) => { addStart = e.target.checked; hints(); };
     $p("[name=asset]").onchange = hints;
     $p("[name=debt]").onchange = () => {
       read();
@@ -1405,6 +1415,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
       if (!draft.date) return toast("날짜를 입력해 주세요.");
       const now = nowISO();
       const dcur = curOf(d);
+      const over = roundFor(draft.amount - debtBalance(ref), dcur); // 저장 전에 계산(이 상환이 반영되기 전 잔액 기준)
       const krw = dcur === "KRW" ? draft.amount : toKRW(draft.amount, dcur);
       if (krw === null) return toast("환율 정보가 없어 반영할 수 없어요.");
       const deltas = [{ col: "debts", id: d.id, amount: -draft.amount }];
@@ -1475,6 +1486,8 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         if (interestId) S.transactions[interestId].repayOf = null;
       }
       if (replaces) dropTx(replaces, now);
+      // 앱 쓰기 전 사용분: 기록된 부채보다 많이 갚은 만큼 시작 잔액(base)을 올려 0원에서 끝나게
+      if (over > 0 && addStart) S.debts[d.id] = { ...S.debts[d.id], base: roundFor((S.debts[d.id].base || 0) + over, dcur), updatedAt: now };
       await saveState(S);
       scheduleSync();
       onDone();
@@ -2581,9 +2594,10 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
           <input class="input" name="card" placeholder="예: KB체크카드">
           <p class="note" style="margin-top:6px">지출할 때 이 계좌가 '국민763 | KB체크카드'처럼 함께 보이고, 내역에 결제수단으로 남아요.</p></div>` : ""}
         <div class="field"><label>통화</label><select class="input" name="currency">${currencyOptions("KRW")}</select></div>
-        <div class="field"><label>금액</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
-          <div class="fx-hint" data-hint></div></div>
-        ${col === "debts" ? `<div class="field"><label>받은 돈 입금 자산 <span class="muted">(선택)</span></label>
+        <div class="field"><label data-amt-label>금액</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
+          <div class="fx-hint" data-hint></div>
+          ${col === "debts" ? `<p class="note start-bal-note" data-amt-note hidden></p>` : ""}</div>
+        ${col === "debts" ? `<div class="field" data-loan-field><label>받은 돈 입금 자산 <span class="muted">(선택)</span></label>
           <select class="input" name="loanAsset">${holdingOptions(["assets"], "", { balance: false })}</select>
           <p class="note" style="margin-top:6px">새로 대출을 받아 통장에 들어왔다면 고르세요. 부채와 입금 자산이 같이 늘고 '대출 실행' 내역이 남아요(수입 아님). 예전부터 있던 빚이면 비워 두세요.</p>
         </div>` : ""}
@@ -2597,6 +2611,25 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
       const toggleCard = () => (cardField.hidden = typeSel.value !== "은행"); // 은행 계좌에만
       typeSel.addEventListener("change", toggleCard);
       toggleCard();
+    }
+    // 신용카드·마통: 앱을 쓰기 전에 쓴 대금(지난달 사용분 등)을 시작 잔액으로 넣도록 안내
+    const amtNote = panel.querySelector("[data-amt-note]");
+    if (amtNote) {
+      const typeSel = panel.querySelector("[name=type]");
+      const START_LABEL = {
+        신용카드: ["현재 남은 대금 (아직 안 갚은 사용액)", "지난달 사용분처럼 앞으로 갚아야 할 카드값이 있으면 그 금액을 넣으세요. 나중에 대금을 상환하면 0원이 돼요. 다 갚았으면 0."],
+        마이너스통장: ["현재 빌려 쓴 금액 (마이너스 잔액)", "통장에 찍힌 마이너스 금액을 넣으세요(예: -300,000원이면 300,000). 안 쓰고 있으면 0."],
+      };
+      const toggleStart = () => {
+        const t = START_LABEL[typeSel.value];
+        panel.querySelector("[data-amt-label]").textContent = t ? t[0] : "금액";
+        amtNote.hidden = !t;
+        amtNote.textContent = t ? t[1] : "";
+        panel.querySelector("[data-loan-field]").hidden = !!t; // 카드·마통은 '받은 돈'이 없음
+        if (t) panel.querySelector("[name=loanAsset]").value = "";
+      };
+      typeSel.addEventListener("change", toggleStart);
+      toggleStart();
     }
     const updateHint = bindMoney(amt, () => cur.value, panel.querySelector("[data-hint]"));
     cur.onchange = () => { amt.value = formatInput(amt.value, cur.value); updateHint(); };
