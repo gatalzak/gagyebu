@@ -491,3 +491,12 @@ input[type="date"].input { color-scheme: dark; }
 /* 카테고리 편집: 끌어서 순서 바꾸기 */
 .edit-item.cat-item { padding: 0; }
 .cat-item .cat-row { flex: 1; min-width: 0; }
+
+/* 내역 창: 자산·부채 등록 안내 */
+.holding-help { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; font-size: calc(0.78rem + var(--fs-up)); color: var(--muted); word-break: keep-all; }
+.holding-help.no-holding { color: #f3dc94; }
+.holding-help .reg-link { color: #9fe0b5; font-size: inherit; padding: 2px 0; }
+.holding-help .reg-link[data-reg="debts"] { color: #ff9fae; }
+.holding-help { justify-content: flex-start; align-content: flex-start; text-align: left; }
+.holding-help > span { flex: 1 1 100%; }
+.fx-hint.tx-hint:empty { display: none; } /* 안내가 없으면 빈 줄을 남기지 않음 */

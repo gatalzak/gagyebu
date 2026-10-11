@@ -1224,6 +1224,14 @@ function migrateBalances() {
   return n;
 }
 
+/** 내역 창의 자산·부채 선택 아래 안내: 등록된 게 없으면 알려 주고, 바로 등록할 수 있는 버튼 */
+function holdingHelp(cols) {
+  const has = cols.some((col) => Object.values(S[col]).some((a) => !a.deleted));
+  const msg = has ? "찾는 항목이 없나요?" : cols.includes("debts") ? "등록된 자산·부채가 없어요. 등록해 두면 잔액이 자동으로 바뀌어요." : "등록된 자산이 없어요. 등록해 두면 잔액이 자동으로 바뀌어요.";
+  return `<div class="holding-help${has ? "" : " no-holding"}"><span>${msg}</span>
+    ${cols.map((col) => `<button class="reg-link" data-reg="${col}">+ ${col === "debts" ? "부채(카드 등)" : "자산"} 등록</button>`).join("")}</div>`;
+}
+
 /** 선택 목록: 자산(종류별) → 부채(종류별), 현재 잔액을 함께 보여 준다 */
 function holdingOptions(cols, selectedKey, { balance = true } = {}) {
   const html = cols.map((col) => {
@@ -1614,11 +1622,13 @@ function openTxDialog(existing, presetDate, preset = null) {
         <div class="field"><label>${ASSET_LINK[draft.kind].label}</label>
           <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
+          ${holdingHelp(ASSET_LINK[draft.kind].cols)}
         </div>` : ""}
         ${draft.kind === "자산이동" ? `
         <div class="field"><label>출금 자산</label>
           <select class="input" name="fromAsset">${holdingOptions(["assets"], draft.fromAsset, { balance: false })}</select>
           <div class="fx-hint tx-hint exp" data-from-hint></div>
+          ${holdingHelp(["assets"])}
         </div>
         <div class="flow-arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v15"/><path d="M6.5 13.5 12 19l5.5-5.5"/></svg></div>
         <div class="field flow-to"><label>입금 자산</label>
@@ -1846,6 +1856,21 @@ function openTxDialog(existing, presetDate, preset = null) {
       await commit();
       toast(prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : existing.deltas?.length ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요");
     };
+    panel.querySelectorAll("[data-reg]").forEach((b) => (b.onclick = () => {
+      read();
+      const col = b.dataset.reg;
+      openHoldingsDialog(col, {
+        startAdd: true,
+        onDone: (newId) => {
+          if (newId) {
+            const key = linkKey(col, newId);
+            if (draft.kind === "자산이동") { if (!draft.fromAsset) draft.fromAsset = key; else if (!draft.toAsset) draft.toAsset = key; }
+            else draft.link = key;
+          }
+          openTxDialog(existing, null, draft);
+        },
+      });
+    }));
     // 영수증 사진: 카메라 버튼 → 촬영/앨범, 썸네일 누르면 크게, ✕로 빼기 (저장해야 반영)
     const photoFile = $p("[data-photo-file]");
     if (photoFile) {
@@ -2131,11 +2156,11 @@ function enableReorder(panel, onDrop) {
   });
 }
 
-function openHoldingsDialog(col) {
+function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
   const cfg = HOLDINGS[col];
   const order = makeOrder(cfg.types);
   const liveList = () => Object.values(S[col]).filter((a) => !a.deleted);
-  let mode = null;   // null: 목록 | "add": 등록 | "edit": 전체 편집
+  let mode = startAdd ? "add" : null;   // null: 목록 | "add": 등록 | "edit": 전체 편집
   let drafts = null; // 전체 편집 중인 값 [{ id, type, name, currency, amount, del }]
 
   const sortedAssets = () => liveList().sort(order);
@@ -2326,7 +2351,10 @@ function openHoldingsDialog(col) {
     const amt = panel.querySelector("[name=amount]");
     const updateHint = bindMoney(amt, () => cur.value, panel.querySelector("[data-hint]"));
     cur.onchange = () => { amt.value = formatInput(amt.value, cur.value); updateHint(); };
-    panel.querySelector("[data-cancel]").onclick = () => { mode = null; draw(); };
+    // 내역 창에서 바로 등록하러 온 경우: 취소·✕·저장 모두 내역 창으로 돌아감
+    const back = () => (onDone ? onDone(null) : (mode = null, draw()));
+    panel.querySelector("[data-cancel]").onclick = back;
+    if (onDone) panel.querySelector("[data-close]").onclick = back;
     panel.querySelector("[data-save]").onclick = async () => {
       const name = panel.querySelector("[name=name]").value.trim();
       if (!name) return toast("이름을 입력해 주세요.");
@@ -2356,6 +2384,7 @@ function openHoldingsDialog(col) {
       await saveState(S);
       scheduleSync();
       mode = null;
+      if (onDone) { onDone(rec.id); toast(`'${name}' 등록했어요`); return; }
       draw();
       toast(loanAsset && value > 0 ? `등록했어요 · ${loanAsset.name}에 ${formatMoney(value, cur.value)} 입금으로 기록` : "등록했어요");
       render();
