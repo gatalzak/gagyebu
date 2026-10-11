@@ -448,7 +448,7 @@ input[type="date"].input { color-scheme: dark; }
 .tb-sub > span:last-child { flex: 0 0 auto; white-space: nowrap; }
 
 /* 현황: 이번 달 현재 카드와 단기 부채 카드 사이 간격 */
-.card.home-debt { margin-top: 22px; }
+.card.home-sec { margin-top: 22px; } /* 현황 섹션(카드) 사이 간격 */
 
 /* 내역 검색 */
 .search-bar { position: relative; display: flex; align-items: center; margin-bottom: 12px; }
@@ -462,3 +462,8 @@ input[type="date"].input { color-scheme: dark; }
 
 /* 내역: 대출 실행 경로(핑크) */
 .tx .memo.cred { color: var(--cred); }
+
+/* 현황 하위 항목: 금액은 한 줄, 이름은 단어 단위로 줄바꿈 */
+.row-sub { gap: 10px; }
+.row-sub > span:first-child { min-width: 0; word-break: keep-all; }
+.row-sub > span:last-child { flex: 0 0 auto; white-space: nowrap; }

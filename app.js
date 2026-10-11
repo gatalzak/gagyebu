@@ -655,11 +655,14 @@ function homeView(part = "summary") {
     : ui.seg === "자산이동" || ui.seg === "부채 상환" ? "" // 자산이동·부채 상환은 합계 아래 경로별 하위 항목만
     : buildCatSections(selTx);
 
-  // 자산이동의 하위 항목: '출금 자산 → 입금 자산' 경로별 합계(큰 순서)
-  const movRows = routeTotals(mov)
-    .map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`)
-    .join("");
 
+  // 현황: 이번 달 현재(수입·지출) → 단기 부채 → 자산이동 → 부채 상환 → 대출 실행, 각각 섹션(카드)으로
+  const subRows = (pairs) => pairs.length ? `<div class="row">${pairs.map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}</div>` : "";
+  const section = (key, title, cls, total, body) => `
+  <section class="card home-sec">
+    <div class="card-head">${homeLabel(key, title, cls)}<span class="${cls}">${won(total)}</span></div>
+    ${body}
+  </section>`;
   const summary = `
   <section class="card">
     <div class="card-head"><span>이번 달 현재</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
@@ -669,23 +672,11 @@ function homeView(part = "summary") {
       <div class="row-sub"><span>└ 고정지출</span><span>${signed(sum(fixed), "-")}</span></div>
       <div class="row-sub"><span>└ 변동지출</span><span>${signed(sum(variable), "-")}</span></div>
     </div>
-    <div class="row">
-      <div class="row-main">${homeLabel("자산이동", "자산이동", "mov")}<span class="mov">${won(sum(mov))}</span></div>
-      ${movRows}
-    </div>
-    ${repay.length ? `<div class="row">
-      <div class="row-main">${homeLabel("부채상환", "부채 상환", "repay")}<span class="repay">${won(sum(repay))}</span></div>
-      ${repayTotals(repay).map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}
-    </div>` : ""}
-    ${loans.length ? `<div class="row">
-      <div class="row-main">${homeLabel("대출실행", "대출 실행", "cred")}<span class="cred">${won(sum(loans))}</span></div>
-      ${routeTotals(loans).map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}
-    </div>` : ""}
   </section>
-  <section class="card home-debt">
-    <div class="card-head">${homeLabel("단기부채", "단기 부채 (이번 달)", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
-    ${shortDebtRows}
-  </section>`;
+  ${section("단기부채", "단기 부채 (이번 달)", "cred", sum(shortDebt), shortDebtRows)}
+  ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
+  ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
+  ${loans.length ? section("대출실행", "대출 실행", "cred", sum(loans), subRows(routeTotals(loans))) : ""}`;
   if (part === "summary") return summary;
   return `
   <section class="card">
