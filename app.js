@@ -580,19 +580,28 @@ function homeView(part = "summary") {
   const fixed = exp.filter((t) => isPlainExpense(t) && t.expenseType === "고정");
   const variable = exp.filter((t) => isPlainExpense(t) && t.expenseType !== "고정");
 
-  // 단기 부채 섹션: 종류별 줄 + 그 아래 항목(카드·통장)별 사용액
+  // 단기 부채 섹션: 종류별 줄 + 그 아래 항목(카드·통장)별 사용액, 그 부채의 대금 상환은 '-'로 빼서 합계에 반영
+  const repayDebtId = (t) => t.deltas.find((x) => x.col === "debts")?.id;
+  let shortDebtNet = 0;
   const shortDebtRows = Object.entries(SHORT_DEBT).map(([type, info]) => {
     const items = shortDebt.filter((t) => shortDebtType(t) === type);
-    if (!sum(items)) return ""; // 0원인 종류는 생략
+    const paid = repay.filter((t) => debtType(S.debts[repayDebtId(t)]) === type);
+    if (!sum(items) && !sum(paid)) return ""; // 사용도 상환도 없으면 생략
     const byDebt = {};
     items.forEach((t) => { const id = deltaRef(t.assetDelta).id; byDebt[id] = (byDebt[id] || 0) + txKRW(t); });
+    const paidBy = {};
+    paid.forEach((t) => { const id = repayDebtId(t); paidBy[id] = (paidBy[id] || 0) + txKRW(t); });
     const subs = Object.entries(byDebt)
       .sort((a, b) => b[1] - a[1])
       .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || type)}</span><span>${won(v)}</span></div>`)
+      .concat(Object.entries(paidBy).sort((a, b) => b[1] - a[1])
+        .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || type)} 대금 상환</span><span>-${won(v)}</span></div>`))
       .join("");
+    const net = sum(items) - sum(paid);
+    shortDebtNet += net;
     return `
     <div class="row">
-      <div class="row-main"><span>${info.title}</span><span class="cred">${won(sum(items))}</span></div>
+      <div class="row-main"><span>${info.title}</span><span class="cred">${won(net)}</span></div>
       ${subs}
     </div>`;
   }).join("");
@@ -673,7 +682,7 @@ function homeView(part = "summary") {
     </div>` : ""}
   </section>
   <section class="card">
-    <div class="card-head">${homeLabel("단기부채", "단기 부채", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
+    <div class="card-head">${homeLabel("단기부채", "단기 부채", "cred")}<span class="cred">${won(shortDebtNet)}</span></div>
     ${shortDebtRows}
   </section>`;
   if (part === "summary") return summary;
