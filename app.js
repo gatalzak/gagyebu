@@ -673,7 +673,7 @@ function homeView(part = "summary") {
     </div>` : ""}
   </section>
   <section class="card">
-    <div class="card-head">${homeLabel("단기부채", "부채 변동(이번 달)", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
+    <div class="card-head">${homeLabel("단기부채", "단기 부채(이번 달)", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
     ${shortDebtRows}
   </section>`;
   if (part === "summary") return summary;
