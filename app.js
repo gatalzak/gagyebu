@@ -536,7 +536,7 @@ function txSheetRows(list) {
     if (t.kind === "자산이동") return moveRoute(t);
     const d = deltaRef(t.assetDelta);
     const h = d && S[d.col]?.[d.id];
-    return h ? `${t.kind === "수입" ? "입금" : d.col === "debts" ? "결제" : "출금"} ${h.name}` : "";
+    return h ? `${t.kind === "수입" ? "입금" : d.col === "debts" ? "결제" : "출금"} ${h.name}${t.card ? ` (${t.card})` : ""}` : "";
   };
   const rows = [["날짜", "시간", "구분", "지출 종류", "카테고리", "하위 카테고리", "내용", "거래처", "금액", "통화", "원화 금액", "입금·출금·결제", "단기 부채", "메모"]];
   for (const t of list) {
@@ -913,6 +913,7 @@ function txRow(t, { withDate = false } = {}) {
               ${t.content ? `<div class="tx-content">${esc(isLoan ? t.content.replace(/ 대출 실행$/, "") : t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
+              ${t.card && t.kind === "지출" ? `<div class="memo">결제수단 ${esc(t.card)}</div>` : ""}
             </div>
             <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "대출 " : ""}${t.currency && t.currency !== "KRW"
               ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
@@ -1167,7 +1168,7 @@ const unitLabel = (cur) => (cur === "KRW" ? "원" : cur);
 // 예전 기록은 {assetId, amount} 형태라 col이 없으면 자산으로 본다.
 const ASSET_LINK = {
   수입: { label: "입금 자산", cols: ["assets"] },
-  지출: { label: "결제 수단", cols: ["assets", "debts"] }, // 자산에서 출금하거나 신용카드 등 부채로 결제
+  지출: { label: "출금 되는 자산 및 결제 수단", cols: ["assets", "debts"] }, // 자산에서 출금하거나 신용카드 등 부채로 결제
 };
 /** 잔액 변화 방향: 수입→자산 +, 지출→자산 -, 지출→부채 + */
 const linkSign = (kind, col) => (kind === "수입" ? 1 : col === "debts" ? 1 : -1);
@@ -1233,14 +1234,14 @@ function holdingHelp(cols) {
 }
 
 /** 선택 목록: 자산(종류별) → 부채(종류별), 현재 잔액을 함께 보여 준다 */
-function holdingOptions(cols, selectedKey, { balance = true } = {}) {
+function holdingOptions(cols, selectedKey, { balance = true, withCard = false } = {}) {
   const html = cols.map((col) => {
     const types = HOLDINGS[col].types;
     const items = Object.values(S[col]).filter((a) => !a.deleted).sort(makeOrder(types));
     return types.filter((t) => items.some((a) => a.type === t)).map((t) => `
     <optgroup label="${col === "debts" ? `부채 · ${t}` : t}">${items.filter((a) => a.type === t).map((a) => {
       const key = linkKey(col, a.id);
-      return `<option value="${key}" ${key === selectedKey ? "selected" : ""}>${esc(a.name)}${balance ? ` · ${formatMoney(balanceOf(col, a), curOf(a))}` : ""}</option>`;
+      return `<option value="${key}" ${key === selectedKey ? "selected" : ""}>${esc(a.name)}${withCard && a.card ? ` | ${esc(a.card)}` : ""}${balance ? ` · ${formatMoney(balanceOf(col, a), curOf(a))}` : ""}</option>`;
     }).join("")}
     </optgroup>`).join("");
   }).join("");
@@ -1620,7 +1621,7 @@ function openTxDialog(existing, presetDate, preset = null) {
         </div>
         ${ASSET_LINK[draft.kind] ? `
         <div class="field"><label>${ASSET_LINK[draft.kind].label}</label>
-          <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
+          <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false, withCard: draft.kind === "지출" })}</select>
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
           ${holdingHelp(ASSET_LINK[draft.kind].cols)}
         </div>` : ""}
@@ -1828,6 +1829,7 @@ function openTxDialog(existing, presetDate, preset = null) {
         const add = amountInCurrency(rec, curOf(a));
         if (add === null) return toast("환율 정보가 없어 반영할 수 없어요.");
         delta = { col: ref.col, id: a.id, amount: linkSign(rec.kind, ref.col) * roundFor(add, curOf(a)) };
+        if (rec.kind === "지출" && ref.col === "assets" && a.card) rec.card = a.card; // 연결된 체크카드로 결제
       }
       // 잔액은 내역에서 계산하므로 변화만 기록한다(예전 값은 내역을 바꾸면 자연히 빠짐)
       if (delta) rec.assetDelta = delta;
@@ -2208,7 +2210,7 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
     panel.querySelector("[data-close-btn]").onclick = closeModal;
     const edit = panel.querySelector("[data-edit]");
     if (edit) edit.onclick = () => {
-      drafts = sortedAssets().map((a) => ({ id: a.id, type: a.type, name: a.name, currency: curOf(a), amount: balanceOf(col, a), del: false }));
+      drafts = sortedAssets().map((a) => ({ id: a.id, type: a.type, name: a.name, currency: curOf(a), amount: balanceOf(col, a), card: a.card || "", del: false }));
       mode = "edit";
       draw();
     };
@@ -2238,6 +2240,7 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
               <select class="input sm cur" name="currency" ${d.del ? "disabled" : ""}>${CURRENCIES.map((c) => `<option ${c === d.currency ? "selected" : ""}>${c}</option>`).join("")}</select>
               <button class="edit-del" data-toggle-del>${d.isNew ? "빼기" : d.del ? "되돌리기" : "삭제"}</button>
             </div>
+            ${col === "assets" && d.type === "은행" ? `<div class="edit-line"><input class="input sm" name="card" value="${esc(d.card || "")}" placeholder="연결된 체크카드 (선택)" ${d.del ? "disabled" : ""}></div>` : ""}
             </div>
           </div>`).join("")}
         </section>`).join("") +
@@ -2251,6 +2254,8 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
       d.type = el.querySelector("[name=type]").value;
       d.currency = el.querySelector("[name=currency]").value;
       d.amount = parseMoney(el.querySelector("[name=amount]").value, d.currency);
+      const cardIn = el.querySelector("[name=card]");
+      if (cardIn) d.card = cardIn.value;
     });
     const syncOrder = () => {
       const ids = [...panel.querySelectorAll(".edit-item")].map((el) => el.dataset.id);
@@ -2297,7 +2302,7 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
       for (const d of drafts) {
         if (d.isNew) {
           const i = (pos[d.type] = (pos[d.type] ?? -1) + 1);
-          S[col][d.id] = { id: d.id, type: d.type, order: 10000 + i, name: d.name.trim(), currency: d.currency, amount: d.amount, base: d.amount, createdAt: now, updatedAt: now, deleted: false };
+          S[col][d.id] = { id: d.id, type: d.type, order: 10000 + i, name: d.name.trim(), currency: d.currency, amount: d.amount, base: d.amount, ...(col === "assets" && d.type === "은행" && (d.card || "").trim() ? { card: d.card.trim() } : {}), createdAt: now, updatedAt: now, deleted: false };
           changed++;
           continue;
         }
@@ -2310,10 +2315,12 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
         const i = (pos[a.type] = (pos[a.type] ?? -1) + 1);
         const order = d.type === a.type ? i : 10000 + i; // 종류를 옮긴 자산은 새 섹션의 맨 뒤로
         const was = balanceOf(col, a);
-        if (a.type !== d.type || a.name !== d.name.trim() || curOf(a) !== d.currency || was !== d.amount || a.order !== order) {
+        const card = d.type === "은행" ? (d.card || "").trim() : "";
+        if (a.type !== d.type || a.name !== d.name.trim() || curOf(a) !== d.currency || was !== d.amount || a.order !== order || (a.card || "") !== card) {
           // 잔액을 고쳤으면 기준 금액을 다시 맞춘다(입력한 잔액 = 기준 금액 + 연결된 내역 합)
           const base = was !== d.amount || a.base === undefined ? roundFor(d.amount - linkedSum(col, a.id), d.currency) : a.base;
           S[col][d.id] = { ...a, type: d.type, name: d.name.trim(), currency: d.currency, amount: d.amount, base, order, updatedAt: now };
+          if (col === "assets") { if (card) S[col][d.id].card = card; else delete S[col][d.id].card; }
           changed++;
         }
       }
@@ -2338,6 +2345,9 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
           <select class="input" name="type">${cfg.types.map((t) => `<option>${t}</option>`).join("")}</select>
         </div>
         <div class="field"><label>이름</label><input class="input" name="name" placeholder="${cfg.placeholder}"></div>
+        ${col === "assets" ? `<div class="field" data-card-field hidden><label>연결된 체크카드 <span class="muted">(선택)</span></label>
+          <input class="input" name="card" placeholder="예: KB체크카드">
+          <p class="note" style="margin-top:6px">지출할 때 이 계좌가 '국민763 | KB체크카드'처럼 함께 보이고, 내역에 결제수단으로 남아요.</p></div>` : ""}
         <div class="field"><label>통화</label><select class="input" name="currency">${currencyOptions("KRW")}</select></div>
         <div class="field"><label>금액</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
           <div class="fx-hint" data-hint></div></div>
@@ -2349,6 +2359,13 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
     });
     const cur = panel.querySelector("[name=currency]");
     const amt = panel.querySelector("[name=amount]");
+    const cardField = panel.querySelector("[data-card-field]");
+    if (cardField) {
+      const typeSel = panel.querySelector("[name=type]");
+      const toggleCard = () => (cardField.hidden = typeSel.value !== "은행"); // 은행 계좌에만
+      typeSel.addEventListener("change", toggleCard);
+      toggleCard();
+    }
     const updateHint = bindMoney(amt, () => cur.value, panel.querySelector("[data-hint]"));
     cur.onchange = () => { amt.value = formatInput(amt.value, cur.value); updateHint(); };
     // 내역 창에서 바로 등록하러 온 경우: 취소·✕·저장 모두 내역 창으로 돌아감
@@ -2372,6 +2389,7 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
         currency: cur.value,
         amount: value,
         base: loanAsset && value > 0 ? 0 : value, // 처음 등록한 잔액이 기준 금액(새 대출이면 0 + 대출 실행 내역)
+        ...(col === "assets" && type === "은행" && panel.querySelector("[name=card]")?.value.trim() ? { card: panel.querySelector("[name=card]").value.trim() } : {}),
         createdAt: now,
         updatedAt: now,
         deleted: false,
