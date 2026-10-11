@@ -510,3 +510,11 @@ input[type="date"].input { color-scheme: dark; }
 
 /* 날짜·시간 칸 전체를 눌러 열기 */
 input[type="date"], input[type="time"] { cursor: pointer; }
+
+/* 지출 창: 카드 대금은 부채 상환으로 */
+.repay-tip { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px 10px; margin-top: 8px; padding: 8px 10px; border-radius: 3px; border: 1px solid #303035;
+  font-size: calc(0.78rem + var(--fs-up)); color: var(--muted); word-break: keep-all; }
+.repay-tip > span { flex: 1 1 100%; }
+.repay-tip .tip-em { font-weight: 400; color: #f3dc94; }
+.repay-tip .repay-link { color: #f3dc94; }
+.repay-tip.warn { border-color: #6b5a2a; background: rgba(243, 220, 148, 0.08); color: #f3dc94; }

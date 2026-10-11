@@ -1258,7 +1258,7 @@ function holdingOptions(cols, selectedKey, { balance = true, withCard = false } 
  * presetDebt: 미리 고를 부채 id
  * onDone: 닫은 뒤 할 일(나의 부채 창으로 돌아가기 등)
  */
-function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal } = {}) {
+function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal, preset = null } = {}) {
   const prevDebt = existing?.deltas?.find((d) => d.col === "debts");
   const prevAsset = existing?.deltas?.find((d) => d.col === "assets");
   // 이자: 상환과 같이 낸 이자는 '금융/이자' 고정지출로 따로 기록하고 상환 내역에 연결해 둔다
@@ -1267,14 +1267,14 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
   const draft = {
     interest: liveInterest?.amount || 0,
     debt: existing ? linkKey("debts", prevDebt?.id) : presetDebt ? linkKey("debts", presetDebt) : "",
-    asset: prevAsset ? linkKey("assets", prevAsset.id) : "",
-    amount: existing?.amount || 0,
-    date: existing?.date || todayStr(),
-    time: existing ? existing.time || "" : nowTime(),
-    memo: existing?.memo || "",
+    asset: prevAsset ? linkKey("assets", prevAsset.id) : preset?.asset || "",
+    amount: existing?.amount || preset?.amount || 0,
+    date: existing?.date || preset?.date || todayStr(),
+    time: existing ? existing.time || "" : preset?.time || nowTime(),
+    memo: existing?.memo || preset?.memo || "",
   };
   let confirmDelete = false;
-  let amountTouched = !!existing;
+  let amountTouched = !!existing || !!preset?.amount; // 넘겨받은 금액은 부채를 골라도 덮어쓰지 않음
 
   /** 부채 잔액(이 내역이 이미 갚은 만큼은 되돌린 상태로 계산) */
   const debtBalance = (ref) => {
@@ -1625,6 +1625,10 @@ function openTxDialog(existing, presetDate, preset = null) {
           <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
           ${holdingHelp(ASSET_LINK[draft.kind].cols)}
+          ${draft.kind === "지출" ? `<div class="repay-tip" data-repay-tip>
+            <span>신용카드 대금·대출금을 갚는 거라면 지출이 아니라 <b class="tip-em">부채 상환</b>이에요.</span>
+            <button class="reg-link repay-link" data-go-repay>부채 상환으로 기록 ›</button>
+          </div>` : ""}
         </div>
         ${draft.kind === "지출" ? `<div class="field" data-pay-field hidden><label>결제 수단 <span class="req">*</span></label>
           <select class="input" name="pay"></select></div>` : ""}` : ""}
@@ -1900,6 +1904,25 @@ function openTxDialog(existing, presetDate, preset = null) {
       await commit();
       toast(prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : existing.deltas?.length ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요");
     };
+    // 카드 대금 등을 지출로 적으려 하면: 내용에 '카드값·대금·상환' 같은 말이 있으면 안내를 강조
+    const tip = $p("[data-repay-tip]");
+    if (tip) {
+      const REPAY_WORDS = /카드\s*(값|대금|결제)|대금|상환|할부금|원리금|마통|마이너스/;
+      const checkTip = () => tip.classList.toggle("warn", REPAY_WORDS.test($p("[name=content]").value));
+      $p("[name=content]").addEventListener("input", checkTip);
+      checkTip();
+      $p("[data-go-repay]").onclick = () => {
+        read();
+        const ref = parseLinkKey(draft.link);
+        openRepayDialog({
+          preset: {
+            amount: draft.amount, date: draft.date, time: draft.time, memo: draft.content,
+            asset: ref?.col === "assets" ? draft.link : "",
+          },
+          onDone: () => { closeModal(); render(); },
+        });
+      };
+    }
     panel.querySelectorAll("[data-reg]").forEach((b) => (b.onclick = () => {
       read();
       const col = b.dataset.reg;
