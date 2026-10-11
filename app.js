@@ -492,7 +492,7 @@ function exportExcel(range) {
     .sort((a, b) => (a.date + (a.time || "") + a.createdAt).localeCompare(b.date + (b.time || "") + b.createdAt));
   if (!list.length) return toast("내보낼 내역이 없어요");
   const label = range === "all" ? "전체" : range === "year" ? `${y}년` : `${y}년${Number(m)}월`;
-  downloadBlob(makeXlsx("내역", txSheetRows(list), TX_SHEET_WIDTHS), `클로드가계부_${label}_${todayStr()}.xlsx`);
+  downloadBlob(makeXlsx("내역", txSheetRows(list), TX_SHEET_WIDTHS), `가계부_${label}_${todayStr()}.xlsx`);
   toast(`엑셀 파일을 저장했어요 · ${list.length}건`);
 }
 
@@ -700,7 +700,7 @@ function settleView() {
     </div>
     <div class="row"><div class="row-main"><span>순자산 변화 (자산-부채)</span><span class="${netChg >= 0 ? "inc" : "exp"}">${signedWon(Math.round(netChg))}</span></div></div>
   </section>
-  <button class="btn excel-btn settle-excel" data-settle-excel>${EXCEL_ICON}${m}월 결산 엑셀로 저장</button>`;
+  <button class="btn excel-btn settle-excel" data-settle-excel>${EXCEL_ICON}${m}월 결산 엑셀 파일로 내보내기</button>`;
 }
 
 const EXCEL_ICON = `<svg class="excel-ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#1d7a45"/><path d="M8.2 8l7.6 8M15.8 8l-7.6 8" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>`;
