@@ -2046,6 +2046,10 @@ const HOLDINGS = {
  * 손잡이(⋮⋮)를 잡고 끌면 같은 섹션 안에서 위치를 바꾼다.
  * 터치(안드로이드)에서도 되도록 브라우저 드래그앤드롭 대신 포인터 이벤트로 직접 구현.
  */
+/**
+ * 끌어서 순서 바꾸기(워드프레스 메뉴처럼): 손잡이를 잡으면 줄이 떠올라 손가락을 따라 움직이고,
+ * 놓일 자리는 빈 칸(점선)으로 보이며 다른 줄들은 부드럽게 비켜난다. 같은 묶음(섹션) 안에서만 움직인다.
+ */
 function enableReorder(panel, onDrop) {
   const overlay = panel.closest(".overlay");
   panel.querySelectorAll("[data-handle]").forEach((handle) => {
@@ -2053,27 +2057,72 @@ function enableReorder(panel, onDrop) {
       const item = handle.closest(".edit-item");
       const section = item.parentElement;
       e.preventDefault();
-      handle.setPointerCapture(e.pointerId);
+      try { handle.setPointerCapture(e.pointerId); } catch {}
+
+      const rect = item.getBoundingClientRect();
+      const grabY = e.clientY - rect.top; // 줄 안에서 잡은 위치
+      // 빈 자리 표시
+      const holder = document.createElement("div");
+      holder.className = "drag-placeholder";
+      holder.style.height = `${rect.height}px`;
+      section.insertBefore(holder, item);
+      // 줄을 띄워서 손가락을 따라오게
+      Object.assign(item.style, { position: "fixed", left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, zIndex: 50 });
       item.classList.add("dragging");
 
-      const onMove = (ev) => {
-        // 화면 끝 근처에서는 자동으로 스크롤
-        if (ev.clientY < 70) overlay.scrollTop -= 10;
-        else if (ev.clientY > window.innerHeight - 70) overlay.scrollTop += 10;
-        const others = [...section.querySelectorAll(".edit-item")].filter((x) => x !== item);
-        const before = others.find((x) => {
-          const r = x.getBoundingClientRect();
-          return ev.clientY < r.top + r.height / 2;
-        });
-        if (before) { if (item.nextElementSibling !== before) section.insertBefore(item, before); }
-        else if (others.length && section.lastElementChild !== item) section.appendChild(item);
+      // 다른 줄이 자리를 옮길 때 미끄러지듯 움직이기(FLIP)
+      const slide = (moveFn) => {
+        const others = [...section.children].filter((x) => x !== item && x !== holder);
+        const before = new Map(others.map((x) => [x, x.getBoundingClientRect().top]));
+        moveFn();
+        for (const x of others) {
+          const dy = before.get(x) - x.getBoundingClientRect().top;
+          if (!dy) continue;
+          x.style.transition = "none";
+          x.style.transform = `translateY(${dy}px)`;
+          requestAnimationFrame(() => { x.style.transition = "transform 160ms ease"; x.style.transform = ""; });
+        }
       };
+
+      let lastY = e.clientY;
+      let scrollTimer = null;
+      const place = () => {
+        item.style.top = `${lastY - grabY}px`;
+        const others = [...section.querySelectorAll(":scope > .edit-item")].filter((x) => x !== item);
+        const target = others.find((x) => {
+          const r = x.getBoundingClientRect();
+          return lastY < r.top + r.height / 2;
+        });
+        if (target) { if (holder.nextElementSibling !== target) slide(() => section.insertBefore(holder, target)); }
+        else if (others.length && section.lastElementChild !== holder) slide(() => section.appendChild(holder));
+      };
+      // 화면 위·아래 끝에 가까우면 계속 스크롤(손가락을 가만히 대고 있어도)
+      const autoScroll = () => {
+        const edge = 80;
+        const speed = lastY < edge ? -(edge - lastY) / 4 : lastY > window.innerHeight - edge ? (lastY - (window.innerHeight - edge)) / 4 : 0;
+        if (speed) { overlay.scrollTop += speed; place(); }
+        scrollTimer = requestAnimationFrame(autoScroll);
+      };
+      scrollTimer = requestAnimationFrame(autoScroll);
+
+      const onMove = (ev) => { lastY = ev.clientY; place(); };
       const onUp = () => {
-        item.classList.remove("dragging");
+        cancelAnimationFrame(scrollTimer);
         handle.removeEventListener("pointermove", onMove);
         handle.removeEventListener("pointerup", onUp);
         handle.removeEventListener("pointercancel", onUp);
-        onDrop();
+        // 빈 자리로 내려앉기
+        const to = holder.getBoundingClientRect();
+        item.style.transition = "top 140ms ease";
+        item.style.top = `${to.top}px`;
+        setTimeout(() => {
+          section.insertBefore(item, holder);
+          holder.remove();
+          item.classList.remove("dragging");
+          item.removeAttribute("style");
+          section.querySelectorAll(":scope > .edit-item").forEach((x) => { x.style.transition = ""; x.style.transform = ""; });
+          onDrop();
+        }, 150);
       };
       handle.addEventListener("pointermove", onMove);
       handle.addEventListener("pointerup", onUp);

@@ -239,7 +239,9 @@ input[type="date"].input { color-scheme: dark; }
 .edit-body { flex: 1; min-width: 0; }
 .grip { flex: 0 0 22px; align-self: stretch; display: flex; align-items: center; justify-content: center;
   color: var(--muted); touch-action: none; cursor: grab; margin-left: -6px; }
-.edit-item.dragging { background: var(--row); border-radius: 3px; outline: 1px solid var(--line); }
+.edit-item.dragging { background: var(--row); border-radius: 3px; outline: 1px solid var(--wine); opacity: 0.96; transform: scale(1.02); pointer-events: none; }
+.edit-item.dragging .grip { pointer-events: auto; }
+.drag-placeholder { border: 1px dashed #4a4a52; border-radius: 3px; background: rgba(255, 255, 255, 0.03); box-sizing: border-box; } /* 놓일 자리 */
 .edit-item.dragging .grip { color: var(--sector); cursor: grabbing; }
 .edit-item + .edit-item { border-top: 1px solid var(--line-soft); }
 .edit-line { display: flex; gap: 6px; align-items: center; }
