@@ -811,7 +811,7 @@ function monthCols(items) {
     <div class="inc">${signed(inc, "+")}</div>
     <div class="exp">${signed(exp, "-")}</div>
     <div class="mc-total">합계: ${won(inc - exp)}</div>` : "";
-  const right = debt ? `${shortDebtTotals(items)}<div class="mc-total">부채: ${won(debt)}</div>` : "";
+  const right = debt ? `${shortDebtTotals(items)}<div class="mc-total">합계: ${won(debt)}</div>` : "";
   if (!left && !right) return "";
   return `<div class="mc-cols">${left ? `<div>${left}</div>` : ""}${right ? `<div>${right}</div>` : ""}</div>`;
 }
