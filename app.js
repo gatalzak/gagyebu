@@ -155,6 +155,20 @@ function cleanMoveCategories() {
   return n;
 }
 
+/** 지출 카테고리에 고정/변동 값을 박아 둔다(예전엔 이름으로 짐작). 기본 카테고리는 처음 이름(id)으로 판단해
+ *  이미 이름을 바꿔 다른 탭으로 옮겨진 것도 원래 자리로 돌린다. */
+function freezeCatEtypes() {
+  let n = 0;
+  const now = nowISO();
+  for (const c of Object.values(S.cats)) {
+    if (c.deleted || c.kind !== "지출" || c.etype !== undefined) continue;
+    const origName = c.id.startsWith("defcat:지출:") ? c.id.slice("defcat:지출:".length) : c.name;
+    S.cats[c.id] = { ...c, etype: DEFAULT_FIXED.has(origName) ? "고정" : "변동", updatedAt: now };
+    n++;
+  }
+  return n;
+}
+
 function seedCats() {
   let added = 0;
   for (const [kind, names] of Object.entries(CATEGORIES)) {
@@ -335,6 +349,8 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
       if (live.some((n) => !n)) return toast("이름이 빈 하위 카테고리가 있어요.");
       if (new Set(live).size !== live.length) return toast("하위 카테고리 이름이 겹쳐요.");
       const now = nowISO();
+      // 고정/변동을 이름으로 짐작하던 예전 카테고리는 이름을 바꾸면 탭이 바뀌어 사라진 것처럼 보였다 → 항상 값으로 저장
+      if (kind === "지출" && S.cats[catId].etype === undefined) S.cats[catId] = { ...S.cats[catId], etype: catEtype(cat), updatedAt: now };
       if (newName !== cat.name) renameCategory(kind, cat.name, newName, now);
       if (s.etype && s.etype !== catEtype(cat)) {
         // 고정/변동을 바꾸면 이 카테고리로 입력한 지출도 같은 종류로 맞춘다(현황 합계가 일치하도록)
@@ -2511,7 +2527,7 @@ async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
-  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories() + migrateBalances()) await saveState(S);
+  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories() + migrateBalances() + freezeCatEtypes()) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();
