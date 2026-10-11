@@ -504,3 +504,6 @@ input[type="date"].input { color-scheme: dark; }
 /* 내역 창: 필수 항목 */
 .req { color: #ff6b6b; margin-left: 2px; }
 .input.invalid { border-color: #ff6b6b; }
+
+/* 자산·부채 편집: 부호 바꾸기 */
+.sign-btn { flex: 0 0 26px; height: 38px; border-radius: 3px; border: 1px solid #303035; background: var(--row); color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); }

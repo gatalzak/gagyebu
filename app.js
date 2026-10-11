@@ -2275,6 +2275,7 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
             <div class="edit-body">
             <div class="edit-line">
               <input class="input sm" name="name" value="${esc(d.name)}" placeholder="이름" ${d.del ? "disabled" : ""}>
+              <button class="sign-btn" data-sign aria-label="플러스/마이너스 바꾸기" ${d.del ? "disabled" : ""}>±</button>
               <input class="input sm amount-input amt-fixed" name="amount" inputmode="decimal" value="${toInput(d.amount, d.currency)}" placeholder="0" ${d.del ? "disabled" : ""}>
             </div>
             <div class="edit-line">
@@ -2310,6 +2311,12 @@ function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}) {
       bindMoney(amt, () => cur.value);
       cur.onchange = () => { amt.value = formatInput(amt.value, cur.value); };
     });
+    // ± : 휴대폰 숫자 자판엔 '-'가 없는 경우가 많아 버튼으로 부호를 바꾼다(마이너스 통장 잔액 등)
+    panel.querySelectorAll("[data-sign]").forEach((b) => (b.onclick = () => {
+      const inp = b.closest(".edit-item").querySelector("[name=amount]");
+      const v = inp.value.trim();
+      inp.value = v.startsWith("-") ? v.slice(1) : v ? `-${v}` : "-";
+    }));
     panel.querySelectorAll("[data-toggle-del]").forEach((b) => (b.onclick = () => {
       read();
       syncOrder();

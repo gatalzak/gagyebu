@@ -18,19 +18,21 @@ export const decimals = (cur) => new Intl.NumberFormat("en", { style: "currency"
 /** 입력 문자열 → 숫자 (통화의 소수점 자리까지) */
 export function parseMoney(s, cur) {
   const d = decimals(cur);
+  const neg = /^\s*-/.test(String(s)); // 마이너스 잔액(예: -22,000)도 그대로 읽는다
   const [int = "", frac = ""] = String(s).replace(/[^\d.]/g, "").split(".");
   const n = Number(`${int || 0}.${frac.slice(0, d) || 0}`);
-  return Number.isFinite(n) ? n : 0;
+  return Number.isFinite(n) ? (neg ? -n : n) : 0;
 }
 
 /** 입력칸 표시용: 1234567.5 → "1,234,567.5" (빈 값이면 "") */
 export function formatInput(raw, cur) {
   const d = decimals(cur);
+  const sign = /^\s*-/.test(String(raw)) ? "-" : ""; // 앞의 마이너스는 남긴다
   const clean = String(raw).replace(/[^\d.]/g, "");
-  if (!clean) return "";
+  if (!clean) return sign;
   let [int, ...rest] = clean.split(".");
   int = (int || "0").replace(/^0+(?=\d)/, "");
-  const intFmt = Number(int).toLocaleString("en-US");
+  const intFmt = sign + Number(int).toLocaleString("en-US");
   if (!d || !rest.length) return intFmt;
   return `${intFmt}.${rest.join("").slice(0, d)}`;
 }
