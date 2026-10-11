@@ -13,7 +13,8 @@
   --inc: #4cd28a;     /* 수입: 초록 */
   --exp: #ff6b6b;     /* 지출: 레드 */
   --cred: #ff7eb6;     /* 부채(신용카드·마통 사용): 핑크 */
-  --mov: #f3dc94;   /* 자산이동: 연한 옐로우 */
+  --mov: #e4e4e8;   /* 자산이동(내 자산끼리): 화이트 계열 */
+  --repay: #f3dc94; /* 부채 상환: 연한 옐로우 */
   --green-bg: #1f3a2a;
   --green-line: #2b5039;
   --green-text: #cfeedd;
@@ -84,7 +85,7 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
 /* 동기화 알림줄 */
 .sync-bar {
   display: block; width: 100%; margin: -6px 0 12px; padding: 9px 12px; border-radius: 3px; text-align: left;
-  background: #2a2216; border: 1px solid #4a3a1c; color: var(--mov); font-size: calc(0.8rem + var(--fs-up));
+  background: #2a2216; border: 1px solid #4a3a1c; color: #f3dc94; font-size: calc(0.8rem + var(--fs-up));
 }
 .sync-bar[hidden] { display: none; }
 
@@ -100,7 +101,7 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
 .row-main { display: flex; justify-content: space-between; }
 .row-sub { display: flex; justify-content: space-between; color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); padding: 4px 0 0 10px; }
 .row-main + .row-sub { margin-top: 4px; }
-.inc { color: var(--inc); } .exp { color: var(--exp); } .mov { color: var(--mov); } .cred { color: var(--cred); }
+.inc { color: var(--inc); } .exp { color: var(--exp); } .mov { color: var(--mov); } .cred { color: var(--cred); } .repay { color: var(--repay); }
 .muted { color: var(--muted); }
 .empty { color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); text-align: center; padding: 28px 0; line-height: 1.7; }
 
@@ -111,8 +112,9 @@ button { cursor: pointer; background: none; border: none; padding: 0; }
   background: var(--row); border: 1px solid #303035; color: var(--muted);
 }
 .seg button.on { background: var(--wine); border-color: var(--wine); color: #fff; }
-.seg.seg-5 { gap: 4px; }
-.seg.seg-5 button { font-size: calc(0.74rem + var(--fs-up)); padding: 0 2px; white-space: nowrap; }
+.seg.seg-5, .seg.seg-6 { gap: 4px; }
+.seg.seg-5 button, .seg.seg-6 button { font-size: calc(0.74rem + var(--fs-up)); padding: 0 2px; white-space: nowrap; }
+.seg.seg-6 { display: grid; grid-template-columns: repeat(3, 1fr); } /* 6개는 3칸 × 2줄 */
 
 /* 내역 목록 */
 .day { margin-bottom: 10px; }
@@ -298,7 +300,8 @@ input[type="date"].input { color-scheme: dark; }
 .cat-badge { font-size: calc(0.72rem + var(--fs-up)); line-height: 1.4; padding: 2px 7px; border-radius: 3px; }
 .cat-badge.b-inc { background: #e3f8eb; color: #1b8a4c; }
 .cat-badge.b-exp { background: #ffe8e8; color: #c9302c; }
-.cat-badge.b-mov { background: #fff6dc; color: #9a7413; }
+.cat-badge.b-mov { background: #ececef; color: #26262b; }  /* 자산이동: 화이트 바탕·검은 글자 */
+.cat-badge.b-repay { background: #fff6dc; color: #9a7413; } /* 부채 상환: 옐로우 */
 .cat-badge.b-cred { background: #ffe6f1; color: #b8236b; }
 .tx-content { color: #fff; font-size: calc(0.95rem + var(--fs-up)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx .memo { font-size: calc(0.75rem + var(--fs-up)); margin-top: 1px; }
@@ -376,15 +379,15 @@ input[type="date"].input { color-scheme: dark; }
 
 /* 백업 알림줄 */
 .backup-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -6px 0 12px; padding: 9px 12px; border-radius: 3px;
-  background: #2a2216; border: 1px solid #4a3a1c; color: var(--mov); font-size: calc(0.8rem + var(--fs-up)); line-height: 1.5; }
+  background: #2a2216; border: 1px solid #4a3a1c; color: #f3dc94; font-size: calc(0.8rem + var(--fs-up)); line-height: 1.5; }
 .backup-bar[hidden] { display: none; }
 .bb-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .bb-actions button { padding: 5px 8px; border-radius: 3px; font-size: calc(0.75rem + var(--fs-up)); color: var(--muted); border: 1px solid #4a3a1c; white-space: nowrap; }
-.bb-actions .bb-save { color: #2a2216; background: var(--mov); border-color: var(--mov); }
+.bb-actions .bb-save { color: #2a2216; background: #f3dc94; border-color: #f3dc94; }
 
 /* 내역: 자산이동 경로(출금 → 입금) 강조 */
 .tx .memo.mov { color: var(--mov); }
-.tx .memo.inc { color: var(--inc); } /* 부채상환 경로 */
+.tx .memo.repay { color: var(--repay); } /* 부채상환 경로 */
 
 /* 현황: 수입·지출·자산이동·단기 부채 제목 앞 아이콘 */
 .home-label { display: inline-flex; align-items: center; gap: 7px; }
@@ -434,3 +437,12 @@ input[type="date"].input { color-scheme: dark; }
 .fx-hint.tx-hint.exp { color: var(--exp); }
 .fx-hint.tx-hint.mov { color: var(--mov); }
 .fx-hint.tx-hint.cred { color: var(--cred); }
+
+/* 나의 부채: 부채 상환 버튼(옐로우) */
+.yellow-btn { background: #3a3220; border: 1px solid #5c4c22; color: #f3dc94; border-radius: 3px; font-size: calc(0.78rem + var(--fs-up)); padding: 6px 10px; line-height: 1; }
+.panel.theme-debts .head-actions .yellow-btn { padding: 6px 8px; white-space: nowrap; }
+
+/* 합계 바 하위 항목: 금액은 한 줄, 이름은 단어 단위로 줄바꿈 */
+.tb-sub { gap: 10px; }
+.tb-sub > span:first-child { min-width: 0; word-break: keep-all; }
+.tb-sub > span:last-child { flex: 0 0 auto; white-space: nowrap; }

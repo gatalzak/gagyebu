@@ -479,7 +479,7 @@ function exportExcel(range) {
   for (const t of list) {
     const sd = shortDebtType(t);
     rows.push([
-      t.date, t.time || "", t.kind, t.kind === "지출" ? `${t.expenseType || ""}지출` : "",
+      t.date, t.time || "", isRepayTx(t) ? "부채상환" : t.kind, t.kind === "지출" ? `${t.expenseType || ""}지출` : "",
       t.category || "", t.subcategory || "", t.content || "", t.party || "",
       t.amount, t.currency || "KRW", txKRW(t), holdingName(t), sd ? SHORT_DEBT[sd].label : "", t.memo || "",
     ]);
@@ -527,6 +527,11 @@ function shortDebtType(t) {
 }
 const isShortDebt = (t) => !!shortDebtType(t);
 
+/** 부채 상환(내 자산 → 부채): 자산이동과 따로 집계한다 */
+const isRepayTx = (t) => !!t.deltas?.some((x) => x.col === "debts");
+/** 순수 자산이동(내 자산끼리) */
+const isMoveTx = (t) => t.kind === "자산이동" && !isRepayTx(t);
+
 /** 금액 앞 부호: 수입 +, 지출 -, 자산이동·단기 부채(신용·마통 등)는 없음 */
 const txSign = (t) => (isShortDebt(t) ? "" : KIND_SIGN[t.kind]);
 
@@ -547,6 +552,7 @@ const HOME_ICONS = {
   수입: ICO('<path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19h14"/>'),      // 들어오는 돈
   지출: ICO('<path d="M12 15V4"/><path d="M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19h14"/>'),        // 나가는 돈
   자산이동: ICO('<path d="M4 8h14"/><path d="M14.5 4.5 18 8l-3.5 3.5"/><path d="M20 16H6"/><path d="M9.5 12.5 6 16l3.5 3.5"/>'), // 옮기기
+  부채상환: ICO('<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.2l2.5 2.5 5-5"/>'), // 갚음(체크)
   단기부채: ICO('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>'), // 카드
 };
 const SUM_ICON = ICO('<path d="M17 5H7l6 7-6 7h10"/>'); // 합계(Σ)
@@ -557,7 +563,8 @@ function homeView(part = "summary") {
   const tx = monthTx();
   const inc = tx.filter((t) => t.kind === "수입");
   const exp = tx.filter((t) => t.kind === "지출");
-  const mov = tx.filter((t) => t.kind === "자산이동");
+  const mov = tx.filter(isMoveTx);
+  const repay = tx.filter(isRepayTx); // 부채 상환: 자산이동과 따로
   // 신용카드·마이너스통장으로 결제한 지출은 단기부채로 따로 묶고, 지출(고정·변동)에서는 뺀다
   const shortDebt = exp.filter(isShortDebt);
   const fixed = exp.filter((t) => isPlainExpense(t) && t.expenseType === "고정");
@@ -586,6 +593,7 @@ function homeView(part = "summary") {
     변동지출: [variable, "exp", "-"],
     "단기 부채": [shortDebt, "cred", ""], // 단기 부채는 부호 없이(갚아야 할 돈)
     자산이동: [mov, "mov", ""],
+    "부채 상환": [repay, "repay", ""],
   };
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
   const [selTx, cls, sign] = segs[ui.seg];
@@ -628,7 +636,7 @@ function homeView(part = "summary") {
       <div class="group-title"><span class="cat-badge b-cred">${info.label}</span></div>
       ${buildCatSections(list, type)}`;
       }).join("")
-    : ui.seg === "자산이동" ? "" // 자산이동은 합계 아래 경로별 하위 항목만
+    : ui.seg === "자산이동" || ui.seg === "부채 상환" ? "" // 자산이동·부채 상환은 합계 아래 경로별 하위 항목만
     : buildCatSections(selTx);
 
   // 자산이동의 하위 항목: '출금 자산 → 입금 자산' 경로별 합계(큰 순서)
@@ -649,6 +657,10 @@ function homeView(part = "summary") {
       <div class="row-main">${homeLabel("자산이동", "자산이동", "mov")}<span class="mov">${won(sum(mov))}</span></div>
       ${movRows}
     </div>
+    ${repay.length ? `<div class="row">
+      <div class="row-main">${homeLabel("부채상환", "부채 상환", "repay")}<span class="repay">${won(sum(repay))}</span></div>
+      ${routeTotals(repay).map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}
+    </div>` : ""}
   </section>
   <section class="card">
     <div class="card-head">${homeLabel("단기부채", "단기 부채", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
@@ -658,7 +670,7 @@ function homeView(part = "summary") {
   return `
   <section class="card">
     <div class="card-head plain"><span>현황(상세)</span></div>
-    <div class="seg seg-5" data-role="detail-seg">
+    <div class="seg seg-6" data-role="detail-seg">
       ${Object.keys(segs).map((s) => `<button data-seg="${s}" class="${s === ui.seg ? "on" : ""}">${s}</button>`).join("")}
     </div>
     <div class="total-bar">
@@ -667,7 +679,7 @@ function homeView(part = "summary") {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${won(v)}</span></div>` : "";
       }).join("") : ""}
-      ${ui.seg === "자산이동" ? routeTotals(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
+      ${ui.seg === "자산이동" || ui.seg === "부채 상환" ? routeTotals(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
     </div>
     ${selTx.length ? catSections : `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
   </section>`;
@@ -676,7 +688,7 @@ function homeView(part = "summary") {
 /** 내역 한 줄 (누르면 수정 창) */
 /** withDate: 여러 날짜가 섞인 목록(현황(상세) 펼치기)에서는 날짜도 함께 표시 */
 function txRow(t, { withDate = false } = {}) {
-  // 뱃지: 카테고리(수입 초록·지출 레드) / 자산이동(옐로우) / 부채상환(초록: 자산에서 밖으로 나가 빚을 줄임) + 부채로 결제했으면 그 부채 종류(핑크)
+  // 뱃지: 카테고리(수입 초록·지출 레드) / 자산이동(화이트) / 부채상환(옐로우: 자산에서 밖으로 나가 빚을 줄임) + 부채로 결제했으면 그 부채 종류(핑크)
   const kindBadge = t.kind === "수입" ? "b-inc" : t.kind === "지출" ? "b-exp" : "b-mov";
   const d = deltaRef(t.assetDelta);
   const debt = d?.col === "debts" ? S.debts[d.id] : null;
@@ -690,12 +702,12 @@ function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${isRepay ? `<span class="cat-badge b-inc">부채상환</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
+              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
-              ${via ? `<div class="memo${isRepay ? " inc" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
+              ${via ? `<div class="memo${isRepay ? " repay" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
             </div>
-            <span class="amt ${isShortDebt(t) ? "cred" : isRepay ? "inc" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : ""}${t.currency && t.currency !== "KRW"
+            <span class="amt ${isShortDebt(t) ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : ""}${t.currency && t.currency !== "KRW"
               ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
               : signed(t.amount, txSign(t))}</span>
           </button>`;
@@ -1662,7 +1674,7 @@ function openHoldingsDialog(col) {
       cls: `theme-${col}`,
       title: cfg.title,
       headExtra: `<button class="${col === "debts" ? "red-btn" : "green-btn"}" data-add>${cfg.unit} 등록</button>` +
-        (col === "debts" ? `<button class="green-btn" data-repay>부채 상환</button>` : "") +
+        (col === "debts" ? `<button class="yellow-btn" data-repay>부채 상환</button>` : "") +
         (assets.length ? `<button class="icon-only" data-edit aria-label="${cfg.unit} 편집">${PENCIL}</button>` : ""),
       body: body + `<button class="btn" data-close-btn style="margin-top:18px">닫기</button>`,
     });
