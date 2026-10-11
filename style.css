@@ -549,3 +549,26 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .start-fix p { margin: 0 0 6px; }
 .start-fix .check-line { display: flex; align-items: center; gap: 8px; color: var(--text); }
 .start-fix input[type=checkbox] { width: 18px; height: 18px; accent-color: #f3dc94; flex: none; }
+
+/* 예산 */
+.bud { color: #8fc7ff; }
+.bud-row { padding: 10px 0 2px; }
+.bud-row + .bud-row { border-top: 1px solid var(--line); }
+.bud-total { padding-top: 0; }
+.bud-num { white-space: nowrap; }
+.bud-num .muted { font-size: calc(0.8rem + var(--fs-up)); }
+.bud-bar { height: 5px; background: #2a2a30; border-radius: 3px; margin: 7px 0 5px; overflow: hidden; }
+.bud-bar i { display: block; height: 100%; border-radius: 3px; }
+.bud-bar i.ok { background: var(--inc); } .bud-bar i.warn { background: #f3dc94; } .bud-bar i.over { background: var(--exp); }
+.bud-left { font-size: calc(0.78rem + var(--fs-up)); color: var(--muted); }
+.bud-left.warn { color: #f3dc94; } .bud-left.over { color: var(--exp); }
+.card-head .bud-left { font-size: inherit; }
+.card-head .bud-left.ok { color: var(--inc); }
+.bud-note { margin: 10px 0 0; }
+.bud-empty { margin: 4px 0 0; }
+.bud-foot { display: flex; justify-content: flex-end; margin-top: 6px; }
+.bud-link { color: #8fc7ff; font-size: calc(0.85rem + var(--fs-up)); padding: 4px 0; }
+.bud-edit-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.bud-edit-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; word-break: keep-all; }
+.bud-edit-name .muted { font-size: calc(0.75rem + var(--fs-up)); }
+.bud-in { width: 150px; flex: none; }

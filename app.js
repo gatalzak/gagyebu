@@ -196,6 +196,11 @@ function renameCategory(kind, from, to, now) {
   for (const s of Object.values(S.subcats)) if (s.kind === kind && s.category === from) S.subcats[s.id] = { ...s, category: to, updatedAt: now };
   for (const t of Object.values(S.transactions)) if (!t.deleted && t.kind === kind && t.category === from) S.transactions[t.id] = { ...t, category: to, updatedAt: now };
   for (const f of Object.values(S.favorites || {})) if (!f.deleted && f.kind === kind && f.category === from) S.favorites[f.id] = { ...f, category: to, updatedAt: now };
+  const b = kind === "지출" && S.budgets?.[budgetId(from)];
+  if (b && !b.deleted) {
+    S.budgets[b.id] = { ...b, deleted: true, updatedAt: now };
+    S.budgets[budgetId(to)] = { ...b, id: budgetId(to), category: to, updatedAt: now };
+  }
 }
 /** 하위 카테고리 이름 바꾸기: 내역의 하위 카테고리 이름도 같이 바꾼다 */
 function renameSubcat(id, to, now) {
@@ -621,9 +626,128 @@ const HOME_ICONS = {
   대출실행: ICO('<path d="M4 9.5 12 5l8 4.5"/><path d="M6 10v7M10 10v7M14 10v7M18 10v7"/><path d="M4 19.5h16"/>'), // 은행
   부채상환: ICO('<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.2l2.5 2.5 5-5"/>'), // 갚음(체크)
   단기부채: ICO('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>'), // 카드
+  예산: ICO('<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8a8.5 8.5 0 0 1 5.2 5.2H15z"/>'), // 나눠 쓰기(원그래프)
 };
 const SUM_ICON = ICO('<path d="M17 5H7l6 7-6 7h10"/>'); // 합계(Σ)
 const homeLabel = (key, text, cls) => `<span class="home-label"><span class="${cls}">${HOME_ICONS[key]}</span>${text}</span>`;
+
+// ---------------- 예산 ----------------
+// 지출 카테고리별 월 예산(매달 같은 금액). 신용카드·마통으로 쓴 지출도 그 카테고리 사용액에 들어간다.
+// 기기마다 따로 만들어도 겹치지 않게 id는 'budget:카테고리'(전체 예산은 'budget:*').
+const BUDGET_TOTAL = "*";
+const budgetId = (cat) => `budget:${cat}`;
+/** {카테고리: 금액} (전체 예산은 '*') */
+function liveBudgets() {
+  const out = {};
+  for (const b of Object.values(S.budgets || {})) if (!b.deleted && b.amount > 0) out[b.category] = b.amount;
+  return out;
+}
+const expenseCats = () => EXPENSE_TYPES.flatMap((et) => catsFor("지출", et));
+const budgetBar = (spent, budget) => {
+  const pct = budget ? spent / budget : 0;
+  const cls = pct > 1 ? "over" : pct >= 0.8 ? "warn" : "ok";
+  return { cls, pct, html: `<div class="bud-bar"><i class="${cls}" style="width:${Math.min(100, pct * 100).toFixed(1)}%"></i></div>` };
+};
+/** 현황: 예산 섹션 (exp: 이번 달 지출 내역 전부) */
+function budgetSection(exp) {
+  const B = liveBudgets();
+  const catB = expenseCats().filter((c) => B[c] > 0);
+  const hasTotal = B[BUDGET_TOTAL] > 0;
+  const total = hasTotal ? B[BUDGET_TOTAL] : catB.reduce((a, c) => a + B[c], 0);
+  const head = (right) => `<div class="card-head">${homeLabel("예산", "예산 (이번 달)", "bud")}${right}</div>`;
+  if (!total) return `
+  <section class="card home-sec">
+    ${head("<span></span>")}
+    <p class="note bud-empty">예산을 정해 두면 카테고리별로 얼마 남았는지 바로 볼 수 있어요.</p>
+    <div class="bud-foot"><button class="reg-link bud-link" data-budget-edit>예산 설정하기 ›</button></div>
+  </section>`;
+  const spentBy = {};
+  exp.forEach((t) => (spentBy[t.category] = (spentBy[t.category] || 0) + txKRW(t)));
+  const spent = hasTotal ? sum(exp) : catB.reduce((a, c) => a + (spentBy[c] || 0), 0);
+  const left = total - spent;
+  const tb = budgetBar(spent, total);
+  // 이번 달이면: 남은 날 동안 하루에 쓸 수 있는 금액
+  let pace = "";
+  if (ui.month === todayStr().slice(0, 7) && left > 0) {
+    const now = new Date();
+    const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
+    pace = ` · 남은 ${daysLeft}일, 하루 ${won(Math.floor(left / daysLeft))}`;
+  }
+  const row = (name, sp, bud) => {
+    const b = budgetBar(sp, bud);
+    const l = bud - sp;
+    return `
+    <div class="bud-row">
+      <div class="row-main"><span>${esc(name)}</span><span class="bud-num">${won(sp)} <span class="muted">/ ${won(bud)}</span></span></div>
+      ${b.html}
+      <div class="bud-left ${b.cls}">${l >= 0 ? `남은 ${won(l)}` : `초과 ${won(-l)}`} · ${Math.round(b.pct * 100)}%</div>
+    </div>`;
+  };
+  const rows = catB
+    .map((c) => [c, spentBy[c] || 0, B[c]])
+    .sort((a, b) => b[1] / b[2] - a[1] / a[2])
+    .map(([c, sp, bud]) => row(c, sp, bud)).join("");
+  return `
+  <section class="card home-sec">
+    ${head(`<span class="bud-left ${tb.cls}">${left >= 0 ? `남은 ${won(left)}` : `초과 ${won(-left)}`}</span>`)}
+    <div class="bud-row bud-total">
+      <div class="row-main"><span>${hasTotal ? "전체 지출" : "예산 잡은 카테고리"}</span><span class="bud-num">${won(spent)} <span class="muted">/ ${won(total)}</span></span></div>
+      ${tb.html}
+      <div class="bud-left ${tb.cls}">${Math.round(tb.pct * 100)}% 사용${pace}</div>
+    </div>
+    ${rows}
+    <p class="note bud-note">신용카드·마이너스 통장으로 쓴 돈도 포함해요.</p>
+    <div class="bud-foot"><button class="reg-link bud-link" data-budget-edit>예산 설정 ›</button></div>
+  </section>`;
+}
+
+/** 예산 설정: 전체 예산(선택) + 지출 카테고리별 예산, 지난달 사용액을 참고로 보여 줌 */
+function openBudgetDialog() {
+  const B = liveBudgets();
+  const [y, m] = ui.month.split("-").map(Number);
+  const prev = ym(new Date(y, m - 2, 1));
+  const lastBy = {};
+  liveTx().filter((t) => t.kind === "지출" && t.date.startsWith(prev)).forEach((t) => (lastBy[t.category] = (lastBy[t.category] || 0) + txKRW(t)));
+  const input = (key) => `<div class="amount-wrap bud-in"><input class="input amount-input" data-bud="${esc(key)}" inputmode="numeric" autocomplete="off" placeholder="0" value="${B[key] ? fmtAmount(B[key]) : ""}"><span class="amount-unit">원</span></div>`;
+  const group = (et) => {
+    const cats = catsFor("지출", et);
+    if (!cats.length) return "";
+    return `<div class="section-title">${et}지출</div>
+      ${cats.map((c) => `<div class="bud-edit-row"><div class="bud-edit-name"><span>${esc(c)}</span>${lastBy[c] ? `<span class="muted">지난달 ${won(lastBy[c])}</span>` : ""}</div>${input(c)}</div>`).join("")}`;
+  };
+  const panel = openModal({
+    title: "예산 설정",
+    body: `
+      <p class="note">매달 같은 금액으로 적용돼요. 비워 두면 그 카테고리는 예산 없음. 신용카드·마이너스 통장으로 쓴 돈도 사용액에 들어가요.</p>
+      <div class="field"><label>전체 예산 <span class="muted">(선택)</span></label>${input(BUDGET_TOTAL)}
+        <p class="note" style="margin-top:6px" data-bud-sum></p></div>
+      ${EXPENSE_TYPES.map(group).join("")}
+      <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
+  });
+  const ins = [...panel.querySelectorAll("[data-bud]")];
+  const showSum = () => {
+    const catSum = ins.filter((i) => i.dataset.bud !== BUDGET_TOTAL).reduce((a, i) => a + parseAmount(i.value), 0);
+    panel.querySelector("[data-bud-sum]").textContent = catSum
+      ? `카테고리 예산 합계 ${won(catSum)} · 전체 예산을 비우면 이 합계가 전체 예산이 돼요.`
+      : "전체 예산만 정해도 돼요. 카테고리별로 나누면 어디서 많이 쓰는지 보여요.";
+  };
+  ins.forEach((i) => { bindAmount(i); i.addEventListener("input", showSum); });
+  showSum();
+  panel.querySelector("[data-cancel]").onclick = closeModal;
+  panel.querySelector("[data-save]").onclick = async () => {
+    const now = nowISO();
+    S.budgets ||= {};
+    for (const i of ins) {
+      const cat = i.dataset.bud, id = budgetId(cat), v = parseAmount(i.value);
+      const cur = S.budgets[id];
+      if (v > 0 && (!cur || cur.deleted || cur.amount !== v)) S.budgets[id] = { id, category: cat, amount: v, createdAt: cur?.createdAt || now, updatedAt: now, deleted: false };
+      else if (!(v > 0) && cur && !cur.deleted) S.budgets[id] = { ...cur, deleted: true, updatedAt: now };
+    }
+    closeModal();
+    await commit();
+    toast("예산을 저장했어요");
+  };
+}
 
 /** 현황 탭 안의 작은 탭: 현황(종합) / 현황(상세) */
 function homeTabs() {
@@ -870,6 +994,7 @@ function homeView(part = "summary") {
       <div class="row-sub"><span>└ 변동지출</span><span>${signed(sum(variable), "-")}</span></div>
     </div>
   </section>
+  ${budgetSection(exp)}
   ${section("단기부채", "단기 부채 (이번 달)", "cred", sum(shortDebt), shortDebtRows)}
   ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
   ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
@@ -2865,6 +2990,7 @@ function bindEvents() {
     const seg = e.target.closest("[data-seg]");
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
+    if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
     const part = e.target.closest("[data-home-part]");
     if (part) { ui.homePart = part.dataset.homePart; render(); return; }
     const older = e.target.closest("[data-older-toggle]");
