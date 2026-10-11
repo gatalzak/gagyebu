@@ -536,7 +536,7 @@ function txSheetRows(list) {
     if (t.kind === "자산이동") return moveRoute(t);
     const d = deltaRef(t.assetDelta);
     const h = d && S[d.col]?.[d.id];
-    return h ? `${t.kind === "수입" ? "입금" : d.col === "debts" ? "결제" : "출금"} ${h.name}${t.card ? ` (${t.card})` : ""}` : "";
+    return h ? `${t.kind === "수입" ? "입금" : d.col === "debts" ? "결제" : "출금"} ${h.name}${t.card ? ` (${t.card})` : t.transfer ? " (계좌이체)" : ""}` : "";
   };
   const rows = [["날짜", "시간", "구분", "지출 종류", "카테고리", "하위 카테고리", "내용", "거래처", "금액", "통화", "원화 금액", "입금·출금·결제", "단기 부채", "메모"]];
   for (const t of list) {
@@ -913,7 +913,7 @@ function txRow(t, { withDate = false } = {}) {
               ${t.content ? `<div class="tx-content">${esc(isLoan ? t.content.replace(/ 대출 실행$/, "") : t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
-              ${t.card && t.kind === "지출" ? `<div class="memo">결제수단 ${esc(t.card)}</div>` : ""}
+              ${t.kind === "지출" && (t.card || t.transfer) ? `<div class="memo">결제수단 ${t.card ? esc(t.card) : "계좌이체"}</div>` : ""}
             </div>
             <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "대출 " : ""}${t.currency && t.currency !== "KRW"
               ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
@@ -1168,7 +1168,7 @@ const unitLabel = (cur) => (cur === "KRW" ? "원" : cur);
 // 예전 기록은 {assetId, amount} 형태라 col이 없으면 자산으로 본다.
 const ASSET_LINK = {
   수입: { label: "입금 자산", cols: ["assets"] },
-  지출: { label: "출금 되는 자산 및 결제 수단", cols: ["assets", "debts"] }, // 자산에서 출금하거나 신용카드 등 부채로 결제
+  지출: { label: "출금 되는 자산", cols: ["assets", "debts"] }, // 자산에서 출금하거나 신용카드 등 부채로 결제
 };
 /** 잔액 변화 방향: 수입→자산 +, 지출→자산 -, 지출→부채 + */
 const linkSign = (kind, col) => (kind === "수입" ? 1 : col === "debts" ? 1 : -1);
@@ -1574,6 +1574,7 @@ function openTxDialog(existing, presetDate, preset = null) {
   let confirmDelete = false;
   let krwTouched = !!existing?.krw; // 원화 금액을 직접 고쳤으면 자동 계산으로 덮어쓰지 않음
   if (existing) { const d = deltaRef(existing.assetDelta); draft.link = d ? linkKey(d.col, d.id) : ""; }
+  if (existing && !preset) draft.pay = existing.card ? "card" : existing.transfer ? "transfer" : ""; // 은행 계좌 결제 수단
   // 자산이동: 출금 자산 → 입금 자산
   const prevOut = existing?.deltas?.find((d) => d.col === "assets" && d.amount < 0);
   const prevIn = existing?.deltas?.find((d) => d.col === "assets" && d.amount > 0);
@@ -1621,10 +1622,12 @@ function openTxDialog(existing, presetDate, preset = null) {
         </div>
         ${ASSET_LINK[draft.kind] ? `
         <div class="field"><label>${ASSET_LINK[draft.kind].label}</label>
-          <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false, withCard: draft.kind === "지출" })}</select>
+          <select class="input" name="asset">${holdingOptions(ASSET_LINK[draft.kind].cols, draft.link, { balance: false })}</select>
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
           ${holdingHelp(ASSET_LINK[draft.kind].cols)}
-        </div>` : ""}
+        </div>
+        ${draft.kind === "지출" ? `<div class="field" data-pay-field hidden><label>결제 수단</label>
+          <select class="input" name="pay"></select></div>` : ""}` : ""}
         ${draft.kind === "자산이동" ? `
         <div class="field"><label>출금 자산</label>
           <select class="input" name="fromAsset">${holdingOptions(["assets"], draft.fromAsset, { balance: false })}</select>
@@ -1701,6 +1704,8 @@ function openTxDialog(existing, presetDate, preset = null) {
       if ($p("[name=memo]")) draft.memo = $p("[name=memo]").value;
       if ($p("[name=fromAsset]")) { draft.fromAsset = $p("[name=fromAsset]").value; draft.toAsset = $p("[name=toAsset]").value; }
       if ($p("[name=asset]")) draft.link = $p("[name=asset]").value;
+      const payField = $p("[data-pay-field]");
+      draft.pay = payField && !payField.hidden ? $p("[name=pay]").value : "";
     };
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); });
     curSel.onchange = () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); };
@@ -1722,7 +1727,22 @@ function openTxDialog(existing, presetDate, preset = null) {
         ? `저장하면 ${a.name} ${what} +${formatMoney(roundFor(add, cur), cur)} 늘어나요`
         : `저장하면 ${a.name} ${what} -${formatMoney(roundFor(add, cur), cur)} 줄어들어요`;
     };
+    // 은행 계좌로 지출하면 결제 수단: 연결된 체크카드 / 계좌이체(출금)
+    const payField = $p("[data-pay-field]");
+    const refreshPay = () => {
+      if (!payField) return;
+      const ref = parseLinkKey(assetSel.value);
+      const a = ref?.col === "assets" && S.assets[ref.id];
+      payField.hidden = !(a && a.type === "은행");
+      if (payField.hidden) return;
+      const opts = [...(a.card ? [["card", a.card]] : []), ["transfer", "계좌이체(출금)"]];
+      const want = opts.some(([v]) => v === draft.pay) ? draft.pay : opts[0][0];
+      $p("[name=pay]").innerHTML = opts.map(([v, label]) => `<option value="${v}" ${v === want ? "selected" : ""}>${esc(label)}</option>`).join("");
+    };
     if (assetSel) {
+      assetSel.addEventListener("change", () => { draft.pay = ""; refreshPay(); });
+      $p("[name=pay]")?.addEventListener("change", (e) => (draft.pay = e.target.value));
+      refreshPay();
       assetSel.onchange = refreshAssetHint;
       [amt, krwIn].forEach((el) => el.addEventListener("input", refreshAssetHint));
       curSel.addEventListener("change", refreshAssetHint);
@@ -1829,7 +1849,11 @@ function openTxDialog(existing, presetDate, preset = null) {
         const add = amountInCurrency(rec, curOf(a));
         if (add === null) return toast("환율 정보가 없어 반영할 수 없어요.");
         delta = { col: ref.col, id: a.id, amount: linkSign(rec.kind, ref.col) * roundFor(add, curOf(a)) };
-        if (rec.kind === "지출" && ref.col === "assets" && a.card) rec.card = a.card; // 연결된 체크카드로 결제
+        // 은행 계좌: 결제 수단(연결된 체크카드 / 계좌이체)을 그때 이름으로 기록
+        if (rec.kind === "지출" && ref.col === "assets" && a.type === "은행") {
+          if (draft.pay === "card" && a.card) rec.card = a.card;
+          else if (draft.pay === "transfer") rec.transfer = true;
+        }
       }
       // 잔액은 내역에서 계산하므로 변화만 기록한다(예전 값은 내역을 바꾸면 자연히 빠짐)
       if (delta) rec.assetDelta = delta;
