@@ -913,7 +913,7 @@ function txRow(t, { withDate = false } = {}) {
               ${t.content ? `<div class="tx-content">${esc(isLoan ? t.content.replace(/ 대출 실행$/, "") : t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
-              ${t.kind === "지출" && (t.card || t.transfer) ? `<div class="memo">결제수단 ${t.card ? esc(t.card) : "계좌이체"}</div>` : ""}
+              ${t.kind === "지출" && (t.card || t.transfer) ? `<div class="memo">결제 ${t.card ? esc(t.card) : "계좌이체"}</div>` : ""}
             </div>
             <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "대출 " : ""}${t.currency && t.currency !== "KRW"
               ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
@@ -1599,13 +1599,13 @@ function openTxDialog(existing, presetDate, preset = null) {
         <div class="field"><label>지출 종류</label>
           <div class="seg" data-role="etype">${EXPENSE_TYPES.map((k) => `<button data-v="${k}" class="${k === draft.expenseType ? "on" : ""}">${k}지출</button>`).join("")}</div>
         </div>` : ""}
-        <div class="field"><label>날짜 · 시간</label>
+        <div class="field"><label>날짜 · 시간 <span class="req">*</span></label>
           <div class="money-line">
             <input class="input" type="date" name="date" value="${draft.date}">
             <input class="input time-input" type="time" name="time" value="${draft.time || ""}">
           </div>
         </div>
-        <div class="field"><label>금액</label>
+        <div class="field"><label>금액 <span class="req">*</span></label>
           <div class="money-line">
             <div class="amount-wrap">
               <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, draft.currency)}">
@@ -1629,20 +1629,20 @@ function openTxDialog(existing, presetDate, preset = null) {
         ${draft.kind === "지출" ? `<div class="field" data-pay-field hidden><label>결제 수단</label>
           <select class="input" name="pay"></select></div>` : ""}` : ""}
         ${draft.kind === "자산이동" ? `
-        <div class="field"><label>출금 자산</label>
+        <div class="field"><label>출금 자산 <span class="req">*</span></label>
           <select class="input" name="fromAsset">${holdingOptions(["assets"], draft.fromAsset, { balance: false })}</select>
           <div class="fx-hint tx-hint exp" data-from-hint></div>
           ${holdingHelp(["assets"])}
         </div>
         <div class="flow-arrow" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v15"/><path d="M6.5 13.5 12 19l5.5-5.5"/></svg></div>
-        <div class="field flow-to"><label>입금 자산</label>
+        <div class="field flow-to"><label>입금 자산 <span class="req">*</span></label>
           <select class="input" name="toAsset">${holdingOptions(["assets"], draft.toAsset, { balance: false })}</select>
           <div class="fx-hint tx-hint inc" data-to-hint></div>
         </div>` : ""}
         <div class="field"><label>내용</label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
         ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명" : "예: 김밥천국 강남점"}" value="${esc(draft.party || "")}"></div>
         ` : ""}
-        ${draft.kind !== "자산이동" ? `<div class="field"><label>카테고리 · 하위 카테고리</label>
+        ${draft.kind !== "자산이동" ? `<div class="field"><label>카테고리 · 하위 카테고리 <span class="req">*</span></label>
           <div class="money-line">
             <select class="input half" name="category">${catList.map((c) => `<option ${c === draft.category ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
             <select class="input half" name="subcategory">
@@ -1674,6 +1674,9 @@ function openTxDialog(existing, presetDate, preset = null) {
         </div>`,
     });
     const $p = (sel) => panel.querySelector(sel);
+    // 고치기 시작하면 빨간 표시를 지움
+    panel.addEventListener("input", (e) => e.target.classList?.remove("invalid"));
+    panel.addEventListener("change", (e) => e.target.classList?.remove("invalid"));
     const curSel = $p("[name=currency]"), amt = $p("[name=amount]"), krwIn = $p("[name=krw]");
 
     // 외화면 원화 금액 칸을 보여 주고, 직접 고치지 않았으면 환율로 채운다
@@ -1796,9 +1799,19 @@ function openTxDialog(existing, presetDate, preset = null) {
     $p("[data-act=save]").onclick = async () => {
       read();
       const foreignNow = draft.currency !== "KRW";
-      if (draft.amount <= 0) return toast("금액을 입력해 주세요.");
-      if (foreignNow && draft.krw <= 0) return toast("원화 금액을 입력해 주세요.");
-      if (!draft.date) return toast("날짜를 입력해 주세요.");
+      // 필수 항목: 빠지면 저장하지 않고 그 칸을 빨갛게 표시하고 그리로 이동
+      const bad = (sel, msg) => {
+        const el = $p(sel);
+        if (el) { el.classList.add("invalid"); el.scrollIntoView({ block: "center" }); el.focus(); }
+        toast(msg);
+      };
+      if (!draft.date) return bad("[name=date]", "날짜를 입력해 주세요.");
+      if (draft.amount <= 0) return bad("[name=amount]", "금액을 입력해 주세요.");
+      if (foreignNow && draft.krw <= 0) return bad("[name=krw]", "원화 금액을 입력해 주세요.");
+      if (draft.kind === "자산이동") {
+        if (!draft.fromAsset) return bad("[name=fromAsset]", "출금 자산을 골라 주세요.");
+        if (!draft.toAsset) return bad("[name=toAsset]", "입금 자산을 골라 주세요.");
+      } else if (!draft.category) return bad("[name=category]", "카테고리를 골라 주세요.");
       const now = nowISO();
       const isMove = draft.kind === "자산이동";
       let deltas = null;

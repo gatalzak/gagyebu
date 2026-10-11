@@ -500,3 +500,7 @@ input[type="date"].input { color-scheme: dark; }
 .holding-help { justify-content: flex-start; align-content: flex-start; text-align: left; }
 .holding-help > span { flex: 1 1 100%; }
 .fx-hint.tx-hint:empty { display: none; } /* 안내가 없으면 빈 줄을 남기지 않음 */
+
+/* 내역 창: 필수 항목 */
+.req { color: #ff6b6b; margin-left: 2px; }
+.input.invalid { border-color: #ff6b6b; }
