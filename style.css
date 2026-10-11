@@ -507,3 +507,6 @@ input[type="date"].input { color-scheme: dark; }
 
 /* 자산·부채 편집: 부호 바꾸기 */
 .sign-btn { flex: 0 0 26px; height: 38px; border-radius: 3px; border: 1px solid #303035; background: var(--row); color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); }
+
+/* 날짜·시간 칸 전체를 눌러 열기 */
+input[type="date"], input[type="time"] { cursor: pointer; }

@@ -2619,6 +2619,12 @@ function openDatePicker() {
 
 // ---------------- 이벤트 ----------------
 function bindEvents() {
+  // 날짜·시간 칸: 작은 아이콘이 아니라 칸 어디를 눌러도 달력·시계가 열리게
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest?.('input[type="date"], input[type="time"]');
+    if (!el || el.disabled || typeof el.showPicker !== "function") return;
+    try { el.showPicker(); } catch {}
+  });
   $("#prev").onclick = () => { ui.month = shiftMonth(ui.month, -1); render(); };
   $("#next").onclick = () => { ui.month = shiftMonth(ui.month, 1); render(); };
   $("#month-title").onclick = openDatePicker;
