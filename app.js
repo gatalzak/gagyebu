@@ -592,7 +592,7 @@ function homeView(part = "summary") {
       .join("");
     return `
     <div class="row">
-      <div class="row-main"><span>${info.title}(이번달)</span><span class="cred">${won(sum(items))}</span></div>
+      <div class="row-main"><span>${info.title}</span><span class="cred">${won(sum(items))}</span></div>
       ${subs}
     </div>`;
   }).join("");
@@ -673,7 +673,7 @@ function homeView(part = "summary") {
     </div>` : ""}
   </section>
   <section class="card">
-    <div class="card-head">${homeLabel("단기부채", "단기 부채", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
+    <div class="card-head">${homeLabel("단기부채", "이번 달 발생한 단기 부채", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
     ${shortDebtRows}
   </section>`;
   if (part === "summary") return summary;
