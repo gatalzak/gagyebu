@@ -589,9 +589,103 @@ function homeTabs() {
     .map(([k, label]) => `<button data-home-part="${k}" class="${ui.homePart === k ? "active" : ""}">${label}</button>`).join("")}</div>`;
 }
 
-/** 결산 탭 (내용은 정하는 중) */
+// ---------------- 결산 (이번 달) ----------------
+/** 한 달 숫자 모으기 */
+function monthFigures(list) {
+  const exp = list.filter((t) => t.kind === "지출");
+  const plain = exp.filter(isPlainExpense);
+  return {
+    inc: sum(list.filter((t) => t.kind === "수입")),
+    exp: sum(plain),
+    fixed: sum(plain.filter((t) => t.expenseType === "고정")),
+    variable: sum(plain.filter((t) => t.expenseType !== "고정")),
+    debtUse: sum(exp.filter(isShortDebt)),
+    repay: sum(list.filter(isRepayTx)),
+  };
+}
+const signedWon = (v) => (v > 0 ? "+" : v < 0 ? "-" : "") + won(Math.abs(v));
+
+/** 결산 탭: 고른 달의 결산 — 요약·저축률 / 지난달 대비 / 많이 쓴 카테고리 / 자산·부채 변화 */
 function settleView() {
-  return `<div class="card"><div class="empty">결산 화면은 준비 중이에요.</div></div>`;
+  const m = Number(ui.month.slice(5));
+  const tx = monthTx();
+  if (!tx.length) return `<div class="card"><div class="empty">${m}월 기록이 없어요.</div></div>`;
+  const cur = monthFigures(tx);
+  const prevKey = shiftMonth(ui.month, -1);
+  const prevTx = liveTx().filter((t) => t.date.startsWith(prevKey));
+  const prev = monthFigures(prevTx);
+  const left = cur.inc - cur.exp;
+  const rate = cur.inc ? Math.round((left / cur.inc) * 100) : null;
+
+  // 지난달 대비: 늘었으면 ▲, 줄었으면 ▼. 수입은 늘면 초록, 지출·부채는 늘면 레드/핑크
+  const diffRow = (label, now, before, upGood, upCls) => {
+    const d = now - before;
+    const cls = !d ? "muted" : (d > 0) === upGood ? "inc" : upCls;
+    return `<div class="diff-row">
+      <div class="row-main"><span>${label}</span><span class="${cls}">${d ? `${d > 0 ? "▲" : "▼"} ${won(Math.abs(d))}` : "변화 없음"}</span></div>
+      <div class="diff-sub">${Number(prevKey.slice(5))}월 ${won(before)} → ${m}월 ${won(now)}</div>
+    </div>`;
+  };
+
+  // 많이 쓴 카테고리: 카드·마통으로 쓴 돈도 그 카테고리 지출로 포함
+  const byCat = {};
+  tx.filter((t) => t.kind === "지출").forEach((t) => (byCat[t.category || "미분류"] = (byCat[t.category || "미분류"] || 0) + txKRW(t)));
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const catTotal = cats.reduce((n, [, v]) => n + v, 0);
+  const top = cats.slice(0, 5);
+
+  // 자산·부채 변화: 이번 달 내역이 자산·부채에 준 변화(원화 환산)
+  let assetChg = 0, debtChg = 0;
+  for (const t of tx) {
+    const ds = [deltaRef(t.assetDelta), ...(t.deltas || [])].filter(Boolean);
+    for (const d of ds) {
+      const h = S[d.col]?.[d.id];
+      const v = h ? toKRW(d.amount, curOf(h)) ?? 0 : 0;
+      if (d.col === "debts") debtChg += v; else assetChg += v;
+    }
+  }
+  const netChg = assetChg - debtChg;
+
+  return `
+  <section class="card">
+    <div class="card-head"><span>${m}월 결산</span><span>${rate === null ? "" : `<span class="muted">저축률</span> ${rate}%`}</span></div>
+    <div class="row"><div class="row-main">${homeLabel("수입", "수입", "inc")}<span class="inc">${signed(cur.inc, "+")}</span></div></div>
+    <div class="row">
+      <div class="row-main">${homeLabel("지출", "지출", "exp")}<span class="exp">${signed(cur.exp, "-")}</span></div>
+      <div class="row-sub"><span>└ 고정지출</span><span>${signed(cur.fixed, "-")}</span></div>
+      <div class="row-sub"><span>└ 변동지출</span><span>${signed(cur.variable, "-")}</span></div>
+    </div>
+    <div class="row"><div class="row-main"><span>남은 돈 (수입-지출)</span><span>${signedWon(left)}</span></div></div>
+    ${cur.debtUse ? `<div class="row"><div class="row-main">${homeLabel("단기부채", "단기 부채 사용", "cred")}<span class="cred">${won(cur.debtUse)}</span></div>
+      <div class="row-sub"><span>카드·마통으로 쓴 돈은 갚을 때 통장에서 나가요</span><span></span></div></div>` : ""}
+  </section>
+
+  <section class="card home-sec">
+    <div class="card-head"><span>지난달(${Number(prevKey.slice(5))}월) 대비</span><span></span></div>
+    ${prevTx.length ? `<div class="row">
+      ${diffRow("수입", cur.inc, prev.inc, true, "exp")}
+      ${diffRow("지출", cur.exp, prev.exp, false, "exp")}
+      ${diffRow("단기 부채 사용", cur.debtUse, prev.debtUse, false, "cred")}
+    </div>` : `<div class="empty" style="padding:14px 0">지난달 기록이 없어요.</div>`}
+  </section>
+
+  <section class="card home-sec">
+    <div class="card-head"><span>많이 쓴 카테고리</span><span class="muted settle-note">카드·마통 사용 포함</span></div>
+    ${top.length ? `<div class="row">${top.map(([c, v], i) => `
+      <div class="rank-row">
+        <div class="rank-top"><span><span class="rank-no">${i + 1}</span>${esc(c)}</span><span>${won(v)} <span class="muted">${Math.round((v / catTotal) * 100)}%</span></span></div>
+        <div class="rank-bar"><span style="width:${(v / top[0][1]) * 100}%"></span></div>
+      </div>`).join("")}</div>` : `<div class="empty" style="padding:14px 0">지출 기록이 없어요.</div>`}
+  </section>
+
+  <section class="card home-sec">
+    <div class="card-head"><span>자산·부채 변화</span><span class="muted settle-note">이번 달 기록 기준</span></div>
+    <div class="row">
+      <div class="row-sub"><span>자산</span><span class="${assetChg >= 0 ? "inc" : "exp"}">${signedWon(Math.round(assetChg))}</span></div>
+      <div class="row-sub"><span>부채</span><span class="cred">${signedWon(Math.round(debtChg))}</span></div>
+    </div>
+    <div class="row"><div class="row-main"><span>순자산 변화 (자산-부채)</span><span class="${netChg >= 0 ? "inc" : "exp"}">${signedWon(Math.round(netChg))}</span></div></div>
+  </section>`;
 }
 
 /** part: "summary" = 현황(종합), "detail" = 현황(상세) */
