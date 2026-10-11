@@ -783,7 +783,6 @@ function calendarView() {
         ${inc ? `<span class="cal-amt inc">+${compact(inc)}</span>` : ""}
         ${exp ? `<span class="cal-amt exp">-${compact(exp)}</span>` : ""}
         ${cred ? `<span class="cal-amt cred">${compact(cred)}</span>` : ""}
-        ${!inc && !exp && !cred && items.length ? `<span class="cal-dot"></span>` : ""}
       </button>`);
   }
 
