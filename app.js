@@ -542,7 +542,7 @@ const SHORT_DEBT = {
 /** 단기부채(신용카드·마이너스통장·미납금·지인에게 빌린 돈·기타)로 결제한 지출이면 그 부채 종류, 아니면 null.
  *  부채가 나중에 지워져도 기록(삭제 표시)은 남아 있어 종류로 계속 구분된다. */
 function shortDebtType(t) {
-  if (t.kind !== "지출") return null;
+  if (t.kind !== "지출" || t.interest) return null; // 이자(마통에서 자동 차감 등)는 비용이라 지출로 센다
   const d = deltaRef(t.assetDelta);
   const type = d?.col === "debts" ? debtType(S.debts[d.id]) : null;
   return SHORT_DEBT[type] ? type : null;
@@ -1123,7 +1123,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
             <input class="input amount-input" name="interest" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.interest, cur)}">
             <span class="amount-unit">${unitLabel(cur)}</span>
           </div>
-          <p class="note" style="margin-top:6px">원금은 부채에서 빠지고, 이자는 지출(${INTEREST_CAT})로 기록돼요.</p>
+          <p class="note" style="margin-top:6px">원금은 부채에서 빠지고, 이자는 지출(${INTEREST_CAT})로 기록돼요. 이자만 기록하려면 상환 금액을 0으로 두세요. 출금 자산을 비우면 이자는 이 부채에 더해져요(마통 이자 자동 차감처럼).</p>
         </div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 10월 카드값" value="${esc(draft.memo)}"></div>
         <div class="btn-row">
@@ -1145,10 +1145,11 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
     const hints = () => {
       const bal = debtBalance(debtRef);
       const pay = parseMoney(amt.value, cur);
-      $p("[data-debt-hint]").textContent = debt
-        ? `현재 ${formatMoney(bal, cur)} → 상환 후 ${formatMoney(roundFor(bal - pay, cur), cur)}${pay > bal ? " (잔액보다 많아요)" : ""}`
-        : "";
       const aRef = parseLinkKey($p("[name=asset]").value);
+      const addInt = aRef ? 0 : parseMoney($p("[name=interest]").value, cur); // 출금 자산이 없으면 이자는 부채에 더해짐(마통 이자 자동 차감)
+      $p("[data-debt-hint]").textContent = debt
+        ? `현재 ${formatMoney(bal, cur)} → ${pay ? "상환 후" : "기록 후"} ${formatMoney(roundFor(bal - pay + addInt, cur), cur)}${addInt ? ` (이자 ${formatMoney(addInt, cur)} 더해짐)` : ""}${pay > bal ? " (잔액보다 많아요)" : ""}`
+        : "";
       const a = aRef && S.assets[aRef.id];
       if (!a || !debt) { $p("[data-asset-hint]").textContent = ""; return; }
       const intr = parseMoney($p("[name=interest]").value, cur);
@@ -1161,6 +1162,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, cur); amountTouched = true; hints(); });
     const intIn = $p("[name=interest]");
     intIn.addEventListener("input", () => { intIn.value = formatInput(intIn.value, cur); hints(); });
+    $p("[name=asset]").addEventListener("change", hints);
     $p("[name=asset]").onchange = hints;
     $p("[name=debt]").onchange = () => {
       read();
@@ -1178,7 +1180,8 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
       const ref = parseLinkKey(draft.debt);
       const d = ref && S.debts[ref.id];
       if (!d || d.deleted) return toast("상환할 부채를 골라 주세요.");
-      if (draft.amount <= 0) return toast("상환 금액을 입력해 주세요.");
+      if (draft.amount <= 0 && !(draft.interest > 0)) return toast("상환 금액이나 이자를 입력해 주세요.");
+      if (draft.amount < 0) return toast("상환 금액을 확인해 주세요.");
       if (!draft.date) return toast("날짜를 입력해 주세요.");
       const now = nowISO();
       const dcur = curOf(d);
@@ -1204,6 +1207,8 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
           const iout = amountInCurrency({ currency: dcur, amount: draft.interest, krw: ikrw }, curOf(a));
           if (iout === null) return toast("환율 정보가 없어 반영할 수 없어요.");
           iDelta = { col: "assets", id: a.id, amount: -roundFor(iout, curOf(a)) };
+        } else {
+          iDelta = { col: "debts", id: d.id, amount: draft.interest }; // 출금 자산 없음: 이자가 부채에 더해짐(마통 이자)
         }
         interestId ||= uid();
         S.transactions[interestId] = {
@@ -1213,6 +1218,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
           currency: dcur, amount: draft.interest, ...(dcur !== "KRW" ? { krw: Math.round(ikrw) } : {}),
           content: `${d.name} 이자`, party: liveInterest?.party || "", memo: liveInterest?.memo || "",
           ...(iDelta ? { assetDelta: iDelta } : {}),
+          interest: true, // 단기 부채로 결제돼도 지출로 센다
           repayOf: existing?.id || null,
           createdAt: liveInterest?.createdAt || now, updatedAt: now, deleted: false,
         };
@@ -1240,12 +1246,20 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         updatedAt: now,
         deleted: false,
       };
-      if (interestId) S.transactions[interestId].repayOf = rec.id;
-      S.transactions[rec.id] = rec;
+      if (draft.amount > 0) {
+        if (interestId) S.transactions[interestId].repayOf = rec.id;
+        S.transactions[rec.id] = rec;
+      } else {
+        // 이자만: 상환 내역은 만들지 않고(고치던 상환은 지움) 이자 지출만 남긴다
+        if (existing) S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
+        if (interestId) S.transactions[interestId].repayOf = null;
+      }
       await saveState(S);
       scheduleSync();
       onDone();
-      toast(`${d.name} ${formatMoney(draft.amount, dcur)} 상환했어요${draft.interest > 0 ? ` · 이자 ${formatMoney(draft.interest, dcur)} → 지출` : ""}`);
+      toast(draft.amount > 0
+        ? `${d.name} ${formatMoney(draft.amount, dcur)} 상환했어요${draft.interest > 0 ? ` · 이자 ${formatMoney(draft.interest, dcur)} → 지출` : ""}`
+        : `${d.name} 이자 ${formatMoney(draft.interest, dcur)} 지출로 기록했어요${aRef ? "" : ` · ${d.name}에 더해짐`}`);
     };
     const del = $p("[data-act=delete]");
     if (del) del.onclick = async () => {
@@ -1605,6 +1619,8 @@ function openTxDialog(existing, presetDate, preset = null) {
         party: (draft.party || "").trim(),
         memo: draft.memo.trim(),
         ...(!isMove && draft.photos?.length ? { photos: [...draft.photos] } : {}),
+        ...(existing?.interest && draft.kind === "지출" ? { interest: true } : {}), // 대출·마통 이자 기록
+        ...(existing?.repayOf ? { repayOf: existing.repayOf } : {}),
         createdAt: existing?.createdAt || now,
         updatedAt: now,
         deleted: false,
