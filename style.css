@@ -482,3 +482,6 @@ input[type="date"].input { color-scheme: dark; }
 .rank-bar span { display: block; height: 100%; background: var(--exp); opacity: 0.75; border-radius: 2px; }
 .diff-row + .diff-row { margin-top: 12px; }
 .diff-sub { color: var(--muted); font-size: calc(0.8rem + var(--fs-up)); margin-top: 3px; padding-left: 2px; }
+
+/* 결산: 엑셀 저장 버튼 */
+.btn.settle-excel { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 18px; min-height: 46px; }

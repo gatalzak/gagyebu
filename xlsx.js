@@ -17,7 +17,8 @@ function colName(i) {
  * rows: 2차원 배열. 숫자는 숫자 칸(천 단위 쉼표 서식), 나머지는 글자 칸.
  * widths: 열 너비(글자 수 기준, 선택)
  */
-function sheetXml(rows, widths = []) {
+function sheetXml(rows, widths = [], { heads = [0], freeze = true } = {}) {
+  const head = new Set(heads); // 회색 바탕으로 칠할 줄(제목 줄)
   const cols = widths.length
     ? `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>`
     : "";
@@ -25,11 +26,11 @@ function sheetXml(rows, widths = []) {
     const ref = `${colName(c)}${r + 1}`;
     if (v === null || v === undefined || v === "") return "";
     if (typeof v === "number" && Number.isFinite(v)) return `<c r="${ref}" s="${Number.isInteger(v) ? 1 : 3}"><v>${v}</v></c>`; // 정수 #,##0 / 소수 #,##0.00
-    return `<c r="${ref}" t="inlineStr"${r === 0 ? ' s="2"' : ""}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
+    return `<c r="${ref}" t="inlineStr"${head.has(r) ? ' s="2"' : ""}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
   }).join("")}</row>`).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+${freeze ? `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>` : ""}
 ${cols}<sheetData>${body}</sheetData></worksheet>`;
 }
 
@@ -42,14 +43,15 @@ const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cellXfs count="4"><xf/><xf numFmtId="3" applyNumberFormat="1"/><xf fillId="2" applyFill="1"/><xf numFmtId="4" applyNumberFormat="1"/></cellXfs>
 </styleSheet>`;
 
-function workbookFiles(sheetName, rows, widths) {
-  return {
+/** sheets: [{ name, rows, widths, heads?, freeze? }] — 시트 여러 개 */
+function workbookFiles(sheets) {
+  const files = {
     "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
 <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
 <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>`,
     "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -58,15 +60,16 @@ function workbookFiles(sheetName, rows, widths) {
 </Relationships>`,
     "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="${xmlEsc(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+<sheets>${sheets.map((sh, i) => `<sheet name="${xmlEsc(sh.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets></workbook>`,
     "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}
+<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`,
     "xl/styles.xml": STYLES,
-    "xl/worksheets/sheet1.xml": sheetXml(rows, widths),
   };
+  sheets.forEach((sh, i) => (files[`xl/worksheets/sheet${i + 1}.xml`] = sheetXml(sh.rows, sh.widths, sh)));
+  return files;
 }
 
 // ---------------- zip (압축 없이 묶기) ----------------
@@ -130,5 +133,9 @@ function zip(files) {
 
 /** 시트 하나짜리 .xlsx Blob */
 export function makeXlsx(sheetName, rows, widths) {
-  return zip(workbookFiles(sheetName, rows, widths));
+  return zip(workbookFiles([{ name: sheetName, rows, widths }]));
+}
+/** 시트 여러 개짜리 .xlsx Blob. sheets: [{ name, rows, widths, heads?(회색 줄 번호들), freeze?(첫 줄 고정) }] */
+export function makeXlsxBook(sheets) {
+  return zip(workbookFiles(sheets));
 }

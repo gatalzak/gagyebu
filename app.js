@@ -2,7 +2,7 @@ import { loadState, saveState, mergeInto, uid, nowISO } from "./store.js";
 import { CURRENCIES, CURRENCY_NAMES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates, ratesDate, decimals } from "./fx.js";
 import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, refreshIfNeeded, syncNow, syncDrivePhotos } from "./sync.js";
 import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
-import { makeXlsx } from "./xlsx.js";
+import { makeXlsx, makeXlsxBook } from "./xlsx.js";
 
 // ---------------- 기본 목록 ----------------
 const KINDS = ["수입", "지출", "자산이동"];
@@ -491,6 +491,14 @@ function exportExcel(range) {
     .filter((t) => range === "all" || t.date.startsWith(range === "year" ? `${y}-` : ui.month))
     .sort((a, b) => (a.date + (a.time || "") + a.createdAt).localeCompare(b.date + (b.time || "") + b.createdAt));
   if (!list.length) return toast("내보낼 내역이 없어요");
+  const label = range === "all" ? "전체" : range === "year" ? `${y}년` : `${y}년${Number(m)}월`;
+  downloadBlob(makeXlsx("내역", txSheetRows(list), TX_SHEET_WIDTHS), `클로드가계부_${label}_${todayStr()}.xlsx`);
+  toast(`엑셀 파일을 저장했어요 · ${list.length}건`);
+}
+
+/** 내역 시트 줄들 (첫 줄은 제목) */
+const TX_SHEET_WIDTHS = [11, 7, 8, 9, 12, 12, 22, 16, 12, 6, 12, 24, 12, 20];
+function txSheetRows(list) {
   const holdingName = (t) => {
     if (t.kind === "자산이동") return moveRoute(t);
     const d = deltaRef(t.assetDelta);
@@ -506,14 +514,15 @@ function exportExcel(range) {
       t.amount, t.currency || "KRW", txKRW(t), holdingName(t), sd ? SHORT_DEBT[sd].label : "", t.memo || "",
     ]);
   }
-  const label = range === "all" ? "전체" : range === "year" ? `${y}년` : `${y}년${Number(m)}월`;
-  const blob = makeXlsx("내역", rows, [11, 7, 8, 9, 12, 12, 22, 16, 12, 6, 12, 24, 12, 20]);
+  return rows;
+}
+
+function downloadBlob(blob, name) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `클로드가계부_${label}_${todayStr()}.xlsx`;
+  a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  toast(`엑셀 파일을 저장했어요 · ${list.length}건`);
 }
 
 function render() {
@@ -605,11 +614,10 @@ function monthFigures(list) {
 }
 const signedWon = (v) => (v > 0 ? "+" : v < 0 ? "-" : "") + won(Math.abs(v));
 
-/** 결산 탭: 고른 달의 결산 — 요약·저축률 / 지난달 대비 / 많이 쓴 카테고리 / 자산·부채 변화 */
-function settleView() {
+/** 고른 달 결산 숫자 (화면·엑셀 공용) */
+function settleData() {
   const m = Number(ui.month.slice(5));
   const tx = monthTx();
-  if (!tx.length) return `<div class="card"><div class="empty">${m}월 기록이 없어요.</div></div>`;
   const cur = monthFigures(tx);
   const prevKey = shiftMonth(ui.month, -1);
   const prevTx = liveTx().filter((t) => t.date.startsWith(prevKey));
@@ -617,22 +625,11 @@ function settleView() {
   const left = cur.inc - cur.exp;
   const rate = cur.inc ? Math.round((left / cur.inc) * 100) : null;
 
-  // 지난달 대비: 늘었으면 ▲, 줄었으면 ▼. 수입은 늘면 초록, 지출·부채는 늘면 레드/핑크
-  const diffRow = (label, now, before, upGood, upCls) => {
-    const d = now - before;
-    const cls = !d ? "muted" : (d > 0) === upGood ? "inc" : upCls;
-    return `<div class="diff-row">
-      <div class="row-main"><span>${label}</span><span class="${cls}">${d ? `${d > 0 ? "▲" : "▼"} ${won(Math.abs(d))}` : "변화 없음"}</span></div>
-      <div class="diff-sub">${Number(prevKey.slice(5))}월 ${won(before)} → ${m}월 ${won(now)}</div>
-    </div>`;
-  };
-
   // 많이 쓴 카테고리: 카드·마통으로 쓴 돈도 그 카테고리 지출로 포함
   const byCat = {};
   tx.filter((t) => t.kind === "지출").forEach((t) => (byCat[t.category || "미분류"] = (byCat[t.category || "미분류"] || 0) + txKRW(t)));
   const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
   const catTotal = cats.reduce((n, [, v]) => n + v, 0);
-  const top = cats.slice(0, 5);
 
   // 자산·부채 변화: 이번 달 내역이 자산·부채에 준 변화(원화 환산)
   let assetChg = 0, debtChg = 0;
@@ -645,6 +642,23 @@ function settleView() {
     }
   }
   const netChg = assetChg - debtChg;
+  return { m, tx, cur, prevKey, prevTx, prev, left, rate, cats, catTotal, assetChg, debtChg, netChg };
+}
+
+/** 결산 탭: 고른 달의 결산 — 요약·저축률 / 지난달 대비 / 많이 쓴 카테고리 / 자산·부채 변화 */
+function settleView() {
+  const { m, tx, cur, prevKey, prevTx, prev, left, rate, cats, catTotal, assetChg, debtChg, netChg } = settleData();
+  if (!tx.length) return `<div class="card"><div class="empty">${m}월 기록이 없어요.</div></div>`;
+  const top = cats.slice(0, 5);
+  // 지난달 대비: 늘었으면 ▲, 줄었으면 ▼. 수입은 늘면 초록, 지출·부채는 늘면 레드/핑크
+  const diffRow = (label, now, before, upGood, upCls) => {
+    const d = now - before;
+    const cls = !d ? "muted" : (d > 0) === upGood ? "inc" : upCls;
+    return `<div class="diff-row">
+      <div class="row-main"><span>${label}</span><span class="${cls}">${d ? `${d > 0 ? "▲" : "▼"} ${won(Math.abs(d))}` : "변화 없음"}</span></div>
+      <div class="diff-sub">${Number(prevKey.slice(5))}월 ${won(before)} → ${m}월 ${won(now)}</div>
+    </div>`;
+  };
 
   return `
   <section class="card">
@@ -685,7 +699,42 @@ function settleView() {
       <div class="row-sub"><span>부채</span><span class="cred">${signedWon(Math.round(debtChg))}</span></div>
     </div>
     <div class="row"><div class="row-main"><span>순자산 변화 (자산-부채)</span><span class="${netChg >= 0 ? "inc" : "exp"}">${signedWon(Math.round(netChg))}</span></div></div>
-  </section>`;
+  </section>
+  <button class="btn excel-btn settle-excel" data-settle-excel>${EXCEL_ICON}${m}월 결산 엑셀로 저장</button>`;
+}
+
+const EXCEL_ICON = `<svg class="excel-ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#1d7a45"/><path d="M8.2 8l7.6 8M15.8 8l-7.6 8" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>`;
+
+/** 결산 엑셀: 시트 1 '결산'(요약·지난달 대비·카테고리 전체·자산 변화), 시트 2 '내역'(그달 내역) */
+function exportSettlement() {
+  const { m, tx, cur, prevKey, prevTx, prev, left, rate, cats, catTotal, assetChg, debtChg, netChg } = settleData();
+  if (!tx.length) return toast("내보낼 기록이 없어요");
+  const y = ui.month.slice(0, 4), pm = Number(prevKey.slice(5));
+  const rows = [], heads = [];
+  const head = (...cells) => { heads.push(rows.length); rows.push(cells); };
+  const gap = () => rows.push([]);
+  head(`${y}년 ${m}월 결산`, "금액");
+  rows.push(["수입", cur.inc], ["지출", cur.exp], ["  고정지출", cur.fixed], ["  변동지출", cur.variable],
+    ["남은 돈 (수입-지출)", left], ["저축률", rate === null ? "-" : `${rate}%`], ["단기 부채 사용 (카드·마통)", cur.debtUse], ["부채 상환", cur.repay]);
+  gap();
+  head(`지난달 대비`, `${pm}월`, `${m}월`, "증감");
+  if (prevTx.length) {
+    for (const [label, a, b] of [["수입", prev.inc, cur.inc], ["지출", prev.exp, cur.exp], ["단기 부채 사용", prev.debtUse, cur.debtUse]]) rows.push([label, a, b, b - a]);
+  } else rows.push(["지난달 기록이 없어요"]);
+  gap();
+  head("카테고리별 지출 (카드·마통 포함)", "금액", "비율");
+  cats.forEach(([c, v]) => rows.push([c, v, `${Math.round((v / catTotal) * 100)}%`]));
+  if (!cats.length) rows.push(["지출 기록이 없어요"]);
+  gap();
+  head("자산·부채 변화 (이번 달 기록 기준)", "금액");
+  rows.push(["자산", Math.round(assetChg)], ["부채", Math.round(debtChg)], ["순자산 변화 (자산-부채)", Math.round(netChg)]);
+  const list = [...tx].sort((a, b) => (a.date + (a.time || "") + a.createdAt).localeCompare(b.date + (b.time || "") + b.createdAt));
+  const blob = makeXlsxBook([
+    { name: "결산", rows, widths: [30, 14, 14, 14], heads, freeze: false },
+    { name: "내역", rows: txSheetRows(list), widths: TX_SHEET_WIDTHS },
+  ]);
+  downloadBlob(blob, `가계부_결산_${y}년${m}월.xlsx`);
+  toast(`${m}월 결산을 엑셀로 저장했어요`);
 }
 
 /** part: "summary" = 현황(종합), "detail" = 현황(상세) */
@@ -2415,6 +2464,7 @@ function bindEvents() {
   $("#view").addEventListener("click", (e) => {
     const seg = e.target.closest("[data-seg]");
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
+    if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     const part = e.target.closest("[data-home-part]");
     if (part) { ui.homePart = part.dataset.homePart; render(); return; }
     const older = e.target.closest("[data-older-toggle]");
