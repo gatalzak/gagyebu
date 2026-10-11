@@ -592,7 +592,7 @@ function homeView(part = "summary") {
       .join("");
     return `
     <div class="row">
-      <div class="row-main"><span>${info.title}</span><span class="cred">${won(sum(items))}</span></div>
+      <div class="row-main"><span>${info.title}(이번달)</span><span class="cred">${won(sum(items))}</span></div>
       ${subs}
     </div>`;
   }).join("");
