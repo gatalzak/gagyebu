@@ -376,6 +376,16 @@ function repayTotals(list) {
   });
   return Object.entries(by).sort((a, b) => b[1] - a[1]);
 }
+/** 대출 실행 내역을 부채(대출) 이름별로 묶어 ['주택담보대출', 합계] (큰 순서) */
+function loanTotals(list) {
+  const by = {};
+  list.forEach((t) => {
+    const d = t.deltas?.find((x) => x.col === "debts");
+    const label = S.debts[d?.id]?.name || "대출";
+    by[label] = (by[label] || 0) + txKRW(t);
+  });
+  return Object.entries(by).sort((a, b) => b[1] - a[1]);
+}
 /** 자산이동 내역을 경로별로 묶어 [경로, 합계] (큰 순서) */
 function routeTotals(list) {
   const by = {};
@@ -676,7 +686,7 @@ function homeView(part = "summary") {
   ${section("단기부채", "단기 부채 (이번 달)", "cred", sum(shortDebt), shortDebtRows)}
   ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
   ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
-  ${loans.length ? section("대출실행", "대출 실행", "cred", sum(loans), subRows(routeTotals(loans))) : ""}`;
+  ${loans.length ? section("대출실행", "대출 실행", "cred", sum(loans), subRows(loanTotals(loans))) : ""}`;
   if (part === "summary") return summary;
   return `
   <section class="card">
