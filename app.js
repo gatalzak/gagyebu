@@ -1015,7 +1015,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 10월 카드값" value="${esc(draft.memo)}"></div>
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : `<button class="btn" data-act="cancel">취소</button>`}
-          <button class="btn primary" data-act="save">상환하기</button>
+          <button class="btn primary" data-act="save">${existing ? "저장" : "상환하기"}</button>
         </div>`,
     });
     const $p = (s) => panel.querySelector(s);
