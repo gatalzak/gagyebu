@@ -44,6 +44,7 @@ const KIND_CLASS = { 수입: "inc", 지출: "exp", 자산이동: "mov" };
 const KIND_SIGN = { 수입: "+", 지출: "-", 자산이동: "" };
 
 // ---------------- 유틸 ----------------
+const FILE_PREFIX = "가탈작 가계부"; // 내려받는 파일(백업·엑셀) 이름 앞부분
 const $ = (sel, root = document) => root.querySelector(sel);
 const pad = (n) => String(n).padStart(2, "0");
 const ym = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
@@ -474,7 +475,7 @@ async function exportBackup() {
   const blob = new Blob([JSON.stringify(S, null, 1)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `클로드가계부_${todayStr()}.json`;
+  a.download = `${FILE_PREFIX}_${todayStr()}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
   S.meta.lastBackup = nowISO();
@@ -492,7 +493,7 @@ function exportExcel(range) {
     .sort((a, b) => (a.date + (a.time || "") + a.createdAt).localeCompare(b.date + (b.time || "") + b.createdAt));
   if (!list.length) return toast("내보낼 내역이 없어요");
   const label = range === "all" ? "전체" : range === "year" ? `${y}년` : `${y}년${Number(m)}월`;
-  downloadBlob(makeXlsx("내역", txSheetRows(list), TX_SHEET_WIDTHS), `가계부_${label}_${todayStr()}.xlsx`);
+  downloadBlob(makeXlsx("내역", txSheetRows(list), TX_SHEET_WIDTHS), `${FILE_PREFIX}_${label}_${todayStr()}.xlsx`);
   toast(`엑셀 파일을 저장했어요 · ${list.length}건`);
 }
 
@@ -733,7 +734,7 @@ function exportSettlement() {
     { name: "결산", rows, widths: [30, 14, 14, 14], heads, freeze: false },
     { name: "내역", rows: txSheetRows(list), widths: TX_SHEET_WIDTHS },
   ]);
-  downloadBlob(blob, `가계부_결산_${y}년${m}월.xlsx`);
+  downloadBlob(blob, `${FILE_PREFIX}_결산_${y}년${m}월.xlsx`);
   toast(`${m}월 결산을 엑셀로 저장했어요`);
 }
 
