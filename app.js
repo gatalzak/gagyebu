@@ -685,10 +685,13 @@ function budgetSection(exp) {
       <div class="bud-left ${b.cls}">${l >= 0 ? `${won(l)} 남음` : `${won(-l)} 초과`} · ${Math.round(b.pct * 100)}%</div>
     </div>`;
   };
-  const rows = catB
-    .map((c) => [c, spentBy[c] || 0, B[c]])
-    .sort((a, b) => b[1] / b[2] - a[1] / a[2])
-    .map(([c, sp, bud]) => row(c, sp, bud)).join("");
+  const all = catB.map((c) => [c, spentBy[c] || 0, B[c]]).sort((a, b) => b[1] / b[2] - a[1] / a[2]);
+  // 현황에는 80% 넘은(주의·초과) 카테고리만 펼치고, 나머지는 개수 한 줄 + 전체 보기
+  const hot = all.filter(([, sp, bud]) => sp / bud >= 0.8);
+  const calm = all.filter((e) => !hot.includes(e));
+  const rows = hot.map(([c, sp, bud]) => row(c, sp, bud)).join("") + (calm.length ? `
+    <button class="fold-line" data-fold="budOpen"><span>${hot.length ? `예산 안쪽 카테고리 ${calm.length}개` : `모든 카테고리 예산 안쪽 (${calm.length}개)`}</span><span class="fold-go">${ui.budOpen ? "접기 ⌃" : "전체 보기 ⌄"}</span></button>
+    ${ui.budOpen ? calm.map(([c, sp, bud]) => row(c, sp, bud)).join("") : ""}` : "");
   return `
   <section class="card home-sec">
     ${head(`<span class="bud-left ${tb.cls}">${left >= 0 ? `${won(left)} 남음` : `${won(-left)} 초과`}</span>`)}
@@ -796,7 +799,7 @@ function recurringSection() {
   const today = todayStr();
   const st = list.map((r) => [r, recurStatus(r, ui.month)]);
   const done = st.filter(([, x]) => x === "done").length;
-  const rows = st.map(([r, x]) => {
+  const rowOf = ([r, x]) => {
     const date = recurDate(r, ui.month);
     const it = recurItem(r);
     const tx = x === "done" ? recurTx(r, ui.month) : null;
@@ -814,7 +817,21 @@ function recurringSection() {
         <span class="rc-sub">매달 ${r.day >= 31 ? "말일" : `${r.day}일`} · <span class="${it.cls}">${it.name}</span>${via ? ` · ${esc(via)}` : ""}</span></span>
       <span class="rc-right"><span class="rc-amt">${amount}</span><span class="rc-state">${state}</span></span>
     </button>`;
-  }).join("");
+  };
+  // 현황에는 처리할 것(날짜 지남·미납)만 펼치고, 나머지는 개수 한 줄 + 전체 보기
+  const isUnpaid = ([r, x]) => { const tx = x === "done" && recurTx(r, ui.month); return tx && tx.assetDelta?.col === "debts" && debtType(S.debts[tx.assetDelta.id]) === "미납금"; };
+  const urgent = st.filter((e) => e[1] === "due" || isUnpaid(e));
+  const rest = st.filter((e) => !urgent.includes(e));
+  const cnt = (k) => rest.filter(([, x]) => x === k).length;
+  const next = st.find(([, x]) => x === "plan");
+  const summary = urgent.length
+    ? [`✓ 기록 ${cnt("done")}`, `○ 예정 ${cnt("plan")}`, cnt("skip") ? `– 건너뜀 ${cnt("skip")}` : ""].filter(Boolean).join(" · ")
+    : next ? `이번 달 할 일 없음 · 다음: ${esc(recurName(next[0]))} ${Math.min(next[0].day, monthLast(ui.month))}일${next[0].variable ? "" : ` ${won(next[0].amount)}`}`
+    : "이번 달 모두 처리했어요";
+  const open = ui.recurOpen;
+  const rows = urgent.map(rowOf).join("") + (rest.length ? `
+    <button class="fold-line" data-fold="recurOpen"><span>${summary}</span><span class="fold-go">${open ? "접기 ⌃" : "전체 보기 ⌄"}</span></button>
+    ${open ? rest.map(rowOf).join("") : ""}` : "");
   return `
   <section class="card home-sec">
     ${head(`<span class="rec">${done}/${list.length} 기록</span>`)}
@@ -3273,6 +3290,8 @@ function bindEvents() {
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
     if (e.target.closest("[data-recur-manage]")) return openRecurringDialog();
+    const fold = e.target.closest("[data-fold]");
+    if (fold) { ui[fold.dataset.fold] = !ui[fold.dataset.fold]; render(); return; }
     const rc = e.target.closest("[data-recur]");
     if (rc) return openRecurAction(rc.dataset.recur);
     const part = e.target.closest("[data-home-part]");

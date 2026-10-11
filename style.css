@@ -610,3 +610,10 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .rc-edit input[type=checkbox] { width: 18px; height: 18px; accent-color: #c7a8ff; flex: none; }
 .rc-row.unpaid .rc-mark { border-color: var(--cred); color: var(--cred); }
 .rc-row.unpaid .rc-state { color: var(--cred); }
+
+/* 현황 접기 줄 (반복 내역·예산) */
+.fold-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 10px 0; border-top: 1px solid var(--line);
+  text-align: left; color: var(--muted); font-size: calc(0.8rem + var(--fs-up)); }
+.fold-line > span:first-child { min-width: 0; word-break: keep-all; }
+.fold-go { flex: none; white-space: nowrap; color: var(--text); }
+.card-head + .fold-line { border-top: 0; }
