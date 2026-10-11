@@ -76,7 +76,7 @@ function toast(msg) {
 
 // ---------------- 상태 ----------------
 let S;
-const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null, openCat: null, olderOpen: null, dayMore: {} }; // day: 달력에서 고른 날짜, openCat: 현황(상세)에서 펼친 카테고리, olderOpen: 내역 탭 이전 내역을 펼친 달, dayMore: 더 보기를 연 날짜
+const ui = { month: ym(new Date()), tab: "home", seg: "수입", day: null, openCat: null, olderOpen: null, dayMore: {}, q: "" }; // day: 달력에서 고른 날짜, openCat: 현황(상세)에서 펼친 카테고리, olderOpen: 내역 탭 이전 내역을 펼친 달, dayMore: 더 보기를 연 날짜
 
 const liveTx = () => Object.values(S.transactions).filter((t) => !t.deleted);
 const monthTx = () => liveTx().filter((t) => t.date.startsWith(ui.month));
@@ -514,7 +514,7 @@ function render() {
   const view = $("#view");
   if (ui.tab === "home") view.innerHTML = homeView("summary");
   else if (ui.tab === "detail") view.innerHTML = homeView("detail");
-  else if (ui.tab === "list") view.innerHTML = listView();
+  else if (ui.tab === "list") { view.innerHTML = listView(); bindSearch(); }
   else if (ui.tab === "calendar") view.innerHTML = calendarView();
   else view.innerHTML = monthlyView();
 }
@@ -569,7 +569,7 @@ const HOME_ICONS = {
 const SUM_ICON = ICO('<path d="M17 5H7l6 7-6 7h10"/>'); // 합계(Σ)
 const homeLabel = (key, text, cls) => `<span class="home-label"><span class="${cls}">${HOME_ICONS[key]}</span>${text}</span>`;
 
-/** part: "summary" = 현황(이번달 현재·단기 부채), "detail" = 현황(상세) */
+/** part: "summary" = 현황(이번 달 현재·단기 부채), "detail" = 현황(상세) */
 function homeView(part = "summary") {
   const tx = monthTx();
   const inc = tx.filter((t) => t.kind === "수입");
@@ -657,7 +657,7 @@ function homeView(part = "summary") {
 
   const summary = `
   <section class="card">
-    <div class="card-head"><span>이번달 현재</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
+    <div class="card-head"><span>이번 달 현재</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
     <div class="row"><div class="row-main">${homeLabel("수입", "수입", "inc")}<span class="inc">${signed(sum(inc), "+")}</span></div></div>
     <div class="row">
       <div class="row-main">${homeLabel("지출", "지출", "exp")}<span class="exp">${signed(sum(fixed) + sum(variable), "-")}</span></div>
@@ -673,8 +673,8 @@ function homeView(part = "summary") {
       ${repayTotals(repay).map(([r, v]) => `<div class="row-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("")}
     </div>` : ""}
   </section>
-  <section class="card">
-    <div class="card-head">${homeLabel("단기부채", "단기 부채(이번 달)", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
+  <section class="card home-debt">
+    <div class="card-head">${homeLabel("단기부채", "단기 부채 (이번 달)", "cred")}<span class="cred">${won(sum(shortDebt))}</span></div>
     ${shortDebtRows}
   </section>`;
   if (part === "summary") return summary;
@@ -840,25 +840,44 @@ function monthlyView() {
   </section>`;
 }
 
-function listView() {
-  const tx = monthTx().sort(txNewestFirst);
-  if (!tx.length) return `<div class="card"><div class="empty">이번 달 내역이 없어요.<br>아래 + 버튼으로 추가해 보세요.</div></div>`;
-  const days = {};
-  tx.forEach((t) => (days[t.date] ||= []).push(t));
-  // 최근 RECENT_DAYS일은 그대로 보이고, 그 전 날짜는 '이전 내역' 한 줄로 묶어 펼치기/접기.
-  // 하루 내역이 많으면 DAY_LIMIT건까지만 보이고 '더 보기'로 나머지를 연다.
-  const RECENT_DAYS = 3, DAY_LIMIT = 5;
-  const dayCard = ([date, items]) => {
-    const more = ui.dayMore[date] || items.length <= DAY_LIMIT + 1;
-    return `
+// 내역 탭: 위에 검색창, 아래에 목록(검색어가 있으면 전체 기간 검색 결과, 없으면 이번 달 목록)
+const RECENT_DAYS = 3, DAY_LIMIT = 5;
+/** 날짜 카드: 하루 내역이 많으면 DAY_LIMIT건까지만 보이고 '더 보기'로 나머지를 연다 */
+function dayCard([date, items]) {
+  const more = ui.dayMore[date] || items.length <= DAY_LIMIT + 1;
+  return `
       <section class="card day">
         ${dayHead(date, items)}
         ${(more ? items : items.slice(0, DAY_LIMIT)).map((t) => txRow(t)).join("")}
         ${!more ? `<button class="day-more" data-day-more="${date}">${items.length - DAY_LIMIT}건 더 보기 ▾</button>` : ""}
         ${ui.dayMore[date] && items.length > DAY_LIMIT + 1 ? `<button class="day-more" data-day-less="${date}">줄이기 ▴</button>` : ""}
       </section>`;
-  };
-  const entries = Object.entries(days);
+}
+const groupByDate = (list) => {
+  const days = {};
+  list.forEach((t) => (days[t.date] ||= []).push(t));
+  return Object.entries(days);
+};
+
+function listView() {
+  return `
+  <div class="search-bar">
+    <svg class="search-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    <input class="search-input" type="search" name="q" placeholder="내역 검색 · 내용, 거래처, 카테고리, 금액" value="${esc(ui.q)}" autocomplete="off" enterkeyhint="search">
+    <button class="search-clear" data-search-clear aria-label="검색어 지우기" ${ui.q ? "" : "hidden"}>✕</button>
+  </div>
+  <div id="list-results">${listBody()}</div>`;
+}
+
+function listBody() {
+  return ui.q.trim() ? searchResults(ui.q) : monthList();
+}
+
+/** 이번 달 목록: 최근 RECENT_DAYS일은 그대로, 그 전 날짜는 '이전 내역' 한 줄로 묶어 펼치기/접기 */
+function monthList() {
+  const tx = monthTx().sort(txNewestFirst);
+  if (!tx.length) return `<div class="card"><div class="empty">이번 달 내역이 없어요.<br>아래 + 버튼으로 추가해 보세요.</div></div>`;
+  const entries = groupByDate(tx);
   const recent = entries.slice(0, RECENT_DAYS), older = entries.slice(RECENT_DAYS);
   if (!older.length) return recent.map(dayCard).join("");
   const open = ui.olderOpen === ui.month;
@@ -870,6 +889,52 @@ function listView() {
       </button>`;
   return recent.map(dayCard).join("") + toggle(open ? "접기 ▴" : "펼치기 ▾") +
     (open ? older.map(dayCard).join("") + toggle("접기 ▴") : "");
+}
+
+/** 검색: 띄어 쓴 낱말이 모두 들어 있는 내역(전체 기간). 숫자는 금액(쉼표·'원' 무시)으로도 찾는다. */
+function txMatches(t, words) {
+  const d = deltaRef(t.assetDelta);
+  const linked = d && S[d.col]?.[d.id];
+  const text = [
+    t.content, t.party, t.memo, t.category, t.subcategory, isRepayTx(t) ? "부채상환 상환" : t.kind,
+    t.kind === "지출" ? `${t.expenseType || ""}지출` : "", linked?.name, d?.col === "debts" ? debtType(linked) : "",
+    moveRoute(t), t.currency && t.currency !== "KRW" ? t.currency : "",
+  ].filter(Boolean).join(" ").toLowerCase();
+  return words.every((w) => {
+    const digits = w.replace(/[,원]/g, "");
+    if (/^\d+$/.test(digits)) return text.includes(digits) || String(t.amount).includes(digits) || String(Math.round(txKRW(t))).includes(digits);
+    return text.includes(w);
+  });
+}
+const SEARCH_MAX = 300;
+function searchResults(q) {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const found = liveTx().filter((t) => txMatches(t, words)).sort(txNewestFirst);
+  if (!found.length) return `<div class="card"><div class="empty">'${esc(q.trim())}'에 맞는 내역이 없어요.<br>전체 기간에서 찾았어요.</div></div>`;
+  const shown = found.slice(0, SEARCH_MAX);
+  const inc = sum(found.filter((t) => t.kind === "수입")), exp = sum(found.filter(isPlainExpense));
+  return `
+  <div class="search-summary">
+    <span>검색 결과 ${found.length}건 <span class="muted">· 전체 기간</span></span>
+    <span>${inc ? `<span class="inc">${signed(inc, "+")}</span> ` : ""}${exp ? `<span class="exp">${signed(exp, "-")}</span>` : ""}</span>
+  </div>
+  ${groupByDate(shown).map(dayCard).join("")}
+  ${found.length > SEARCH_MAX ? `<p class="note" style="text-align:center">최근 ${SEARCH_MAX}건까지 보여요. 검색어를 더 자세히 적어 보세요.</p>` : ""}`;
+}
+
+/** 검색창: 글자를 칠 때마다 결과만 다시 그린다(입력창은 그대로라 키보드가 닫히지 않음) */
+function bindSearch() {
+  const input = $("#view [name=q]");
+  if (!input) return;
+  const clear = $("#view [data-search-clear]");
+  const update = () => {
+    ui.q = input.value;
+    clear.hidden = !ui.q;
+    $("#list-results").innerHTML = listBody();
+  };
+  input.addEventListener("input", update);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") input.blur(); });
+  clear.onclick = () => { input.value = ""; update(); input.focus(); };
 }
 
 // ---------------- 팝업 창 ----------------

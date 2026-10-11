@@ -446,3 +446,16 @@ input[type="date"].input { color-scheme: dark; }
 .tb-sub { gap: 10px; }
 .tb-sub > span:first-child { min-width: 0; word-break: keep-all; }
 .tb-sub > span:last-child { flex: 0 0 auto; white-space: nowrap; }
+
+/* 현황: 이번 달 현재 카드와 단기 부채 카드 사이 간격 */
+.card.home-debt { margin-top: 22px; }
+
+/* 내역 검색 */
+.search-bar { position: relative; display: flex; align-items: center; margin-bottom: 12px; }
+.search-ico { position: absolute; left: 12px; color: var(--muted); pointer-events: none; }
+.search-input { width: 100%; height: 44px; padding: 0 40px 0 38px; border-radius: 3px; background: var(--card); border: 1px solid var(--line); outline: none; color: var(--text); font-size: calc(0.9rem + var(--fs-up)); }
+.search-input:focus { border-color: var(--wine); }
+.search-input::-webkit-search-cancel-button { display: none; }
+.search-clear { position: absolute; right: 6px; width: 32px; height: 32px; color: var(--muted); font-size: 0.9rem; }
+.search-clear[hidden] { display: none; }
+.search-summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 2px 10px; font-size: calc(0.82rem + var(--fs-up)); white-space: nowrap; }
