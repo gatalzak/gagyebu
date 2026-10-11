@@ -446,6 +446,7 @@ function scheduleSync(delay = 1500) {
 async function runSync() {
   const pulled = await syncNow(S);
   if (pulled && migrateBalances()) { await saveState(S); scheduleSync(); } // 예전 버전 기기에서 온 자산·부채
+  if (pulled && autoRecur()) { await saveState(S); scheduleSync(); } // 다른 기기에서 켠 자동 기록
   if (pulled && !$("#modal-root").children.length) render();
   if (sync.status === "ok") await syncDrivePhotos(liveTx().flatMap((t) => t.photos || [])); // 영수증 사진은 따로
 }
@@ -626,6 +627,7 @@ const HOME_ICONS = {
   대출실행: ICO('<path d="M4 9.5 12 5l8 4.5"/><path d="M6 10v7M10 10v7M14 10v7M18 10v7"/><path d="M4 19.5h16"/>'), // 은행
   부채상환: ICO('<circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.2l2.5 2.5 5-5"/>'), // 갚음(체크)
   단기부채: ICO('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>'), // 카드
+  반복: ICO('<path d="M4.5 11a7.5 7.5 0 0 1 13-4.5L19.5 8.5"/><path d="M19.5 4v4.5H15"/><path d="M19.5 13a7.5 7.5 0 0 1-13 4.5L4.5 15.5"/><path d="M4.5 20v-4.5H9"/>'), // 반복
   예산: ICO('<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8a8.5 8.5 0 0 1 5.2 5.2H15z"/>'), // 나눠 쓰기(원그래프)
 };
 const SUM_ICON = ICO('<path d="M17 5H7l6 7-6 7h10"/>'); // 합계(Σ)
@@ -747,6 +749,263 @@ function openBudgetDialog() {
     await commit();
     toast("예산을 저장했어요");
   };
+}
+
+// ---------------- 반복 내역 ----------------
+// 매달 같은 날 생기는 내역을 등록해 두고(기록된 내역에서 '반복 내역으로 등록'), 그달 상태를 보여 준다.
+// 기록하면 내역에 recurId·recurMonth가 붙어 그달은 '기록됨'. 건너뛴 달은 skips. 상태는 내역에서 계산한다.
+// 자동 기록(금액 고정 + 원화만)은 앱을 열 때 날짜가 지난 달을 'recur:템플릿:월' id로 만든다(기기끼리 겹치지 않음).
+const liveRecurs = () => Object.values(S.recurring || {}).filter((r) => !r.deleted)
+  .sort((a, b) => a.day - b.day || a.createdAt.localeCompare(b.createdAt));
+const monthLast = (month) => { const [y, m] = month.split("-").map(Number); return new Date(y, m, 0).getDate(); };
+const recurDate = (r, month) => `${month}-${pad(Math.min(r.day, monthLast(month)))}`;
+const recurTx = (r, month) => liveTx().find((t) => t.recurId === r.id && t.recurMonth === month);
+function recurName(r) {
+  if (r.nature === "repay") return `${S.debts[parseLinkKey(r.repay?.debt)?.id]?.name || "부채"} 상환`;
+  return r.fields?.content || "반복 내역";
+}
+function recurStatus(r, month) {
+  if (recurTx(r, month)) return "done";
+  if ((r.skips || []).includes(month)) return "skip";
+  return recurDate(r, month) <= todayStr() ? "due" : "plan";
+}
+/** 금액이 달라지는 항목: 가장 최근에 기록한 금액 */
+function recurLastAmount(r) {
+  const last = liveTx().filter((t) => t.recurId === r.id).sort((a, b) => b.recurMonth.localeCompare(a.recurMonth))[0];
+  return last ? last.amount : r.amount;
+}
+const recurItem = (r) => PICK_ITEMS.find((it) => it.key === r.nature) || PICK_ITEMS[1];
+function recurVia(r) {
+  const key = r.nature === "repay" ? r.repay?.asset : r.nature === "move" ? r.fields?.fromAsset : r.fields?.link;
+  const ref = key && parseLinkKey(key);
+  const h = ref && S[ref.col]?.[ref.id];
+  return h && !h.deleted ? h.name : "";
+}
+
+/** 현황: 이번 달 반복 내역 */
+function recurringSection() {
+  const all = liveRecurs();
+  const head = (right) => `<div class="card-head">${homeLabel("반복", "반복 내역 (이번 달)", "rec")}${right}</div>`;
+  if (!all.length) return `
+  <section class="card home-sec">
+    ${head("<span></span>")}
+    <p class="note bud-empty">월세·구독료·공과금처럼 매달 생기는 내역을 등록해 두면 날짜에 맞춰 챙겨 드려요. 기록된 내역을 열고 '반복 내역으로 등록'을 누르세요.</p>
+  </section>`;
+  const list = all.filter((r) => (r.startMonth || "") <= ui.month);
+  if (!list.length) return "";
+  const today = todayStr();
+  const st = list.map((r) => [r, recurStatus(r, ui.month)]);
+  const done = st.filter(([, x]) => x === "done").length;
+  const rows = st.map(([r, x]) => {
+    const date = recurDate(r, ui.month);
+    const it = recurItem(r);
+    const tx = x === "done" ? recurTx(r, ui.month) : null;
+    const late = x === "due" ? Math.round((new Date(today) - new Date(date)) / 86400000) : 0;
+    // 미납으로 기록한 달: 기록은 됐지만 갚아야 함
+    const unpaid = tx && tx.assetDelta?.col === "debts" && debtType(S.debts[tx.assetDelta.id]) === "미납금";
+    const mark = unpaid ? "!" : { done: "✓", skip: "–", due: "!", plan: "○" }[x];
+    const state = unpaid ? "미납 · 상환 필요" : x === "done" ? `${Number(tx.date.slice(8))}일 기록` : x === "skip" ? "이번 달 건너뜀" : x === "due" ? (late ? `${late}일 지남` : "오늘") : "예정";
+    const amount = x === "done" ? won(txKRW(tx)) : r.variable ? `<span class="muted">금액 확인</span>` : won(r.amount);
+    const via = recurVia(r);
+    return `
+    <button class="rc-row ${x}${unpaid ? " unpaid" : ""}" data-recur="${r.id}">
+      <span class="rc-mark">${mark}</span>
+      <span class="rc-text"><span class="rc-name">${esc(recurName(r))}</span>
+        <span class="rc-sub">매달 ${r.day >= 31 ? "말일" : `${r.day}일`} · <span class="${it.cls}">${it.name}</span>${via ? ` · ${esc(via)}` : ""}</span></span>
+      <span class="rc-right"><span class="rc-amt">${amount}</span><span class="rc-state">${state}</span></span>
+    </button>`;
+  }).join("");
+  return `
+  <section class="card home-sec">
+    ${head(`<span class="rec">${done}/${list.length} 기록</span>`)}
+    ${rows}
+    <div class="bud-foot"><button class="reg-link rec-link" data-recur-manage>반복 내역 관리 ›</button></div>
+  </section>`;
+}
+
+/** 반복 내역 하나 누르기: 기록됨 → 그 내역, 아니면 기록·미납·건너뛰기 고르기 */
+function openRecurAction(id) {
+  const r = S.recurring[id];
+  const month = ui.month;
+  const x = recurStatus(r, month);
+  if (x === "done") return openTxDialog(recurTx(r, month));
+  const date = recurDate(r, month);
+  const expense = r.nature === "fixed" || r.nature === "var";
+  const amt = r.variable ? recurLastAmount(r) : r.amount;
+  const panel = openModal({
+    title: recurName(r),
+    body: `
+      <p class="rc-info">${Number(month.slice(5))}월분 · 예정일 ${Number(date.slice(5, 7))}월 ${Number(date.slice(8))}일<br>
+        ${r.variable ? `지난번 ${won(amt)} · 금액이 매달 달라서 기록할 때 확인해요` : `${won(amt)}`}</p>
+      ${x === "skip" ? `
+      <div class="rc-acts"><button class="btn primary" data-ra="unskip">건너뛰기 취소</button></div>` : `
+      <div class="rc-acts">
+        <button class="btn primary" data-ra="record">기록하기</button>
+        ${expense ? `<button class="btn" data-ra="unpaid">미납으로 기록 <span class="muted">(아직 못 냄 · 나중에 부채 상환)</span></button>` : ""}
+        <button class="btn" data-ra="skip">이번 달 건너뛰기</button>
+        <button class="btn" data-ra="later">나중에</button>
+      </div>`}`,
+  });
+  const act = async (a) => {
+    if (a === "later") return closeModal();
+    if (a === "skip" || a === "unskip") {
+      const skips = (r.skips || []).filter((m) => m !== month);
+      S.recurring[r.id] = { ...r, skips: a === "skip" ? [...skips, month] : skips, updatedAt: nowISO() };
+      closeModal();
+      await commit();
+      const nm = recurName(r);
+      const obj = (nm.charCodeAt(nm.length - 1) - 0xac00) % 28 > 0 ? "을" : "를"; // 받침 있으면 '을'
+      return toast(a === "skip" ? `${Number(month.slice(5))}월 ${nm}${obj} 건너뛰었어요` : "건너뛰기를 취소했어요");
+    }
+    // 기록: 날짜가 지났으면 오늘(이번 달일 때), 아니면 예정일
+    const recDate = month === todayStr().slice(0, 7) && date <= todayStr() ? todayStr() : date;
+    if (r.nature === "repay") {
+      return openRepayDialog({
+        presetDebt: parseLinkKey(r.repay?.debt)?.id || "",
+        preset: { amount: amt, date: recDate, time: nowTime(), memo: r.repay?.memo || "", asset: liveLink(r.repay?.asset), recur: { id: r.id, month } },
+        onDone: () => { closeModal(); render(); },
+      });
+    }
+    const d = applyFav(newTxDraft(recDate), r.fields);
+    Object.assign(d, { amount: amt, time: nowTime(), debtMode: r.fields.debtMode || "", pay: r.fields.pay || "", recurId: r.id, recurMonth: month });
+    if (a === "unpaid") {
+      // 미납: 그날 내야 했던 돈을 '미납금' 부채로 잡아 두고, 나중에 내면 부채 상환
+      let debt = Object.values(S.debts).find((x) => !x.deleted && debtType(x) === "미납금");
+      if (!debt) {
+        const now = nowISO();
+        debt = { id: uid(), type: "미납금", name: "미납금", currency: "KRW", amount: 0, base: 0, order: 10000, createdAt: now, updatedAt: now, deleted: false };
+        S.debts[debt.id] = debt;
+        await saveState(S);
+      }
+      Object.assign(d, { date, link: linkKey("debts", debt.id), debtMode: "", pay: "", memo: `${d.memo ? `${d.memo} · ` : ""}미납` });
+    }
+    openTxDialog(null, null, d);
+  };
+  panel.querySelectorAll("[data-ra]").forEach((b) => (b.onclick = () => act(b.dataset.ra)));
+}
+
+/** 기록된 내역 → 반복 내역 등록 (그 내역의 달은 '기록됨') */
+async function registerRecurring(tx, src) {
+  const now = nowISO();
+  const nature = src.nature;
+  if (liveRecurs().some((r) => r.nature === nature && recurName(r) === (nature === "repay" ? `${S.debts[parseLinkKey(src.repay.debt)?.id]?.name || "부채"} 상환` : src.fields.content)))
+    return toast("이미 같은 반복 내역이 있어요."), false;
+  const id = uid();
+  const month = tx.date.slice(0, 7);
+  S.recurring ||= {};
+  S.recurring[id] = {
+    id, nature, day: Number(tx.date.slice(8)), amount: src.amount, currency: src.currency || "KRW",
+    variable: nature === "repay", auto: false, startMonth: month, skips: [],
+    ...(src.fields ? { fields: src.fields } : {}), ...(src.repay ? { repay: src.repay } : {}),
+    createdAt: now, updatedAt: now, deleted: false,
+  };
+  const cur = S.transactions[tx.id];
+  if (cur) S.transactions[tx.id] = { ...cur, recurId: id, recurMonth: month, updatedAt: now };
+  await saveState(S);
+  scheduleSync();
+  toast(`반복 내역으로 등록했어요 · 매달 ${Number(tx.date.slice(8))}일`);
+  return { id, month };
+}
+
+/** 반복 내역 관리: 날짜·금액·금액 달라짐·자동 기록, 삭제 */
+function openRecurringDialog() {
+  const rows = liveRecurs().map((r) => ({ ...r, del: false }));
+  const draw = () => {
+    const panel = openModal({
+      title: "반복 내역 관리",
+      body: `
+        <p class="note">기록된 내역을 열고 '반복 내역으로 등록'을 누르면 여기에 추가돼요. 내용·카테고리를 바꾸려면 삭제하고 다시 등록하세요.</p>
+        ${rows.length ? rows.map((r, i) => {
+          const it = recurItem(r);
+          const canAuto = !r.variable && r.nature !== "repay" && (r.currency || "KRW") === "KRW";
+          return `
+          <div class="rc-edit${r.del ? " del" : ""}" data-i="${i}">
+            <div class="rc-edit-top"><span class="rc-name">${esc(recurName(r))}</span><span class="${it.cls} rc-nat">${it.name}</span>
+              <button class="edit-del" data-rdel>${r.del ? "되돌리기" : "삭제"}</button></div>
+            <div class="rc-edit-line">매달
+              <select class="input sm rc-day" name="day" ${r.del ? "disabled" : ""}>${Array.from({ length: 31 }, (_, k) => k + 1).map((dd) => `<option value="${dd}" ${dd === r.day ? "selected" : ""}>${dd === 31 ? "말일" : `${dd}일`}</option>`).join("")}</select>
+              <div class="amount-wrap rc-amt-in"><input class="input sm amount-input" name="amount" inputmode="numeric" value="${fmtAmount(r.amount)}" ${r.del ? "disabled" : ""}><span class="amount-unit">원</span></div></div>
+            <label class="check-line"><input type="checkbox" name="variable" ${r.variable ? "checked" : ""} ${r.del ? "disabled" : ""}> 금액이 매달 달라요 (기록할 때 금액 확인)</label>
+            <label class="check-line ${canAuto ? "" : "off"}"><input type="checkbox" name="auto" ${r.auto && canAuto ? "checked" : ""} ${canAuto && !r.del ? "" : "disabled"}> 날짜가 되면 자동 기록 <span class="muted">(자동이체처럼 꼭 빠져나가는 것만)</span></label>
+          </div>`;
+        }).join("") : `<div class="empty">등록된 반복 내역이 없어요.</div>`}
+        <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
+    });
+    const read = () => panel.querySelectorAll("[data-i]").forEach((el) => {
+      const r = rows[el.dataset.i];
+      if (r.del) return;
+      r.day = Number(el.querySelector("[name=day]").value);
+      r.amount = parseAmount(el.querySelector("[name=amount]").value);
+      r.variable = el.querySelector("[name=variable]").checked;
+      r.auto = el.querySelector("[name=auto]").checked && !r.variable;
+    });
+    panel.querySelectorAll("[name=amount]").forEach(bindAmount);
+    panel.querySelectorAll("[name=variable]").forEach((c) => (c.onchange = () => { read(); draw(); }));
+    panel.querySelectorAll("[data-rdel]").forEach((b) => (b.onclick = () => { read(); const r = rows[b.closest("[data-i]").dataset.i]; r.del = !r.del; draw(); }));
+    panel.querySelector("[data-cancel]").onclick = closeModal;
+    panel.querySelector("[data-save]").onclick = async () => {
+      read();
+      const now = nowISO();
+      for (const r of rows) {
+        const cur = S.recurring[r.id];
+        if (r.del) { S.recurring[r.id] = { ...cur, deleted: true, updatedAt: now }; continue; }
+        if (cur.day !== r.day || cur.amount !== r.amount || !!cur.variable !== r.variable || !!cur.auto !== r.auto)
+          S.recurring[r.id] = { ...cur, day: r.day, amount: r.amount, variable: r.variable, auto: r.auto, updatedAt: now };
+      }
+      closeModal();
+      const n = autoRecur();
+      await commit();
+      toast(`반복 내역을 저장했어요${n ? ` · ${n}건 자동 기록` : ""}`);
+    };
+  };
+  draw();
+}
+
+/** 자동 기록 켠 반복 내역: 날짜가 지난 달을 내역으로 만든다. 만든 개수를 돌려준다. */
+function autoRecur() {
+  let n = 0;
+  const today = todayStr();
+  const thisMonth = today.slice(0, 7);
+  for (const r of liveRecurs()) {
+    if (!r.auto || r.variable || r.nature === "repay" || (r.currency || "KRW") !== "KRW" || !r.amount) continue;
+    let month = r.startMonth;
+    for (let guard = 0; month <= thisMonth && guard < 60; guard++) {
+      const id = `recur:${r.id}:${month}`;
+      const date = recurDate(r, month);
+      if (date <= today && !S.transactions[id] && !recurTx(r, month) && !(r.skips || []).includes(month)) {
+        const rec = buildRecurTx(r, month, id, date);
+        if (rec) { S.transactions[id] = rec; n++; }
+      }
+      const [y, m] = month.split("-").map(Number);
+      month = ym(new Date(y, m, 1));
+    }
+  }
+  return n;
+}
+function buildRecurTx(r, month, id, date) {
+  const f = r.fields || {};
+  const now = nowISO();
+  const rec = {
+    id, date, time: "", kind: f.kind, expenseType: f.kind === "지출" ? f.expenseType || "고정" : "",
+    category: f.kind === "자산이동" ? "" : f.category || "", subcategory: f.kind === "자산이동" ? "" : f.subcategory || "",
+    currency: "KRW", amount: r.amount, content: f.content || "", party: f.party || "", memo: f.memo || "",
+    recurId: r.id, recurMonth: month, createdAt: now, updatedAt: now, deleted: false,
+  };
+  const holding = (key) => { const ref = key && parseLinkKey(key); const h = ref && S[ref.col]?.[ref.id]; return h && !h.deleted && curOf(h) === "KRW" ? [ref, h] : null; };
+  if (f.kind === "자산이동") {
+    const a = holding(f.fromAsset), b = holding(f.toAsset);
+    if (!a || !b) return null;
+    rec.deltas = [{ col: "assets", id: a[1].id, amount: -r.amount }, { col: "assets", id: b[1].id, amount: r.amount }];
+    return rec;
+  }
+  const h = holding(f.link);
+  if (!h) return null;
+  rec.assetDelta = { col: h[0].col, id: h[1].id, amount: linkSign(f.kind, h[0].col) * r.amount };
+  if (f.kind === "지출" && h[0].col === "assets" && h[1].type === "은행") {
+    if (f.pay === "card" && h[1].card) rec.card = h[1].card;
+    else if (f.pay === "transfer") rec.transfer = true;
+  }
+  return rec;
 }
 
 /** 현황 탭 안의 작은 탭: 현황(종합) / 현황(상세) */
@@ -995,6 +1254,7 @@ function homeView(part = "summary") {
     </div>
   </section>
   ${budgetSection(exp)}
+  ${recurringSection()}
   ${section("단기부채", "단기 부채 (이번 달)", "cred", sum(shortDebt), shortDebtRows)}
   ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
   ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
@@ -1472,6 +1732,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
           <p class="note" style="margin-top:6px">원금은 부채에서 빠지고, 이자는 지출(${INTEREST_CAT})로 기록돼요. 이자만 기록하려면 상환 금액을 0으로 두세요. 출금 자산을 비우면 이자는 이 부채에 더해져요(마통 이자 자동 차감처럼).</p>
         </div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 10월 카드값" value="${esc(draft.memo)}"></div>
+        ${existing && !S.transactions[existing.id]?.recurId && draft.amount > 0 ? `<button class="btn fav-add-btn rec-add-btn" data-act="add-recur">${HOME_ICONS.반복} 반복 내역으로 등록 <span class="muted">(매달 ${Number(existing.date.slice(8))}일)</span></button>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : `<button class="btn" data-act="cancel">취소</button>`}
           <button class="btn primary" data-act="save">${existing || replaces ? "저장" : "상환하기"}</button>
@@ -1530,6 +1791,11 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
 
     const cancel = $p("[data-act=cancel]");
     if (cancel) cancel.onclick = () => onDone();
+    const addRecur = $p("[data-act=add-recur]");
+    if (addRecur) addRecur.onclick = async () => {
+      read();
+      if (await registerRecurring(existing, { nature: "repay", amount: draft.amount, currency: cur, repay: { debt: draft.debt, asset: draft.asset, memo: draft.memo } })) draw();
+    };
     $p("[data-act=save]").onclick = async () => {
       read();
       const ref = parseLinkKey(draft.debt);
@@ -1541,6 +1807,8 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
       const now = nowISO();
       const dcur = curOf(d);
       const over = roundFor(draft.amount - debtBalance(ref), dcur); // 저장 전에 계산(이 상환이 반영되기 전 잔액 기준)
+      const curTx = existing && S.transactions[existing.id];
+      const recurOf = curTx?.recurId ? { id: curTx.recurId, month: curTx.recurMonth } : preset?.recur || null;
       const krw = dcur === "KRW" ? draft.amount : toKRW(draft.amount, dcur);
       if (krw === null) return toast("환율 정보가 없어 반영할 수 없어요.");
       const deltas = [{ col: "debts", id: d.id, amount: -draft.amount }];
@@ -1598,6 +1866,7 @@ function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal
         memo: draft.memo.trim(),
         deltas,
         ...(interestId ? { interestTx: interestId } : {}),
+        ...(recurOf ? { recurId: recurOf.id, recurMonth: recurOf.month } : {}),
         createdAt: existing?.createdAt || now,
         updatedAt: now,
         deleted: false,
@@ -1886,6 +2155,7 @@ function openTxDialog(existing, presetDate, preset = null, { replaces = null } =
       headExtra: existing || replaces ? "" : `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
       body: `
         ${natureSelect(natureOf(draft))}
+        ${draft.recurId && S.recurring?.[draft.recurId] ? `<p class="note rc-tag">${HOME_ICONS.반복} 반복 내역 · ${Number((draft.recurMonth || "").slice(5))}월분</p>` : ""}
         <div class="field"><label>날짜 · 시간 <span class="req">*</span></label>
           <div class="money-line">
             <input class="input" type="date" name="date" value="${draft.date}">
@@ -1960,6 +2230,7 @@ function openTxDialog(existing, presetDate, preset = null, { replaces = null } =
             <div class="photo-thumb" data-photo="${id}"><span class="pt-wait">사진</span><img alt="영수증 사진" hidden><button class="photo-del" data-photo-del="${id}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : ""}
         </div>` : ""}
         <button class="btn fav-add-btn" data-act="add-fav">${STAR} 자주 쓰는 내역으로 등록</button>
+        ${existing && !draft.recurId && !existing.interest ? `<button class="btn fav-add-btn rec-add-btn" data-act="add-recur">${HOME_ICONS.반복} 반복 내역으로 등록 <span class="muted">(매달 ${Number(existing.date.slice(8))}일)</span></button>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
           <button class="btn primary" data-act="save">저장</button>
@@ -2161,6 +2432,7 @@ function openTxDialog(existing, presetDate, preset = null, { replaces = null } =
         ...(!isMove && draft.photos?.length ? { photos: [...draft.photos] } : {}),
         ...(existing?.interest && draft.kind === "지출" ? { interest: true } : {}), // 대출·마통 이자 기록
         ...(existing?.repayOf ? { repayOf: existing.repayOf } : {}),
+        ...(draft.recurId ? { recurId: draft.recurId, recurMonth: draft.recurMonth } : {}), // 반복 내역에서 기록
         createdAt: existing?.createdAt || now,
         updatedAt: now,
         deleted: false,
@@ -2276,6 +2548,15 @@ function openTxDialog(existing, presetDate, preset = null, { replaces = null } =
         draw();
       }));
     }
+    const addRecur = $p("[data-act=add-recur]");
+    if (addRecur) addRecur.onclick = async () => {
+      read();
+      const f = favFromDraft(draft);
+      f.debtMode = draft.kind === "지출" ? draft.debtMode || "" : "";
+      f.pay = draft.pay || "";
+      const res = await registerRecurring(existing, { nature: natureOf(draft), amount: draft.amount, currency: draft.currency, fields: f });
+      if (res) { draft.recurId = res.id; draft.recurMonth = res.month; draw(); }
+    };
     // 자주 쓰는 내역: 수정 창에서 등록, 추가 창의 별을 눌러 불러오기
     const addFav = $p("[data-act=add-fav]");
     if (addFav) addFav.onclick = async () => {
@@ -2991,6 +3272,9 @@ function bindEvents() {
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
+    if (e.target.closest("[data-recur-manage]")) return openRecurringDialog();
+    const rc = e.target.closest("[data-recur]");
+    if (rc) return openRecurAction(rc.dataset.recur);
     const part = e.target.closest("[data-home-part]");
     if (part) { ui.homePart = part.dataset.homePart; render(); return; }
     const older = e.target.closest("[data-older-toggle]");
@@ -3021,11 +3305,14 @@ async function main() {
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
   if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories() + repairLoanTxs() + migrateBalances() + freezeCatEtypes()) await saveState(S);
+  const autoN = autoRecur(); // 자동 기록 켠 반복 내역
+  if (autoN) await saveState(S);
   sync.onChange = renderSyncBar;
   bindEvents();
   render();
   runSync();
   if (fresh) toast("구글 드라이브에 연결했어요");
+  else if (autoN) toast(`반복 내역 ${autoN}건을 자동 기록했어요`);
   if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost")) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }

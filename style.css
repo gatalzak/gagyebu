@@ -572,3 +572,41 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .bud-edit-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; word-break: keep-all; }
 .bud-edit-name .muted { font-size: calc(0.75rem + var(--fs-up)); }
 .bud-in { width: 150px; flex: none; }
+
+/* 반복 내역 */
+.rec { color: #c7a8ff; }
+.rec-link { color: #c7a8ff; font-size: calc(0.85rem + var(--fs-up)); padding: 4px 0; }
+.rc-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 0; text-align: left; }
+.rc-row + .rc-row { border-top: 1px solid var(--line); }
+.rc-mark { width: 20px; height: 20px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+  font-size: calc(0.75rem + var(--fs-up)); border: 1px solid #4a4a52; color: var(--muted); }
+.rc-row.done .rc-mark { border-color: var(--inc); color: var(--inc); }
+.rc-row.due .rc-mark { border-color: #f3dc94; color: #f3dc94; }
+.rc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rc-sub { font-size: calc(0.75rem + var(--fs-up)); color: var(--muted); word-break: keep-all; }
+.rc-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; }
+.rc-amt { white-space: nowrap; }
+.rc-state { font-size: calc(0.75rem + var(--fs-up)); color: var(--muted); white-space: nowrap; }
+.rc-row.done .rc-state { color: var(--inc); }
+.rc-row.due .rc-state { color: #f3dc94; }
+.rc-row.skip .rc-name, .rc-row.skip .rc-amt { color: var(--muted); text-decoration: line-through; }
+.rc-info { margin: 4px 0 16px; line-height: 1.7; color: var(--text); }
+.rc-acts { display: flex; flex-direction: column; gap: 8px; }
+.rc-acts .btn { width: 100%; }
+.rc-acts .muted { font-size: calc(0.75rem + var(--fs-up)); }
+.rec-add-btn { margin-top: 8px; }
+.rec-add-btn .home-ico, .rc-tag .home-ico { width: 16px; height: 16px; vertical-align: -3px; color: #c7a8ff; }
+.rc-tag { margin: 0 0 8px; color: #c7a8ff; }
+.rc-edit { padding: 12px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.rc-edit.del { opacity: 0.45; }
+.rc-edit-top { display: flex; align-items: center; gap: 8px; }
+.rc-edit-top .rc-name { flex: 1; min-width: 0; word-break: keep-all; }
+.rc-nat { font-size: calc(0.75rem + var(--fs-up)); flex: none; }
+.rc-edit-line { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); }
+.rc-day { width: 82px; flex: none; }
+.rc-amt-in { flex: 1; min-width: 0; }
+.rc-edit .check-line { display: flex; align-items: center; gap: 8px; font-size: calc(0.8rem + var(--fs-up)); color: var(--text); word-break: keep-all; }
+.rc-edit .check-line.off { color: var(--muted); }
+.rc-edit input[type=checkbox] { width: 18px; height: 18px; accent-color: #c7a8ff; flex: none; }
+.rc-row.unpaid .rc-mark { border-color: var(--cred); color: var(--cred); }
+.rc-row.unpaid .rc-state { color: var(--cred); }
