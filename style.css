@@ -485,3 +485,7 @@ input[type="date"].input { color-scheme: dark; }
 
 /* 결산: 엑셀 저장 버튼 */
 .btn.settle-excel { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-top: 18px; min-height: 46px; }
+
+/* 카테고리 편집: 끌어서 순서 바꾸기 */
+.edit-item.cat-item { padding: 0; }
+.cat-item .cat-row { flex: 1; min-width: 0; }

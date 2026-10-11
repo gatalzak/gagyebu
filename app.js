@@ -216,11 +216,14 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
           return `<section class="asset-group">
           ${list.map((c) => {
             const subs = subcatRecords(kind, c.name).map((s) => s.name);
-            return `<button class="asset-row cat-row" data-cat="${c.id}">
-              <span class="name">${esc(c.name)}</span>
-              <span class="muted cat-subs">${subs.length ? esc(subs.join(", ")) : "하위 없음"}</span>
-              <span class="chev">›</span>
-            </button>`;
+            return `<div class="edit-item cat-item" data-id="${c.id}">
+              <button class="grip" data-handle aria-label="끌어서 순서 바꾸기">${GRIP}</button>
+              <button class="asset-row cat-row" data-cat="${c.id}">
+                <span class="name">${esc(c.name)}</span>
+                <span class="muted cat-subs">${subs.length ? esc(subs.join(", ")) : "하위 없음"}</span>
+                <span class="chev">›</span>
+              </button>
+            </div>`;
           }).join("") || `<div class="asset-row asset-none">카테고리가 없습니다</div>`}
           </section>`;
         }).join("")}
@@ -234,6 +237,18 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
     panel.querySelectorAll("[data-role=etab] button").forEach((b) => (b.onclick = () => { etab = b.dataset.v; drawList(); }));
     panel.querySelectorAll("[data-cat]").forEach((b) => (b.onclick = () => drawCat(b.dataset.cat)));
     panel.querySelector("[data-act=done]").onclick = () => onClose();
+    panel.querySelector("[data-close]").onclick = () => onClose(); // ✕도 원래 창(내역 추가·수정)으로
+    // 끌어서 순서 바꾸기: 놓으면 지금 보이는 목록 순서대로 order를 다시 매긴다
+    enableReorder(panel, async () => {
+      const ids = [...panel.querySelectorAll(".cat-item")].map((el) => el.dataset.id);
+      const now = nowISO();
+      let changed = 0;
+      ids.forEach((id, i) => {
+        const c = S.cats[id];
+        if (c && c.order !== i) { S.cats[id] = { ...c, order: i, updatedAt: now }; changed++; }
+      });
+      if (changed) { await saveState(S); scheduleSync(); }
+    });
     panel.querySelector("[data-act=add-cat]").onclick = async () => {
       const name = panel.querySelector("[name=newCat]").value.trim();
       if (!name) return toast("카테고리 이름을 입력해 주세요.");
@@ -286,6 +301,7 @@ function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "�
         <p class="note">이름이나 지출 종류(고정/변동)를 바꾸면 이미 입력한 내역도 함께 바뀌어요. 카테고리나 하위 카테고리를 삭제해도 이미 입력한 내역은 그대로 남아요.</p>`,
     });
     const $p = (q) => panel.querySelector(q);
+    $p("[data-close]").onclick = () => onClose(); // ✕는 원래 창(내역 추가·수정)으로
     const read = () => {
       s.name = $p("[name=catName]").value;
       panel.querySelectorAll(".edit-item").forEach((el) => {
