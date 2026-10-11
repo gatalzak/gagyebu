@@ -671,7 +671,7 @@ function budgetSection(exp) {
   if (ui.month === todayStr().slice(0, 7) && left > 0) {
     const now = new Date();
     const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
-    pace = ` · 남은 ${daysLeft}일, 하루 ${won(Math.floor(left / daysLeft))}`;
+    pace = ` · ${daysLeft}일 남음 · 하루 ${won(Math.floor(left / daysLeft))}`;
   }
   const row = (name, sp, bud) => {
     const b = budgetBar(sp, bud);
@@ -680,7 +680,7 @@ function budgetSection(exp) {
     <div class="bud-row">
       <div class="row-main"><span>${esc(name)}</span><span class="bud-num">${won(sp)} <span class="muted">/ ${won(bud)}</span></span></div>
       ${b.html}
-      <div class="bud-left ${b.cls}">${l >= 0 ? `남은 ${won(l)}` : `초과 ${won(-l)}`} · ${Math.round(b.pct * 100)}%</div>
+      <div class="bud-left ${b.cls}">${l >= 0 ? `${won(l)} 남음` : `${won(-l)} 초과`} · ${Math.round(b.pct * 100)}%</div>
     </div>`;
   };
   const rows = catB
@@ -689,7 +689,7 @@ function budgetSection(exp) {
     .map(([c, sp, bud]) => row(c, sp, bud)).join("");
   return `
   <section class="card home-sec">
-    ${head(`<span class="bud-left ${tb.cls}">${left >= 0 ? `남은 ${won(left)}` : `초과 ${won(-left)}`}</span>`)}
+    ${head(`<span class="bud-left ${tb.cls}">${left >= 0 ? `${won(left)} 남음` : `${won(-left)} 초과`}</span>`)}
     <div class="bud-row bud-total">
       <div class="row-main"><span>${hasTotal ? "전체 지출" : "예산 잡은 카테고리"}</span><span class="bud-num">${won(spent)} <span class="muted">/ ${won(total)}</span></span></div>
       ${tb.html}
