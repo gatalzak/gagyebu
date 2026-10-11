@@ -44,7 +44,7 @@ const KIND_CLASS = { 수입: "inc", 지출: "exp", 자산이동: "mov" };
 const KIND_SIGN = { 수입: "+", 지출: "-", 자산이동: "" };
 
 // ---------------- 유틸 ----------------
-const FILE_PREFIX = "가탈작 가계부"; // 내려받는 파일(백업·엑셀) 이름 앞부분
+const FILE_PREFIX = "가탈작가계부"; // 내려받는 파일(백업·엑셀) 이름 앞부분
 const $ = (sel, root = document) => root.querySelector(sel);
 const pad = (n) => String(n).padStart(2, "0");
 const ym = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
