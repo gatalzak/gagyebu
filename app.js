@@ -1644,7 +1644,9 @@ function homeView(part = "summary") {
       <div class="group-title"><span class="cat-badge b-cred">${info.label}</span></div>
       ${buildCatSections(list, type)}`;
       }).join("")
-    : ui.seg === "자산이동" || ui.seg === "부채 상환" ? "" // 자산이동·부채 상환은 합계 아래 경로별 하위 항목만
+    // 자산이동: 경로(출금 → 입금)마다 섹션, 하위 줄은 내역의 '내용'별 금액
+    : ui.seg === "자산이동" ? buildCatSections(selTx.map((t) => ({ ...t, category: moveRoute(t) || MOVE_NONE, subcategory: (t.content || "").trim() || "내용 없음" })))
+    : ui.seg === "부채 상환" ? "" // 부채 상환은 합계 아래 경로별 하위 항목만
     : buildCatSections(selTx, "", ui.seg === "고정지출" ? catsFor("지출", "고정") : []);
 
 
