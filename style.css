@@ -638,3 +638,33 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .nw-why .row-main { color: var(--text); }
 .nw-why-note { font-size: calc(0.72rem + var(--fs-up)); }
 .nw-debt-head { margin-top: 10px; }
+
+/* 금액 가리기 눈 버튼 */
+.topbar { position: relative; }
+.eye-btn { position: absolute; right: 0; top: 4px; padding: 6px; color: var(--muted); display: inline-flex; }
+.eye-btn.on { color: #f3dc94; }
+.eye-btn[hidden] { display: none; }
+
+/* 앱 잠금 화면 */
+.lock-screen { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; justify-content: center; align-items: center;
+  padding: calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
+.lock-box { width: 100%; max-width: 320px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.lock-ico { color: var(--muted); margin-bottom: 10px; }
+.lock-title { margin: 0; font-size: 1.2rem; font-weight: 400; }
+.lock-sub { margin: 8px 0 0; min-height: 1.2em; color: var(--muted); font-size: calc(0.82rem + var(--fs-up)); word-break: keep-all; line-height: 1.5; }
+.lock-forgot-text { margin: 14px 0 18px; }
+.lock-warn { color: var(--exp); }
+.pin-dots { display: flex; gap: 16px; margin: 26px 0 8px; }
+.pin-dots i { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid #6a6a72; }
+.pin-dots i.on { background: var(--text); border-color: var(--text); }
+.pin-dots.shake { animation: pin-shake 0.35s; }
+@keyframes pin-shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+.lock-msg { min-height: 1.3em; margin: 4px 0 14px; color: var(--exp); font-size: calc(0.8rem + var(--fs-up)); }
+.keypad { display: grid; grid-template-columns: repeat(3, 72px); gap: 14px 22px; justify-content: center; }
+.keypad button { width: 72px; height: 72px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 1.5rem; }
+.keypad button:active { background: #2a2a30; }
+.keypad .kp-del, .keypad .kp-bio { border-color: transparent; background: transparent; color: var(--muted); font-size: 1.3rem; display: inline-flex; align-items: center; justify-content: center; }
+.keypad .kp-bio { color: #f3dc94; }
+.lock-link { margin-top: 22px; color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); padding: 6px 10px; }
+.lock-wide { width: 100%; }
+.lock-scope { font-size: calc(0.72rem + var(--fs-up)); margin-left: 6px; }

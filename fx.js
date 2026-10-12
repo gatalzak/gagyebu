@@ -42,6 +42,7 @@ export const toInput = (n, cur) => (n ? formatInput(String(n), cur) : "");
 
 /** 화면 표시: KRW는 "45,000원", 외화는 "1,234.5 USD" */
 export function formatMoney(n, cur = "KRW") {
+  if (globalThis.__hideAmt) return cur === "KRW" ? "●●●●원" : `●●●● ${cur}`; // 금액 가리기
   if (cur === "KRW") return `${Math.round(n).toLocaleString("ko-KR")}원`;
   return `${n.toLocaleString("en-US", { maximumFractionDigits: decimals(cur) })} ${cur}`;
 }

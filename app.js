@@ -3,6 +3,7 @@ import { CURRENCIES, CURRENCY_NAMES, parseMoney, formatInput, toInput, formatMon
 import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, refreshIfNeeded, syncNow, syncDrivePhotos } from "./sync.js";
 import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
 import { makeXlsx, makeXlsxBook } from "./xlsx.js";
+import { initLock, lockSection, bindLockSection, hideAmounts } from "./lock.js";
 
 // ---------------- 기본 목록 ----------------
 const KINDS = ["수입", "지출", "자산이동"];
@@ -52,7 +53,7 @@ const todayStr = () => { const d = new Date(); return `${ym(d)}-${pad(d.getDate(
 const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 /** 최신이 위로: 날짜 → 시각(없으면 맨 아래) → 등록 순 */
 const txNewestFirst = (a, b) => (b.date + (b.time || "") + b.createdAt).localeCompare(a.date + (a.time || "") + a.createdAt);
-const won = (n) => `${Math.round(n).toLocaleString("ko-KR")}원`;
+const won = (n) => (globalThis.__hideAmt ? "●●●●원" : `${Math.round(n).toLocaleString("ko-KR")}원`); // 금액 가리기 중이면 ●●●●
 const signed = (n, sign) => `${sign}${won(n)}`;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 /** 내역의 원화 금액 (외화 내역은 입력 당시 원화로 저장한 krw) */
@@ -3280,6 +3281,7 @@ function openBackupDialog() {
       <p class="note">백업 파일의 내역을 지금 데이터에 <b style="font-weight:400;color:#fff">합쳐요</b>. 같은 내역은 최신 것으로 바뀌고, 지금 데이터는 지워지지 않아요.</p>
       <input type="file" accept=".json,application/json" data-file hidden>
       <button class="btn" data-import style="margin-top:10px">백업 파일 불러오기</button>
+      ${lockSection()}
       <div class="section-title">초기화</div>
       <p class="note">모든 내역(수입·지출·자산이동·상환)을 지워요. 카테고리·자산·부채·자주 쓰는 내역은 남아요. 드라이브에 연결된 다른 기기에서도 지워지고, 되돌릴 수 없어요.</p>
       <label class="check-line"><input type="checkbox" data-reset-holdings checked> 자산·부채 잔액도 내역 입력 전으로 되돌리기</label>
@@ -3294,6 +3296,7 @@ function openBackupDialog() {
     toast(sync.status === "ok" ? "동기화했어요" : SYNC_TEXT[sync.status]);
   });
   panel.querySelector("[data-export]").onclick = async () => { await exportBackup(); openBackupDialog(); };
+  bindLockSection(panel, { reopen: openBackupDialog, onHideChange: (on) => { globalThis.__hideAmt = on; updateEye(); render(); } });
   panel.querySelector("[data-excel]").onclick = () => exportExcel(panel.querySelector("[name=excelRange]").value);
   const file = panel.querySelector("[data-file]");
   panel.querySelector("[data-import]").onclick = () => file.click();
@@ -3457,6 +3460,28 @@ function bindEvents() {
   new MutationObserver(() => { if (!$("#modal-root").children.length) render(); }).observe($("#modal-root"), { childList: true });
 }
 
+// 금액 가리기: 맨 위 눈 버튼을 누르면 15초 동안 보여 주고 다시 가린다
+let revealTimer = null;
+const EYE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>`;
+const EYE_OFF = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.6A9.6 9.6 0 0 1 12 5.5c6 0 9.5 6.5 9.5 6.5a17 17 0 0 1-3 3.7"/><path d="M6.5 6.9C3.9 8.6 2.5 12 2.5 12S6 18.5 12 18.5a9 9 0 0 0 4.2-1"/><path d="M9.9 9.9a2.8 2.8 0 0 0 4 4"/></svg>`;
+function updateEye() {
+  const b = $("#eye-btn");
+  if (!b) return;
+  b.hidden = !hideAmounts();
+  b.innerHTML = globalThis.__hideAmt ? EYE_OFF : EYE;
+  b.setAttribute("aria-label", globalThis.__hideAmt ? "금액 잠깐 보기" : "금액 가리기");
+  b.classList.toggle("on", !globalThis.__hideAmt);
+}
+function bindEye() {
+  $("#eye-btn").onclick = () => {
+    clearTimeout(revealTimer);
+    globalThis.__hideAmt = !globalThis.__hideAmt;
+    if (!globalThis.__hideAmt) revealTimer = setTimeout(() => { globalThis.__hideAmt = hideAmounts(); updateEye(); render(); }, 15_000);
+    updateEye();
+    render();
+  };
+}
+
 async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
@@ -3465,8 +3490,12 @@ async function main() {
   const autoN = autoRecur(); // 자동 기록 켠 반복 내역
   if (autoN) await saveState(S);
   sync.onChange = renderSyncBar;
+  globalThis.__hideAmt = hideAmounts();
   bindEvents();
+  bindEye();
+  updateEye();
   render();
+  initLock({ toast, isConnected }); // 앱 잠금(켜 둔 경우)
   runSync();
   if (fresh) toast("구글 드라이브에 연결했어요");
   else if (autoN) toast(`반복 내역 ${autoN}건을 자동 기록했어요`);
