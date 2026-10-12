@@ -435,6 +435,20 @@ export function netWorthLine() {
 }
 
 /** 결산: 순자산 — 지금 값, 최근 12개월 추이, 이번 달 바뀐 이유, 자산·부채 구성 */
+/** 자산이동을 카테고리(예: 증권 → 은행)별로 묶음. 카테고리가 없던 예전 기록은 자산 종류 경로로 */
+function moveCatTotals(list) {
+  const by = {};
+  list.forEach((t) => {
+    let c = t.category;
+    if (!c) {
+      const ty = (sign) => S.assets[(t.deltas || []).find((x) => x.col === "assets" && Math.sign(x.amount) === sign)?.id]?.type;
+      c = ty(-1) || ty(1) ? `${ty(-1) || "?"} → ${ty(1) || "?"}` : "기타";
+    }
+    by[c] = (by[c] || 0) + txKRW(t);
+  });
+  return Object.entries(by).sort((a, b) => b[1] - a[1]);
+}
+
 export function homeView(part = "summary") {
   const tx = monthTx();
   const inc = tx.filter((t) => t.kind === "수입");
@@ -560,13 +574,16 @@ export function homeView(part = "summary") {
       <div class="row-sub"><span>└ 고정지출</span><span>${signed(sum(fixed), "-")}</span></div>
       <div class="row-sub"><span>└ 변동지출</span><span>${signed(sum(variable), "-")}</span></div>
     </div>
+    <div class="row">
+      <div class="row-main">${homeLabel("자산이동", "자산이동", "mov")}<span class="mov">${won(sum(mov))}</span></div>
+      ${moveCatTotals(mov).map(([c, v]) => `<div class="row-sub"><span>└ ${esc(c)}</span><span>${won(v)}</span></div>`).join("")}
+    </div>
   </section>
   ${budgetSection(exp)}
   ${recurringSection()}
   ${creditCardSection(shortDebt)}
   ${minusUse.length ? section("단기부채", "마이너스 통장 사용", "cred", sum(minusUse), `<div class="row">${groupRows(minusUse, (t) => deltaRef(t.assetDelta).id, "마이너스통장")}</div>`) : ""}
   ${section("대출실행", "부채 · 이번 달 신규 발생", "cred", sum(newDebt), newDebtRows + owedLine)}
-  ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
   ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}`;
   if (part === "summary") return summary;
   return `
