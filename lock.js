@@ -31,7 +31,7 @@ function safetyBox(warn = true) {
 }
 const FORGOT_HELP = `
   <ul class="lock-help">
-    <li><span>지문을 등록해 두면</span> PIN이 생각나지 않아도 지문으로 열 수 있어요.</li>
+    <li><span>폰 잠금(지문·얼굴)으로 열기를 켜 두면</span> PIN이 생각나지 않아도 폰 잠금으로 열 수 있어요.</li>
     <li><span>그래도 못 열면</span> 잠금 화면의 'PIN을 잊었어요'에서 이 기기의 데이터를 지우고 다시 시작해요. 드라이브에 연결돼 있으면 내역은 드라이브에서 다시 받아와요.</li>
     <li><span>드라이브도 백업도 없으면</span> 이 기기의 데이터는 되살릴 수 없어요.</li>
   </ul>`;
@@ -102,7 +102,7 @@ function pinScreen({ title, sub = "", onPin, onCancel = null, unlock = false }) 
       <p class="lock-msg" role="alert"></p>
       <div class="keypad">
         ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button data-k="${n}">${n}</button>`).join("")}
-        ${unlock && cfg?.bio && bioOk ? `<button class="kp-bio" data-bio aria-label="지문으로 열기">${FINGER_ICO}</button>` : `<span></span>`}
+        ${unlock && cfg?.bio && bioOk ? `<button class="kp-bio" data-bio aria-label="폰 잠금(지문·얼굴)으로 열기">${FINGER_ICO}</button>` : `<span></span>`}
         <button data-k="0">0</button>
         <button class="kp-del" data-del aria-label="지우기">⌫</button>
       </div>
@@ -142,7 +142,7 @@ function pinScreen({ title, sub = "", onPin, onCancel = null, unlock = false }) 
   el.querySelector("[data-forgot]")?.addEventListener("click", () => forgotScreen(el));
   const bioBtn = el.querySelector("[data-bio]");
   const tryBio = async () => {
-    try { await bioCheck(); unlockNow(); close(); } catch { msg.textContent = "지문 인증이 취소됐어요. PIN을 입력하세요."; }
+    try { await bioCheck(); unlockNow(); close(); } catch { msg.textContent = "폰 잠금 확인이 취소됐어요. PIN을 입력하세요."; }
   };
   if (bioBtn) { bioBtn.onclick = tryBio; tryBio(); } // 잠금 화면이 뜨면 바로 지문 요청
   return { close };
@@ -157,7 +157,7 @@ function forgotScreen(lockEl) {
     <div class="lock-ico">${LOCK_ICO}</div>
     <h2 class="lock-title">PIN을 잊었어요</h2>
     <ol class="forgot-steps">
-      ${cfg?.bio && bioOk ? `<li><span class="fs-h">지문으로 열어 보세요</span>'돌아가기'를 누르고 키패드 왼쪽 아래 지문 버튼을 누르면 PIN 없이 열려요. 연 뒤 설정에서 PIN을 바꾸면 돼요.</li>` : ""}
+      ${cfg?.bio && bioOk ? `<li><span class="fs-h">폰 잠금(지문·얼굴)으로 열어 보세요</span>'돌아가기'를 누르고 키패드 왼쪽 아래 지문 버튼을 누르면 PIN 없이 열려요. 연 뒤 설정에서 PIN을 바꾸면 돼요.</li>` : ""}
       <li><span class="fs-h">자주 쓰는 숫자를 다시 떠올려 보세요</span>생일·전화번호 끝자리처럼 평소 쓰는 4자리일 수 있어요. 5번 틀리면 30초 기다렸다가 다시 할 수 있어요.</li>
       <li><span class="fs-h">다른 기기에서 먼저 확인하세요</span>PC 등 다른 기기에서도 이 가계부를 쓰고 있다면, 그 기기에서 '백업/복원 → 지금 동기화'를 한 번 눌러 최신 내역을 드라이브에 올려 두세요. 앱 잠금은 기기마다 따로라서 다른 기기는 잠기지 않아요.</li>
       <li><span class="fs-h">그래도 안 되면 이 기기만 초기화</span>
@@ -201,7 +201,7 @@ export function lockNow() {
   document.documentElement.classList.add("app-locked");
   pinScreen({
     title: "PIN을 입력하세요",
-    sub: cfg.bio && bioOk ? "또는 지문으로 열 수 있어요" : "",
+    sub: cfg.bio && bioOk ? "또는 폰 잠금(지문·얼굴)으로 열 수 있어요" : "",
     unlock: true,
     onPin: async (pin) => {
       if ((await hashPin(pin, cfg.salt)) === cfg.hash) { unlockNow(); return true; }
@@ -257,7 +257,8 @@ export function lockSection() {
     ${on ? `
       <div class="field" style="margin-top:4px"><label>잠기는 시점</label>
         <select class="input" name="lockTiming">${TIMING_ORDER.map((k) => [k, TIMING_LABEL[k]]).map(([k, v]) => `<option value="${k}" ${String(cfg.timing) === k ? "selected" : ""}>${v}</option>`).join("")}</select></div>
-      <label class="check-line"><input type="checkbox" data-lock-bio ${cfg.bio ? "checked" : ""} ${bioOk ? "" : "disabled"}> 지문·얼굴 인증으로 열기${bioOk ? "" : ` <span class="muted">(이 기기에서는 쓸 수 없어요)</span>`}</label>
+      <label class="check-line"><input type="checkbox" data-lock-bio ${cfg.bio ? "checked" : ""} ${bioOk ? "" : "disabled"}> 폰 잠금(지문·얼굴)으로 열기${bioOk ? "" : ` <span class="muted">(이 기기에서는 쓸 수 없어요)</span>`}</label>
+      <p class="note bio-note">지문·얼굴 정보는 폰 안에만 있고 앱에 전달되지 않아요. 폰이 '주인 맞음'만 알려 줘요. 켜면 구글 비밀번호 관리자에 '가탈작 가계부' 패스키가 보일 수 있는데, 지문이 아니라 이 폰으로 앱을 여는 열쇠예요.</p>
       <div class="money-line" style="margin-top:10px">
         <button class="btn" data-lock-change>PIN 바꾸기</button>
         <button class="btn" data-lock-off>잠금 끄기</button>
@@ -267,7 +268,7 @@ export function lockSection() {
         ${FORGOT_HELP}
         ${safetyBox()}
       </details>` : `
-      <p class="note">켜면 앱을 열 때 4자리 PIN(또는 지문)을 물어봐요. 기본은 꺼져 있어요.</p>
+      <p class="note">켜면 앱을 열 때 4자리 PIN(또는 폰 잠금)을 물어봐요. 기본은 꺼져 있어요.</p>
       <div class="forgot-pre">
         <div class="fp-title">켜기 전에: PIN을 잊으면 어떻게 되나요?</div>
         ${FORGOT_HELP}
@@ -288,7 +289,7 @@ export function bindLockSection(panel, { reopen, onHideChange }) {
     cfg = { hash: await hashPin(pin, salt), salt, timing: "5", bio: null };
     save();
     reopen();
-    hooks.toast(bioOk ? "앱 잠금을 켰어요 · 지문도 등록해 두면 PIN을 잊어도 열 수 있어요" : "앱 잠금을 켰어요 · 5분 동안 안 쓰면 잠겨요");
+    hooks.toast(bioOk ? "앱 잠금을 켰어요 · 폰 잠금으로 열기도 켜 두면 PIN을 잊어도 열 수 있어요" : "앱 잠금을 켰어요 · 5분 동안 안 쓰면 잠겨요");
   });
   q("[name=lockTiming]")?.addEventListener("change", (e) => {
     cfg.timing = e.target.value;
@@ -297,9 +298,9 @@ export function bindLockSection(panel, { reopen, onHideChange }) {
   });
   q("[data-lock-bio]")?.addEventListener("change", async (e) => {
     if (e.target.checked) {
-      try { cfg.bio = await bioRegister(); save(); hooks.toast("지문으로 열 수 있어요"); }
-      catch { e.target.checked = false; hooks.toast("지문 등록이 취소됐어요"); }
-    } else { cfg.bio = null; save(); hooks.toast("지문 열기를 껐어요"); }
+      try { cfg.bio = await bioRegister(); save(); hooks.toast("폰 잠금(지문·얼굴)으로 열 수 있어요"); }
+      catch { e.target.checked = false; hooks.toast("폰 잠금 연결이 취소됐어요"); }
+    } else { cfg.bio = null; save(); hooks.toast("폰 잠금으로 열기를 껐어요"); }
   });
   q("[data-lock-change]")?.addEventListener("click", async () => {
     if (!(await askCurrentPin("PIN 바꾸기"))) return reopen();

@@ -696,3 +696,4 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .lock-help { margin: 8px 0 0; padding-left: 16px; color: var(--muted); font-size: calc(0.78rem + var(--fs-up)); line-height: 1.55;
   display: flex; flex-direction: column; gap: 4px; word-break: keep-all; }
 .lock-help li > span { color: var(--text); }
+.bio-note { margin: 4px 0 0 26px; word-break: keep-all; }
