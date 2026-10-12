@@ -11,7 +11,7 @@ import { openBudgetDialog, openRecurringDialog } from "./home.js";
 import { openRepayDialog } from "./entry.js";
 import { commit, main, render, runSync, scheduleSync, updateEye } from "./app.js";
 export function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "고정", onClose = closeModal } = {}) {
-  const CAT_KINDS = ["수입", "지출"]; // 자산이동은 카테고리 없이 출금 → 입금 자산으로 구분하므로 편집 대상에서 뺀다
+  const CAT_KINDS = ["수입", "지출", "자산이동"];
   let kind = CAT_KINDS.includes(startKind) ? startKind : "지출";
   let etab = startEtype; // 지출일 때 보고 있는 탭: 고정 | 변동
 

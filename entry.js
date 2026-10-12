@@ -420,6 +420,11 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
   const draw = () => {
+    if (draft.kind === "자산이동" && !draft.catTouched && !existing) {
+      const ty = (key) => { const r = parseLinkKey(key); return r && S.assets[r.id]?.type; };
+      const guess = `${ty(draft.fromAsset)} → ${ty(draft.toAsset)}`;
+      if (ty(draft.fromAsset) && ty(draft.toAsset) && catsFor("자산이동").includes(guess)) draft.category = guess;
+    }
     const cardMode = draft.kind === "지출" && CARD_MODES.includes(draft.debtMode);
     // 카드·마통 사용은 고정/변동을 묻지 않고, 카테고리를 고정·변동 묶음으로 함께 보여 준다(고른 카테고리를 따라감)
     const catList = cardMode ? EXPENSE_TYPES.flatMap((et) => catsFor("지출", et)) : catsFor(draft.kind, draft.kind === "지출" ? draft.expenseType : null);
@@ -489,7 +494,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
         <div class="field"><label>내용 <span class="req">*</span></label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
         ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명 / 통장에 입력된 내역 이름" : "예: 김밥천국 / 통장에 입력된 내역 이름"}" value="${esc(draft.party || "")}"></div>
         ` : ""}
-        ${draft.kind !== "자산이동" ? `<div class="field"><label>카테고리 · 하위 카테고리 <span class="req">*</span></label>
+        ${true ? `<div class="field"><label>카테고리 · 하위 카테고리 <span class="req">*</span></label>
           <div class="money-line">
             <select class="input half" name="category">${catOpts}</select>
             <select class="input half" name="subcategory">
@@ -617,7 +622,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       draw();
     };
     if ($p("[name=category]")) {
-    $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draw(); };
+    $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draft.catTouched = true; draw(); };
     $p("[data-act=edit-cats]").onclick = () => {
       read();
       openCategoryEditor({ kind: draft.kind, etype: draft.expenseType || "고정", onClose: () => draw() });
@@ -654,6 +659,8 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       });
     };
     if (fromSel) {
+      // 출금·입금 자산을 바꾸면(카테고리를 직접 고르기 전) 맞는 경로 카테고리로 다시 그림
+      [fromSel, toSel].forEach((el) => el.addEventListener("change", () => { if (!draft.catTouched && !existing) { read(); draw(); } }));
       [fromSel, toSel, curSel].forEach((el) => el.addEventListener("change", refreshTransferHint));
       [amt, krwIn].forEach((el) => el.addEventListener("input", refreshTransferHint));
       refreshTransferHint();
@@ -679,7 +686,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       if (ASSET_LINK[draft.kind] && !draft.link) return bad("[name=asset]", `${linkCfgOf(draft).label}${/카드$/.test(linkCfgOf(draft).label) ? "를" : "을"} 골라 주세요.`);
       if (draft.kind === "지출" && $p("[data-pay-field]") && !$p("[data-pay-field]").hidden && !draft.pay) return bad("[name=pay]", "결제 수단을 골라 주세요.");
       if (!(draft.content || "").trim()) return bad("[name=content]", "내용을 입력해 주세요.");
-      if (draft.kind !== "자산이동" && !draft.category) return bad("[name=category]", "카테고리를 골라 주세요.");
+      if (!draft.category) return bad("[name=category]", "카테고리를 골라 주세요.");
       const now = nowISO();
       const isMove = draft.kind === "자산이동";
       let deltas = null;
@@ -697,8 +704,6 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
           deltas.push({ col: "assets", id: a.id, amount: sign * roundFor(v, curOf(a)) });
         }
         draft.party = "";
-        draft.category = ""; // 자산이동은 카테고리 없이 출금 → 입금 자산으로 구분
-        draft.subcategory = "";
         draft.memo = "";
       }
       const rec = {

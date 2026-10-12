@@ -171,7 +171,7 @@ export async function main() {
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   setS(await loadState());
-  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + cleanMoveCategories() + repairLoanTxs() + migrateBalances() + freezeCatEtypes()) await saveState(S);
+  if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + repairLoanTxs() + migrateBalances() + freezeCatEtypes()) await saveState(S);
   const autoN = autoRecur(); // 자동 기록 켠 반복 내역
   if (autoN) await saveState(S);
   sync.onChange = renderSyncBar;

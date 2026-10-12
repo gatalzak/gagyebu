@@ -90,7 +90,7 @@ export function seedCats() {
   let added = 0;
   for (const [kind, names] of Object.entries(CATEGORIES)) {
     names.forEach((name, i) => {
-      const id = `defcat:${kind}:${name}`;
+      const id = kind === "자산이동" ? `defmove:${name}` : `defcat:${kind}:${name}`;
       if (S.cats[id]) return;
       S.cats[id] = { id, kind, name, order: i, ...(kind === "지출" ? { etype: DEFAULT_FIXED.has(name) ? "고정" : "변동" } : {}), createdAt: SEED_TIME, updatedAt: SEED_TIME, deleted: false };
       added++;
@@ -275,7 +275,7 @@ export function buildRecurTx(r, month, id, date) {
   const now = nowISO();
   const rec = {
     id, date, time: "", kind: f.kind, expenseType: f.kind === "지출" ? f.expenseType || "고정" : "",
-    category: f.kind === "자산이동" ? "" : f.category || "", subcategory: f.kind === "자산이동" ? "" : f.subcategory || "",
+    category: f.category || "", subcategory: f.subcategory || "",
     currency: "KRW", amount: r.amount, content: f.content || "", party: f.party || "", memo: f.memo || "",
     recurId: r.id, recurMonth: month, createdAt: now, updatedAt: now, deleted: false,
   };
@@ -573,7 +573,7 @@ export function saveLoanTx({ existing = null, debt, asset, amount, date, time, m
 /** 부채 발생(대출 실행·돈 빌림) 기록하기 / 고치기·삭제 */
 export function newTxDraft(presetDate, over = {}) {
   const d = { kind: "지출", expenseType: "고정", date: presetDate || todayStr(), time: nowTime(), currency: "KRW", amount: 0, krw: 0, content: "", party: "", memo: "", ...over };
-  d.category = d.kind === "자산이동" ? "" : catsFor(d.kind, d.kind === "지출" ? d.expenseType : null)[0] || "";
+  d.category = catsFor(d.kind, d.kind === "지출" ? d.expenseType : null)[0] || "";
   return d;
 }
 
