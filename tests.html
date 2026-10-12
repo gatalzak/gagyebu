@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>계산 자동 테스트</title>
+  <style>
+    :root { --bg: #131315; --card: #1c1c20; --line: #2c2c32; --text: #e9e9ec; --muted: #9a9aa2; --ok: #4cd28a; --bad: #ff6b6b; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    main { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
+    h1 { font-size: 1.15rem; font-weight: 400; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 0.85rem; margin: 0 0 16px; }
+    #summary { padding: 12px 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--card); margin-bottom: 14px; }
+    #summary.ok { border-color: #2f6b4a; color: var(--ok); }
+    #summary.bad { border-color: #7a3434; color: var(--bad); }
+    .group { margin-top: 16px; color: var(--muted); font-size: 0.85rem; }
+    .t { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 0.9rem; }
+    .t .m { width: 18px; flex: none; }
+    .t.ok .m { color: var(--ok); } .t.bad .m { color: var(--bad); }
+    .t .why { display: block; color: var(--bad); font-size: 0.8rem; word-break: break-all; }
+    iframe { width: 390px; height: 700px; border: 1px solid var(--line); margin-top: 24px; display: block; max-width: 100%; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>가탈작 가계부 · 계산 자동 테스트</h1>
+    <p class="sub">잔액·순자산·카드 청구·할부·반복 내역·예산 계산을 정해진 예제로 검사해요. 실제 데이터는 읽거나 바꾸지 않아요(아래 앱은 메모리에서만 동작).</p>
+    <div id="summary">테스트 준비 중…</div>
+    <div id="results"></div>
+    <iframe id="app" src="index.html?selftest" title="테스트용 앱"></iframe>
+  </main>
+  <script type="module" src="tests.js"></script>
+</body>
+</html>

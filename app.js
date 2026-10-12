@@ -1,4 +1,6 @@
-import { loadState, saveState, mergeInto, uid, nowISO } from "./store.js";
+import { loadState, saveState, mergeInto, uid, nowISO, setMemoryMode, emptyState } from "./store.js";
+// 자동 테스트 모드: tests.html이 index.html?selftest를 띄워 계산을 검사한다(저장·동기화·잠금 없음)
+const SELFTEST = new URLSearchParams(location.search).has("selftest");
 import { CURRENCIES, CURRENCY_NAMES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates, ratesDate, decimals } from "./fx.js";
 import { sync, isConfigured, isConnected, connect, disconnect, handleRedirect, refreshIfNeeded, syncNow, syncDrivePhotos } from "./sync.js";
 import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
@@ -49,7 +51,7 @@ const FILE_PREFIX = "가탈작가계부"; // 내려받는 파일(백업·엑셀)
 const $ = (sel, root = document) => root.querySelector(sel);
 const pad = (n) => String(n).padStart(2, "0");
 const ym = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
-const todayStr = () => { const d = new Date(); return `${ym(d)}-${pad(d.getDate())}`; };
+const todayStr = () => { if (SELFTEST && globalThis.__fakeToday) return globalThis.__fakeToday; const d = new Date(); return `${ym(d)}-${pad(d.getDate())}`; };
 const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 /** 최신이 위로: 날짜 → 시각(없으면 맨 아래) → 등록 순 */
 const txNewestFirst = (a, b) => (b.date + (b.time || "") + b.createdAt).localeCompare(a.date + (a.time || "") + a.createdAt);
@@ -441,10 +443,12 @@ async function commit() {
 // 데이터가 바뀌면 잠시 뒤 드라이브와 합친다(연속 입력은 한 번에).
 let syncTimer;
 function scheduleSync(delay = 1500) {
+  if (SELFTEST) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(runSync, delay);
 }
 async function runSync() {
+  if (SELFTEST) return;
   const pulled = await syncNow(S);
   if (pulled && migrateBalances()) { await saveState(S); scheduleSync(); } // 예전 버전 기기에서 온 자산·부채
   if (pulled && autoRecur()) { await saveState(S); scheduleSync(); } // 다른 기기에서 켠 자동 기록
@@ -3672,7 +3676,7 @@ function bindEvents() {
   $("#open-backup").onclick = openBackupDialog;
   $("#sync-bar").onclick = () => (sync.status === "need-login" ? connect() : runSync());
   // 앱으로 돌아왔을 때: 토큰이 끝났으면(창이 열려 있지 않을 때) 조용히 재로그인, 아니면 바로 동기화
-  const idle = () => document.visibilityState === "visible" && !$("#modal-root").children.length;
+  const idle = () => !SELFTEST && document.visibilityState === "visible" && !$("#modal-root").children.length; // 테스트 모드에선 로그인·동기화 안 함
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") return;
     if (idle() && refreshIfNeeded()) return;
@@ -3759,6 +3763,7 @@ function bindEye() {
 }
 
 async function main() {
+  if (SELFTEST) return selfTestMain();
   const fresh = handleRedirect(); // 구글 로그인에서 돌아온 경우 토큰 저장
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   S = await loadState();
@@ -3779,4 +3784,25 @@ async function main() {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 }
+/** 자동 테스트 모드: 메모리 저장소 + 계산 함수 노출 (tests.html에서 씀) */
+async function selfTestMain() {
+  setMemoryMode(true);
+  S = await loadState();
+  seedCats(); seedSubcats();
+  bindEvents();
+  render();
+  globalThis.__gagyebu = {
+    get S() { return S; },
+    reset(state) { S = { ...emptyState(), ...state }; linkCache = null; seedCats(); seedSubcats(); },
+    clearCache() { linkCache = null; },
+    ui, render, closeModal,
+    balanceOf, holdingsAt, migrateBalances, repairLoanTxs, saveLoanTx,
+    shortDebtType, isRepayTx, isLoanTx, isMoveTx, monthFigures,
+    cardCycle, payMonthOf, cardBill, activeInstallments, nextPayMonth,
+    recurDate, recurStatus, recurLastAmount, autoRecur,
+    liveBudgets, budgetSection, catTrendSection, networthBody,
+    natureOf, natureDraft, openRepayDialog, openTxDialog, newTxDraft,
+  };
+}
+
 main();

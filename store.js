@@ -17,11 +17,16 @@ function openDB() {
   });
 }
 
-function emptyState() {
+// 자동 테스트(?selftest)에서는 실제 저장소를 건드리지 않도록 메모리에서만 동작한다
+let memoryOnly = false;
+export function setMemoryMode(on) { memoryOnly = !!on; }
+
+export function emptyState() {
   return { version: 1, transactions: {}, assets: {}, debts: {}, subcats: {}, cats: {}, favorites: {}, budgets: {}, recurring: {}, meta: {} };
 }
 
 export async function loadState() {
+  if (memoryOnly) return emptyState();
   const db = await openDB();
   const state = await new Promise((resolve, reject) => {
     const req = db.transaction(STORE).objectStore(STORE).get(KEY);
@@ -32,6 +37,7 @@ export async function loadState() {
 }
 
 export async function saveState(state) {
+  if (memoryOnly) return;
   const db = await openDB();
   await new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, "readwrite");
