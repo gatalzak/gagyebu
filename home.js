@@ -461,7 +461,8 @@ export function homeView(part = "summary") {
       <div class="row-main"><span>${title}</span><span class="cred">${won(sum(items))}</span></div>
       ${groupRows(items, idOf, fallback)}
     </div>` : "";
-  const loanTypes = [...new Set(loans.map((t) => debtType(loanDebt(t)) || "부채"))];
+  const typeOrder = (t) => (DEBT_TYPES.includes(t) ? DEBT_TYPES.indexOf(t) : 99); // 나의 부채의 종류 순서
+  const loanTypes = [...new Set(loans.map((t) => debtType(loanDebt(t)) || "부채"))].sort((a, b) => typeOrder(a) - typeOrder(b));
   const newDebtRows = Object.entries(SHORT_DEBT).map(([type, info]) =>
     typeRow(info.title, shortDebt.filter((t) => shortDebtType(t) === type), (t) => deltaRef(t.assetDelta).id, type)).join("")
     + loanTypes.map((type) => typeRow(`${type} 차입`, loans.filter((t) => (debtType(loanDebt(t)) || "부채") === type), (t) => loanDebt(t)?.id, type)).join("");
@@ -529,9 +530,13 @@ export function homeView(part = "summary") {
         return `
       <div class="group-title"><span class="cat-badge b-cred">${info.label}</span></div>
       ${buildCatSections(list, type)}`;
-      }).join("") + (loans.length ? `
-      <div class="group-title"><span class="cat-badge b-cred">차입</span></div>
-      ${buildCatSections(loans.map((t) => ({ ...t, category: `${loanDebt(t)?.name || "부채"} · ${debtType(loanDebt(t)) || "부채"}`, subcategory: "" })), "loan")}` : "")
+      }).join("") + loanTypes.map((type) => {
+        // 빌린 돈: 나의 부채의 종류(대출·지인에게 빌린 돈 등)마다 묶음, 섹션은 '부채 이름(차입)'
+        const list = loans.filter((t) => (debtType(loanDebt(t)) || "부채") === type);
+        return `
+      <div class="group-title"><span class="cat-badge b-cred">${esc(type)}</span></div>
+      ${buildCatSections(list.map((t) => ({ ...t, category: `${loanDebt(t)?.name || "부채"}(차입)`, subcategory: "" })), `loan|${type}`)}`;
+      }).join("")
     // 자산이동: 경로(출금 → 입금)마다 섹션, 하위 줄은 내역의 '내용'별 금액
     : ui.seg === "자산이동" ? buildCatSections(selTx.map((t) => ({ ...t, category: moveRoute(t) || MOVE_NONE, subcategory: (t.content || "").trim() || "내용 없음" })))
     : ui.seg === "부채 상환" ? "" // 부채 상환은 합계 아래 경로별 하위 항목만
@@ -574,7 +579,12 @@ export function homeView(part = "summary") {
       ${ui.seg === "부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const v = sum(shortDebt.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${won(v)}</span></div>` : "";
-      }).join("") + loanTypes.map((type) => `<div class="tb-sub"><span>└ ${type} 차입</span><span>${won(sum(loans.filter((t) => (debtType(loanDebt(t)) || "부채") === type)))}</span></div>`).join("") : ""}
+      }).join("") + (() => {
+        // 빌린 돈은 부채 이름별: '동생(차입)', '주택담보대출(차입)'
+        const by = {};
+        loans.forEach((t) => { const d = loanDebt(t); const k = d?.id || "?"; by[k] = (by[k] || 0) + txKRW(t); });
+        return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([id, v]) => `<div class="tb-sub"><span>└ ${esc(S.debts[id]?.name || "부채")}(차입)</span><span>${won(v)}</span></div>`).join("");
+      })() : ""}
       ${ui.seg === "자산이동" || ui.seg === "부채 상환" ? (ui.seg === "부채 상환" ? repayTotals : routeTotals)(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
     </div>
     ${selTx.length ? catSections : `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
