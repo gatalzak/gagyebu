@@ -219,7 +219,7 @@ export function settleView() {
       <div class="row-sub"><span>└ 변동지출</span><span>${signed(cur.variable, "-")}</span></div>
     </div>
     <div class="row"><div class="row-main"><span>남은 돈 (수입-지출)</span><span>${signedWon(left)}</span></div></div>
-    ${cur.debtUse ? `<div class="row"><div class="row-main">${homeLabel("단기부채", "카드·마통 사용", "cred")}<span class="cred">${won(cur.debtUse)}</span></div>
+    ${cur.debtUse ? `<div class="row"><div class="row-main">${homeLabel("단기부채", "단기 부채 (새로 생김)", "cred")}<span class="cred">${won(cur.debtUse)}</span></div>
       <div class="row-sub"><span>카드·마통으로 쓴 돈은 갚을 때 통장에서 나가요</span><span></span></div></div>` : ""}
   </section>
 
@@ -228,7 +228,7 @@ export function settleView() {
     ${prevTx.length ? `<div class="row">
       ${diffRow("수입", cur.inc, prev.inc, true, "exp")}
       ${diffRow("지출", cur.exp, prev.exp, false, "exp")}
-      ${diffRow("카드·마통 사용", cur.debtUse, prev.debtUse, false, "cred")}
+      ${diffRow("단기 부채 (새로 생김)", cur.debtUse, prev.debtUse, false, "cred")}
     </div>` : `<div class="empty" style="padding:14px 0">지난달 기록이 없어요.</div>`}
   </section>
 
@@ -257,11 +257,11 @@ export function exportSettlement() {
   const gap = () => rows.push([]);
   head(`${y}년 ${m}월 결산`, "금액");
   rows.push(["수입", cur.inc], ["지출", cur.exp], ["  고정지출", cur.fixed], ["  변동지출", cur.variable],
-    ["남은 돈 (수입-지출)", left], ["저축률", rate === null ? "-" : `${rate}%`], ["카드·마통 사용", cur.debtUse], ["부채 상환", cur.repay]);
+    ["남은 돈 (수입-지출)", left], ["저축률", rate === null ? "-" : `${rate}%`], ["단기 부채 (새로 생김)", cur.debtUse], ["부채 상환", cur.repay]);
   gap();
   head(`지난달 대비`, `${pm}월`, `${m}월`, "증감");
   if (prevTx.length) {
-    for (const [label, a, b] of [["수입", prev.inc, cur.inc], ["지출", prev.exp, cur.exp], ["카드·마통 사용", prev.debtUse, cur.debtUse]]) rows.push([label, a, b, b - a]);
+    for (const [label, a, b] of [["수입", prev.inc, cur.inc], ["지출", prev.exp, cur.exp], ["단기 부채 (새로 생김)", prev.debtUse, cur.debtUse]]) rows.push([label, a, b, b - a]);
   } else rows.push(["지난달 기록이 없어요"]);
   gap();
   head("카테고리별 지출 (카드·마통 포함)", "금액", "비율");

@@ -459,17 +459,22 @@ export function homeView(part = "summary") {
     </div>`;
   }).join("");
 
-  // 지금 남은 카드·마통 등 단기 빚(나의 부채 잔액 기준) — 이번 달 사용액과 다른 숫자라 따로 보여 줌
+  // 지금 남은 단기 부채(나의 부채 잔액 기준) — 이번 달 새로 생긴 금액과 다른 숫자라 종류별로 따로 보여 줌
   const shortDebts = Object.values(S.debts).filter((d) => !d.deleted && SHORT_DEBT[debtType(d)]);
-  const owed = shortDebts.reduce((a, d) => a + (toKRW(balanceOf("debts", d), curOf(d)) ?? 0), 0);
-  const owedLine = shortDebts.length ? `<div class="row owed-row"><div class="row-sub"><span>지금 남은 카드·마통 빚</span><span class="cred">${won(owed)}</span></div></div>` : "";
+  const owedBy = {};
+  shortDebts.forEach((d) => { const t = debtType(d); owedBy[t] = (owedBy[t] || 0) + (toKRW(balanceOf("debts", d), curOf(d)) ?? 0); });
+  const owed = Object.values(owedBy).reduce((a, v) => a + v, 0);
+  const owedLine = shortDebts.length ? `<div class="row owed-row">
+      <div class="row-main"><span>지금 남은 단기 부채</span><span class="cred">${won(owed)}</span></div>
+      ${Object.keys(SHORT_DEBT).filter((t) => Math.round(owedBy[t] || 0)).map((t) => `<div class="row-sub"><span>└ ${SHORT_DEBT[t].label}</span><span>${won(owedBy[t])}</span></div>`).join("")}
+    </div>` : "";
 
   const segs = {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
     자산이동: [mov, "mov", ""],
-    "카드·마통 사용": [shortDebt, "cred", ""], // 카드·마통 등으로 쓴 돈(새로 생긴 단기 빚), 부호 없이
+    "단기 부채": [shortDebt, "cred", ""], // 이번 달 새로 생긴 단기 부채(카드·마통·미납 등으로 쓴 돈), 부호 없이
     "부채 상환": [repay, "repay", ""],
   };
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
@@ -506,7 +511,7 @@ export function homeView(part = "summary") {
       .join("");
   };
   // 단기부채는 신용카드 / 마이너스통장으로 나눠서, 각 묶음 제목(뱃지·소계) 아래에 카테고리 섹션
-  const catSections = ui.seg === "카드·마통 사용"
+  const catSections = ui.seg === "단기 부채"
     ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const list = selTx.filter((t) => shortDebtType(t) === type);
         if (!list.length) return "";
@@ -541,7 +546,7 @@ export function homeView(part = "summary") {
   ${budgetSection(exp)}
   ${recurringSection()}
   ${cardBillSection()}
-  ${section("단기부채", "카드·마통 사용 (이번 달)", "cred", sum(shortDebt), shortDebtRows + owedLine)}
+  ${section("단기부채", "단기 부채 · 이번 달 새로 생김", "cred", sum(shortDebt), shortDebtRows + owedLine)}
   ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
   ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
   ${loans.length ? section("대출실행", "대출 실행", "cred", sum(loans), subRows(loanTotals(loans))) : ""}`;
@@ -553,7 +558,7 @@ export function homeView(part = "summary") {
     </div>
     <div class="total-bar">
       <div class="tb-main"><span class="home-label"><span class="${cls}">${SUM_ICON}</span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
-      ${ui.seg === "카드·마통 사용" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
+      ${ui.seg === "단기 부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${won(v)}</span></div>` : "";
       }).join("") : ""}
