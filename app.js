@@ -1339,8 +1339,9 @@ function homeView(part = "summary") {
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
   const [selTx, cls, sign] = segs[ui.seg];
   // 카테고리마다 섹션 하나: 머리줄(카테고리·합계, 색 유지) → 구분선 → 하위 카테고리별 금액(회색)
-  const buildCatSections = (list, group = "") => {
+  const buildCatSections = (list, group = "", allCats = []) => {
     const byCat = {};
+    allCats.forEach((c) => (byCat[c] = { total: 0, subs: {} })); // 0원이어도 보여 줄 카테고리(고정지출)
     list.forEach((t) => {
       const c = (byCat[t.category] ||= { total: 0, subs: {} });
       const v = txKRW(t);
@@ -1349,7 +1350,7 @@ function homeView(part = "summary") {
       c.subs[sub] = (c.subs[sub] || 0) + v;
     });
     return Object.entries(byCat)
-      .sort((a, b) => b[1].total - a[1].total)
+      .sort((a, b) => b[1].total - a[1].total) // 0원끼리는 카테고리 순서 그대로
       .map(([c, { total, subs }]) => {
         const named = Object.entries(subs).filter(([s]) => s).sort((a, b) => b[1] - a[1]);
         const rest = subs[""] || 0;
@@ -1361,7 +1362,7 @@ function homeView(part = "summary") {
         const items = open ? list.filter((t) => t.category === c).sort(txNewestFirst) : [];
         return `
       <section class="asset-group detail-cat${open ? " open" : ""}" data-detail-cat="${esc(key)}">
-        <div class="asset-group-head"><span>${esc(c)} <span class="cat-chev">${open ? "⌄" : "›"}</span></span><span class="${cls}">${signed(total, sign)}</span></div>
+        <div class="asset-group-head"><span>${esc(c)} <span class="cat-chev">${open ? "⌄" : "›"}</span></span><span class="${total ? cls : "muted"}">${total ? signed(total, sign) : "0원"}</span></div>
         ${rows.map(([s, v]) => `<div class="asset-row detail-sub"><span class="name">${esc(s)}</span><span class="amt">${signed(v, sign)}</span></div>`).join("")}
         ${open ? `<div class="detail-items">${items.map((t) => txRow(t, { withDate: true })).join("")}</div>` : ""}
       </section>`;
@@ -1378,7 +1379,7 @@ function homeView(part = "summary") {
       ${buildCatSections(list, type)}`;
       }).join("")
     : ui.seg === "자산이동" || ui.seg === "부채 상환" ? "" // 자산이동·부채 상환은 합계 아래 경로별 하위 항목만
-    : buildCatSections(selTx);
+    : buildCatSections(selTx, "", ui.seg === "고정지출" ? catsFor("지출", "고정") : []);
 
 
   // 현황: 이번 달 현재(수입·지출) → 단기 부채 → 자산이동 → 부채 상환 → 대출 실행, 각각 섹션(카드)으로
