@@ -2,7 +2,7 @@
 import { toKRW } from "./fx.js";
 import { makeXlsxBook } from "./xlsx.js";
 import { $, ASSET_TYPES, DEBT_TYPES, FILE_PREFIX, S, esc, liveTx, monthTx, shiftMonth, signed, sum, toast, txKRW, ui, won } from "./core.js";
-import { curOf, deltaRef, hasHoldings, holdingsAt, isShortDebt, monthEnd, monthFigures, netStartMonth, signedWon } from "./model.js";
+import { curOf, deltaRef, hasHoldings, holdingsAt, isLoanTx, isShortDebt, monthEnd, monthFigures, netStartMonth, signedWon } from "./model.js";
 import { EXCEL_ICON, homeLabel } from "./uikit.js";
 import { TX_SHEET_WIDTHS, downloadBlob, txSheetRows } from "./manage.js";
 import { main } from "./app.js";
@@ -219,11 +219,12 @@ export function settleView() {
       <div class="row-sub"><span>└ 변동지출</span><span>${signed(cur.variable, "-")}</span></div>
     </div>
     <div class="row"><div class="row-main"><span>합계 (수입-지출)</span><span>${signedWon(left)}</span></div></div>
-    ${cur.debtUse ? `<div class="row"><div class="row-main">${homeLabel("단기부채", "단기 부채 (신규 발생)", "cred")}<span class="cred">${won(cur.debtUse)}</span></div>
+    ${cur.debtUse + cur.borrow ? `<div class="row"><div class="row-main">${homeLabel("단기부채", "부채 (신규 발생)", "cred")}<span class="cred">${won(cur.debtUse + cur.borrow)}</span></div>
       ${(() => {
         // 어느 카드·통장에서 얼마나 생겼는지(예: KB신용카드 60,000원)
         const by = {};
         tx.filter(isShortDebt).forEach((t) => { const id = deltaRef(t.assetDelta)?.id; by[id] = (by[id] || 0) + txKRW(t); });
+        tx.filter(isLoanTx).forEach((t) => { const id = (t.deltas || []).find((x) => x.col === "debts" && x.amount > 0)?.id; by[id] = (by[id] || 0) + txKRW(t); }); // 차입
         return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || "부채")}</span><span>${won(v)}</span></div>`).join("");
       })()}</div>` : ""}
   </section>
@@ -233,7 +234,7 @@ export function settleView() {
     ${prevTx.length ? `<div class="row">
       ${diffRow("수입", cur.inc, prev.inc, true, "exp")}
       ${diffRow("지출", cur.exp, prev.exp, false, "exp")}
-      ${diffRow("단기 부채 (신규 발생)", cur.debtUse, prev.debtUse, false, "cred")}
+      ${diffRow("부채 (신규 발생)", cur.debtUse + cur.borrow, prev.debtUse + prev.borrow, false, "cred")}
     </div>` : `<div class="empty" style="padding:14px 0">지난달 기록이 없어요.</div>`}
   </section>
 
@@ -262,11 +263,11 @@ export function exportSettlement() {
   const gap = () => rows.push([]);
   head(`${y}년 ${m}월 결산`, "금액");
   rows.push(["수입", cur.inc], ["지출", cur.exp], ["  고정지출", cur.fixed], ["  변동지출", cur.variable],
-    ["합계 (수입-지출)", left], ["저축률", rate === null ? "-" : `${rate}%`], ["단기 부채 (신규 발생)", cur.debtUse], ["부채 상환", cur.repay]);
+    ["합계 (수입-지출)", left], ["저축률", rate === null ? "-" : `${rate}%`], ["부채 (신규 발생)", cur.debtUse + cur.borrow], ["부채 상환", cur.repay]);
   gap();
   head(`지난달 대비`, `${pm}월`, `${m}월`, "증감");
   if (prevTx.length) {
-    for (const [label, a, b] of [["수입", prev.inc, cur.inc], ["지출", prev.exp, cur.exp], ["단기 부채 (신규 발생)", prev.debtUse, cur.debtUse]]) rows.push([label, a, b, b - a]);
+    for (const [label, a, b] of [["수입", prev.inc, cur.inc], ["지출", prev.exp, cur.exp], ["부채 (신규 발생)", prev.debtUse + prev.borrow, cur.debtUse + cur.borrow]]) rows.push([label, a, b, b - a]);
   } else rows.push(["지난달 기록이 없어요"]);
   gap();
   head("카테고리별 지출 (카드·마통 포함)", "금액", "비율");

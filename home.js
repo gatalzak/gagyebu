@@ -1,7 +1,7 @@
 // 가탈작 가계부 — 현황 탭(종합·상세, 예산·반복 내역·카드·순자산 줄)
 import { saveState, uid, nowISO } from "./store.js";
 import { toKRW } from "./fx.js";
-import { $, EXPENSE_TYPES, S, debtType, esc, fmtAmount, liveTx, monthTx, nowTime, parseAmount, shiftMonth, signed, sum, toast, todayStr, txKRW, txNewestFirst, ui, won, ym } from "./core.js";
+import { $, DEBT_TYPES, EXPENSE_TYPES, S, debtType, esc, fmtAmount, liveTx, monthTx, nowTime, parseAmount, shiftMonth, signed, sum, toast, todayStr, txKRW, txNewestFirst, ui, won, ym } from "./core.js";
 import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon } from "./model.js";
 import { SUM_ICON, bindAmount, closeModal, homeLabel, openModal } from "./uikit.js";
 import { networthBody } from "./settle.js";
@@ -314,14 +314,19 @@ export function openRecurringDialog() {
 }
 
 /** 자동 기록 켠 반복 내역: 날짜가 지난 달을 내역으로 만든다. 만든 개수를 돌려준다. */
-export function cardBillSection() {
+/** 현황: 신용카드 — 이번 달 카드별 사용액 + 결제 예정(청구 금액·D-day). 누르면 카드 창 */
+export function creditCardSection(shortDebt) {
   const cards = Object.values(S.debts).filter((d) => !d.deleted && debtType(d) === "신용카드");
-  if (!cards.length) return "";
-  const rows = cards.map((d) => {
+  const cardTx = shortDebt.filter((t) => shortDebtType(t) === "신용카드");
+  if (!cards.length && !cardTx.length) return "";
+  const usedBy = {};
+  cardTx.forEach((t) => { const id = deltaRef(t.assetDelta).id; usedBy[id] = (usedBy[id] || 0) + txKRW(t); });
+  const rows = cards.sort((a, b) => (usedBy[b.id] || 0) - (usedBy[a.id] || 0)).map((d) => {
+    const used = `<span class="rc-amt">${usedBy[d.id] ? won(usedBy[d.id]) : "0원"}</span>`;
     if (!hasBilling(d)) return `
     <button class="rc-row cb-row" data-card="${d.id}">
-      <span class="rc-text"><span class="rc-name">${esc(d.name)}</span><span class="rc-sub">결제일·사용 기간을 정하면 청구 예정 금액을 미리 알려 드려요</span></span>
-      <span class="rc-right"><span class="cb-set">결제일 설정 ›</span></span>
+      <span class="rc-text"><span class="rc-name">${esc(d.name)}</span><span class="rc-sub">이번 달 사용 · <span class="cb-set">결제일 설정 ›</span></span></span>
+      <span class="rc-right">${used}<span class="rc-state">사용</span></span>
     </button>`;
     const b = cardBill(d, nextPayMonth(d));
     const done = b.total > 0 && b.paid >= b.total;
@@ -329,13 +334,13 @@ export function cardBillSection() {
     return `
     <button class="rc-row cb-row" data-card="${d.id}">
       <span class="rc-text"><span class="rc-name">${esc(d.name)}</span>
-        <span class="rc-sub">${md(b.payDate)} 결제 · 사용 ${md(b.start)}~${md(b.end)}${inst ? ` · 할부 ${inst}건` : ""}</span></span>
-      <span class="rc-right"><span class="rc-amt">${won(b.total)}</span><span class="rc-state ${done ? "cb-done" : ""}">${done ? "상환 완료" : dday(b.payDate)}</span></span>
+        <span class="rc-sub">${md(b.payDate)} 결제 <span class="cred">${won(b.total)}</span> · <span class="${done ? "cb-done" : ""}">${done ? "상환 완료" : dday(b.payDate)}</span>${inst ? ` · 할부 ${inst}건` : ""}</span></span>
+      <span class="rc-right">${used}<span class="rc-state">사용</span></span>
     </button>`;
   }).join("");
   return `
   <section class="card home-sec">
-    <div class="card-head">${homeLabel("단기부채", "카드 결제 예정", "cred")}<span></span></div>
+    <div class="card-head">${homeLabel("단기부채", "신용카드", "cred")}<span class="cred">${won(sum(cardTx))}</span></div>
     ${rows}
   </section>`;
 }
@@ -442,39 +447,45 @@ export function homeView(part = "summary") {
   const fixed = exp.filter((t) => isPlainExpense(t) && t.expenseType === "고정");
   const variable = exp.filter((t) => isPlainExpense(t) && t.expenseType !== "고정");
 
-  // 단기 부채 섹션: 종류별 줄 + 그 아래 항목(카드·통장)별 사용액
-  const shortDebtRows = Object.entries(SHORT_DEBT).map(([type, info]) => {
-    const items = shortDebt.filter((t) => shortDebtType(t) === type);
-    if (!sum(items)) return ""; // 0원인 종류는 생략
-    const byDebt = {};
-    items.forEach((t) => { const id = deltaRef(t.assetDelta).id; byDebt[id] = (byDebt[id] || 0) + txKRW(t); });
-    const subs = Object.entries(byDebt)
-      .sort((a, b) => b[1] - a[1])
-      .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || type)}</span><span>${won(v)}</span></div>`)
-      .join("");
-    return `
+  // 부채 · 이번 달 신규 발생: 카드·마통·미납 등으로 쓴 돈 + 빌린 돈(차입), 종류별 줄 + 그 아래 카드·통장·부채 이름별
+  const newDebt = [...shortDebt, ...loans];
+  const loanDebt = (t) => S.debts[(t.deltas || []).find((x) => x.col === "debts" && x.amount > 0)?.id];
+  const groupRows = (items, idOf, fallback) => {
+    const by = {};
+    items.forEach((t) => { const id = idOf(t); by[id] = (by[id] || 0) + txKRW(t); });
+    return Object.entries(by).sort((a, b) => b[1] - a[1])
+      .map(([id, v]) => `<div class="row-sub"><span>└ ${esc(S.debts[id]?.name || fallback)}</span><span>${won(v)}</span></div>`).join("");
+  };
+  const typeRow = (title, items, idOf, fallback) => sum(items) ? `
     <div class="row">
-      <div class="row-main"><span>${info.title}</span><span class="cred">${won(sum(items))}</span></div>
-      ${subs}
-    </div>`;
-  }).join("");
-
-  // 지금 남은 단기 부채(나의 부채 잔액 기준) — 이번 달 새로 생긴 금액과 다른 숫자라 종류별로 따로 보여 줌
-  const shortDebts = Object.values(S.debts).filter((d) => !d.deleted && SHORT_DEBT[debtType(d)]);
-  const owedBy = {};
-  shortDebts.forEach((d) => { const t = debtType(d); owedBy[t] = (owedBy[t] || 0) + (toKRW(balanceOf("debts", d), curOf(d)) ?? 0); });
-  const owed = Object.values(owedBy).reduce((a, v) => a + v, 0);
-  const owedLine = shortDebts.length ? `<div class="row owed-row">
-      <div class="row-main"><span>지금 남은 단기 부채</span><span class="cred">${won(owed)}</span></div>
-      ${Object.keys(SHORT_DEBT).filter((t) => Math.round(owedBy[t] || 0)).map((t) => `<div class="row-sub"><span>└ ${SHORT_DEBT[t].label}</span><span>${won(owedBy[t])}</span></div>`).join("")}
+      <div class="row-main"><span>${title}</span><span class="cred">${won(sum(items))}</span></div>
+      ${groupRows(items, idOf, fallback)}
     </div>` : "";
+  const loanTypes = [...new Set(loans.map((t) => debtType(loanDebt(t)) || "부채"))];
+  const newDebtRows = Object.entries(SHORT_DEBT).map(([type, info]) =>
+    typeRow(info.title, shortDebt.filter((t) => shortDebtType(t) === type), (t) => deltaRef(t.assetDelta).id, type)).join("")
+    + loanTypes.map((type) => typeRow(`${type} 차입`, loans.filter((t) => (debtType(loanDebt(t)) || "부채") === type), (t) => loanDebt(t)?.id, type)).join("");
+
+  // 지금 남은 부채(나의 부채 잔액 전부, 종류별) — 이번 달 새로 생긴 금액과 다른 숫자라 따로 보여 줌
+  const allDebts = Object.values(S.debts).filter((d) => !d.deleted);
+  const owedBy = {};
+  allDebts.forEach((d) => { const t = debtType(d); owedBy[t] = (owedBy[t] || 0) + (toKRW(balanceOf("debts", d), curOf(d)) ?? 0); });
+  const owed = Object.values(owedBy).reduce((a, v) => a + v, 0);
+  const owedTypes = [...DEBT_TYPES, ...Object.keys(owedBy).filter((t) => !DEBT_TYPES.includes(t))];
+  const owedLine = allDebts.length ? `<div class="row owed-row">
+      <div class="row-main"><span>지금 남은 부채</span><span class="cred">${won(owed)}</span></div>
+      ${owedTypes.filter((t) => Math.round(owedBy[t] || 0)).map((t) => `<div class="row-sub"><span>└ ${t}</span><span>${won(owedBy[t])}</span></div>`).join("")}
+    </div>` : "";
+
+  // 마이너스 통장: 이번 달 쓴 게 있을 때만 칸을 보여 줌
+  const minusUse = shortDebt.filter((t) => shortDebtType(t) === "마이너스통장");
 
   const segs = {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
     자산이동: [mov, "mov", ""],
-    "단기 부채": [shortDebt, "cred", ""], // 이번 달 새로 생긴 단기 부채(카드·마통·미납 등으로 쓴 돈), 부호 없이
+    부채: [newDebt, "cred", ""], // 이번 달 새로 생긴 부채(카드·마통·미납 등으로 쓴 돈 + 차입), 부호 없이
     "부채 상환": [repay, "repay", ""],
   };
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
@@ -510,15 +521,17 @@ export function homeView(part = "summary") {
       })
       .join("");
   };
-  // 단기부채는 신용카드 / 마이너스통장으로 나눠서, 각 묶음 제목(뱃지·소계) 아래에 카테고리 섹션
-  const catSections = ui.seg === "단기 부채"
+  // 부채: 신용카드 / 마이너스통장 / 미납금 … 으로 나눠 카테고리 섹션, 빌린 돈(차입)은 부채 이름별 섹션
+  const catSections = ui.seg === "부채"
     ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const list = selTx.filter((t) => shortDebtType(t) === type);
         if (!list.length) return "";
         return `
       <div class="group-title"><span class="cat-badge b-cred">${info.label}</span></div>
       ${buildCatSections(list, type)}`;
-      }).join("")
+      }).join("") + (loans.length ? `
+      <div class="group-title"><span class="cat-badge b-cred">차입</span></div>
+      ${buildCatSections(loans.map((t) => ({ ...t, category: `${loanDebt(t)?.name || "부채"} · ${debtType(loanDebt(t)) || "부채"}`, subcategory: "" })), "loan")}` : "")
     // 자산이동: 경로(출금 → 입금)마다 섹션, 하위 줄은 내역의 '내용'별 금액
     : ui.seg === "자산이동" ? buildCatSections(selTx.map((t) => ({ ...t, category: moveRoute(t) || MOVE_NONE, subcategory: (t.content || "").trim() || "내용 없음" })))
     : ui.seg === "부채 상환" ? "" // 부채 상환은 합계 아래 경로별 하위 항목만
@@ -545,11 +558,11 @@ export function homeView(part = "summary") {
   </section>
   ${budgetSection(exp)}
   ${recurringSection()}
-  ${cardBillSection()}
-  ${section("단기부채", "단기 부채 · 이번 달 새로 생김", "cred", sum(shortDebt), shortDebtRows + owedLine)}
+  ${creditCardSection(shortDebt)}
+  ${minusUse.length ? section("단기부채", "마이너스 통장 사용", "cred", sum(minusUse), `<div class="row">${groupRows(minusUse, (t) => deltaRef(t.assetDelta).id, "마이너스통장")}</div>`) : ""}
+  ${section("대출실행", "부채 · 이번 달 신규 발생", "cred", sum(newDebt), newDebtRows + owedLine)}
   ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
-  ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
-  ${loans.length ? section("대출실행", "부채 발생", "cred", sum(loans), subRows(loanTotals(loans))) : ""}`;
+  ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}`;
   if (part === "summary") return summary;
   return `
   <section class="card">
@@ -558,10 +571,10 @@ export function homeView(part = "summary") {
     </div>
     <div class="total-bar">
       <div class="tb-main"><span class="home-label"><span class="${cls}">${SUM_ICON}</span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
-      ${ui.seg === "단기 부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
-        const v = sum(selTx.filter((t) => shortDebtType(t) === type));
+      ${ui.seg === "부채" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
+        const v = sum(shortDebt.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${won(v)}</span></div>` : "";
-      }).join("") : ""}
+      }).join("") + loanTypes.map((type) => `<div class="tb-sub"><span>└ ${type} 차입</span><span>${won(sum(loans.filter((t) => (debtType(loanDebt(t)) || "부채") === type)))}</span></div>`).join("") : ""}
       ${ui.seg === "자산이동" || ui.seg === "부채 상환" ? (ui.seg === "부채 상환" ? repayTotals : routeTotals)(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
     </div>
     ${selTx.length ? catSections : `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}

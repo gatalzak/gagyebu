@@ -361,6 +361,7 @@ export function monthFigures(list) {
     fixed: sum(plain.filter((t) => t.expenseType === "고정")),
     variable: sum(plain.filter((t) => t.expenseType !== "고정")),
     debtUse: sum(exp.filter(isShortDebt)),
+    borrow: sum(list.filter(isLoanTx)), // 빌린 돈(대출 차입 등) — 부채 신규 발생에 같이 셈
     repay: sum(list.filter(isRepayTx)),
   };
 }
