@@ -577,6 +577,46 @@ function render() {
   else if (ui.tab === "list") { view.innerHTML = listView(); bindSearch(); }
   else if (ui.tab === "calendar") view.innerHTML = calendarView();
   else view.innerHTML = monthlyView();
+  view.insertAdjacentHTML("beforeend", footerHTML());
+  fillVersion();
+}
+
+// ---------------- 푸터 · 설정 ----------------
+// 모든 탭 맨 아래: 가끔 들어가는 관리 창 지름길 + 앱 버전
+const GEAR = `<svg class="ft-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
+function footerHTML() {
+  const links = [["settings", `${GEAR}설정`], ["budget", "예산"], ["recur", "반복 내역"], ["cats", "카테고리"], ["backup", "백업/복원"]];
+  return `
+  <footer class="app-footer">
+    <nav class="ft-links">${links.map(([k, t]) => `<button class="ft-link${k === "settings" ? " ft-main" : ""}" data-ft="${k}">${t}</button>`).join('<span class="ft-dot">·</span>')}</nav>
+    <div class="ft-meta">클로드 가계부 <span data-app-ver></span> · <a href="privacy.html">개인정보처리방침</a> · <a href="terms.html">이용약관</a></div>
+  </footer>`;
+}
+/** 버전: 설치된 화면 파일 캐시 이름(gagyebu-vNNN)에서 읽는다 — sw.js만 올리면 자동으로 맞음 */
+let appVersion = "";
+function fillVersion() {
+  const put = () => document.querySelectorAll("[data-app-ver]").forEach((el) => (el.textContent = appVersion));
+  if (appVersion || !("caches" in window)) return put();
+  caches.keys().then((keys) => {
+    const v = keys.map((k) => /^gagyebu-(v\d+)$/.exec(k)?.[1]).filter(Boolean).sort((a, b) => Number(b.slice(1)) - Number(a.slice(1)))[0];
+    if (v) { appVersion = v; put(); }
+  }).catch(() => {});
+}
+function openFooterLink(k) {
+  if (k === "settings") return openSettingsDialog();
+  if (k === "budget") return openBudgetDialog();
+  if (k === "recur") return openRecurringDialog();
+  if (k === "cats") return openCategoryEditor({ onClose: () => { closeModal(); render(); } });
+  if (k === "backup") return openBackupDialog();
+}
+/** 설정: 앱 잠금 · 금액 가리기 (이 기기에만) */
+function openSettingsDialog() {
+  const panel = openModal({
+    title: "설정",
+    body: `${lockSection()}
+      <p class="note" style="margin-top:18px">백업·동기화는 '백업/복원', 예산·반복 내역·카테고리는 아래 메뉴에서 바꿀 수 있어요.</p>`,
+  });
+  bindLockSection(panel, { reopen: openSettingsDialog, onHideChange: (on) => { globalThis.__hideAmt = on; updateEye(); render(); } });
 }
 
 /** 단기부채로 잡는 결제 수단(부채 종류)과 화면 표시 글자 */
@@ -3281,7 +3321,6 @@ function openBackupDialog() {
       <p class="note">백업 파일의 내역을 지금 데이터에 <b style="font-weight:400;color:#fff">합쳐요</b>. 같은 내역은 최신 것으로 바뀌고, 지금 데이터는 지워지지 않아요.</p>
       <input type="file" accept=".json,application/json" data-file hidden>
       <button class="btn" data-import style="margin-top:10px">백업 파일 불러오기</button>
-      ${lockSection()}
       <div class="section-title">초기화</div>
       <p class="note">모든 내역(수입·지출·자산이동·상환)을 지워요. 카테고리·자산·부채·자주 쓰는 내역은 남아요. 드라이브에 연결된 다른 기기에서도 지워지고, 되돌릴 수 없어요.</p>
       <label class="check-line"><input type="checkbox" data-reset-holdings checked> 자산·부채 잔액도 내역 입력 전으로 되돌리기</label>
@@ -3296,7 +3335,6 @@ function openBackupDialog() {
     toast(sync.status === "ok" ? "동기화했어요" : SYNC_TEXT[sync.status]);
   });
   panel.querySelector("[data-export]").onclick = async () => { await exportBackup(); openBackupDialog(); };
-  bindLockSection(panel, { reopen: openBackupDialog, onHideChange: (on) => { globalThis.__hideAmt = on; updateEye(); render(); } });
   panel.querySelector("[data-excel]").onclick = () => exportExcel(panel.querySelector("[name=excelRange]").value);
   const file = panel.querySelector("[data-file]");
   panel.querySelector("[data-import]").onclick = () => file.click();
@@ -3422,6 +3460,8 @@ function bindEvents() {
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
+    const ft = e.target.closest("[data-ft]");
+    if (ft) return openFooterLink(ft.dataset.ft);
     if (e.target.closest("[data-go-networth]")) {
       ui.tab = "settle";
       render();

@@ -216,7 +216,7 @@ function askCurrentPin(title) {
 export function lockSection() {
   const on = lockEnabled();
   return `
-    <div class="section-title">앱 잠금 · 금액 가리기 <span class="muted lock-scope">이 기기에만 적용</span></div>
+    <div class="section-title" style="margin-top:4px">앱 잠금 <span class="muted lock-scope">이 기기에만 적용</span></div>
     ${on ? `
       <div class="field" style="margin-top:4px"><label>잠기는 시점</label>
         <select class="input" name="lockTiming">${TIMING_ORDER.map((k) => [k, TIMING_LABEL[k]]).map(([k, v]) => `<option value="${k}" ${String(cfg.timing) === k ? "selected" : ""}>${v}</option>`).join("")}</select></div>
@@ -227,7 +227,8 @@ export function lockSection() {
       </div>` : `
       <p class="note">켜면 앱을 열 때 4자리 PIN(또는 지문)을 물어봐요. 기본은 꺼져 있어요.</p>
       <button class="btn" data-lock-on style="margin-top:10px">앱 잠금 켜기</button>`}
-    <label class="check-line" style="margin-top:14px"><input type="checkbox" data-hide-amt ${hideAmounts() ? "checked" : ""}> 금액 가리기
+    <div class="section-title">금액 가리기 <span class="muted lock-scope">이 기기에만 적용</span></div>
+    <label class="check-line" style="margin-top:4px"><input type="checkbox" data-hide-amt ${hideAmounts() ? "checked" : ""}> 금액 가리기
       <span class="muted">— 금액을 ●●●●로 가리고, 맨 위 눈 버튼을 누르면 잠깐 보여요</span></label>`;
 }
 

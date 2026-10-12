@@ -668,3 +668,13 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .lock-link { margin-top: 22px; color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); padding: 6px 10px; }
 .lock-wide { width: 100%; }
 .lock-scope { font-size: calc(0.72rem + var(--fs-up)); margin-left: 6px; }
+
+/* 푸터 */
+.app-footer { margin-top: 34px; padding: 18px 0 96px; border-top: 1px solid var(--line); text-align: center; }
+.ft-links { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 2px; }
+.ft-link { color: var(--muted); font-size: calc(0.82rem + var(--fs-up)); padding: 6px 6px; display: inline-flex; align-items: center; gap: 4px; }
+.ft-link.ft-main { color: var(--text); }
+.ft-ico { vertical-align: -2px; }
+.ft-dot { color: #4a4a52; }
+.ft-meta { margin-top: 10px; color: #6a6a72; font-size: calc(0.72rem + var(--fs-up)); }
+.ft-meta a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
