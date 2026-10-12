@@ -10,6 +10,8 @@ export function txRow(t, { withDate = false } = {}) {
   const d = deltaRef(t.assetDelta);
   const debt = d?.col === "debts" ? S.debts[d.id] : null;
   const isRepay = isRepayTx(t), isLoan = isLoanTx(t);
+  // 빌린 돈(부채 발생): 뱃지는 나의 부채에 등록된 종류 이름(대출·지인에게 빌린 돈 등)
+  const loanType = (x) => { const ld = x.deltas.find((y) => y.col === "debts" && y.amount > 0); return debtType(S.debts[ld?.id]) || "부채"; };
   const route = esc(moveRoute(t)); // 자산이동: 출금 자산 → 입금 자산(상환은 → 부채)
   const when = withDate ? `${Number(t.date.slice(5, 7))}/${Number(t.date.slice(8, 10))} ${t.time || ""}`.trim() : t.time;
   const sub = [when, t.party ? esc(t.party) : ""].filter(Boolean).join(" · ");
@@ -19,14 +21,14 @@ export function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : isLoan ? `<span class="cat-badge b-cred">부채 발생</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
+              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : isLoan ? `<span class="cat-badge b-cred">${esc(loanType(t))}</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(isLoan ? t.content.replace(/ 대출 실행$/, "") : t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
               ${t.kind === "지출" && (t.card || t.transfer) ? `<div class="memo">결제 ${t.card ? esc(t.card) : "계좌이체"}</div>` : ""}
               ${t.inst > 1 ? `<div class="memo cred">할부 ${t.inst}개월</div>` : ""}
             </div>
-            <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "발생 " : ""}${t.currency && t.currency !== "KRW"
+            <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "차입 " : ""}${t.currency && t.currency !== "KRW"
               ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
               : signed(t.amount, txSign(t))}</span>
           </button>`;
