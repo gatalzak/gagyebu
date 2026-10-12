@@ -679,7 +679,7 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .ft-ico { vertical-align: -2px; }
 .ft-dot { color: #4a4a52; }
 .ft-meta { margin-top: 10px; color: #6a6a72; font-size: calc(0.72rem + var(--fs-up)); }
-.ft-meta a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.ft-meta a { color: inherit; text-decoration: none; }
 
 /* PIN 분실 안내 */
 .forgot-steps { text-align: left; margin: 16px 0 18px; padding-left: 20px; display: flex; flex-direction: column; gap: 14px;
