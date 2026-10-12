@@ -743,3 +743,4 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .filter-totals { padding: 10px 14px; }
 .filter-totals .row-sub { padding-left: 0; }
 .filter-totals .ft-total { color: var(--text); border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+.owed-row .row-sub { color: var(--text); }

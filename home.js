@@ -1,7 +1,8 @@
 // 가탈작 가계부 — 현황 탭(종합·상세, 예산·반복 내역·카드·순자산 줄)
 import { saveState, uid, nowISO } from "./store.js";
+import { toKRW } from "./fx.js";
 import { $, EXPENSE_TYPES, S, debtType, esc, fmtAmount, liveTx, monthTx, nowTime, parseAmount, shiftMonth, signed, sum, toast, todayStr, txKRW, txNewestFirst, ui, won, ym } from "./core.js";
-import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, budgetId, cardBill, cardCycle, catsFor, dday, deltaRef, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon } from "./model.js";
+import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon } from "./model.js";
 import { SUM_ICON, bindAmount, closeModal, homeLabel, openModal } from "./uikit.js";
 import { networthBody } from "./settle.js";
 import { txRow } from "./list.js";
@@ -458,12 +459,17 @@ export function homeView(part = "summary") {
     </div>`;
   }).join("");
 
+  // 지금 남은 카드·마통 등 단기 빚(나의 부채 잔액 기준) — 이번 달 사용액과 다른 숫자라 따로 보여 줌
+  const shortDebts = Object.values(S.debts).filter((d) => !d.deleted && SHORT_DEBT[debtType(d)]);
+  const owed = shortDebts.reduce((a, d) => a + (toKRW(balanceOf("debts", d), curOf(d)) ?? 0), 0);
+  const owedLine = shortDebts.length ? `<div class="row owed-row"><div class="row-sub"><span>지금 남은 카드·마통 빚</span><span class="cred">${won(owed)}</span></div></div>` : "";
+
   const segs = {
     수입: [inc, "inc", "+"],
     고정지출: [fixed, "exp", "-"],
     변동지출: [variable, "exp", "-"],
     자산이동: [mov, "mov", ""],
-    "단기 부채(이번 달)": [shortDebt, "cred", ""], // 단기 부채는 부호 없이(갚아야 할 돈)
+    "카드·마통 사용": [shortDebt, "cred", ""], // 카드·마통 등으로 쓴 돈(새로 생긴 단기 빚), 부호 없이
     "부채 상환": [repay, "repay", ""],
   };
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
@@ -500,7 +506,7 @@ export function homeView(part = "summary") {
       .join("");
   };
   // 단기부채는 신용카드 / 마이너스통장으로 나눠서, 각 묶음 제목(뱃지·소계) 아래에 카테고리 섹션
-  const catSections = ui.seg === "단기 부채(이번 달)"
+  const catSections = ui.seg === "카드·마통 사용"
     ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const list = selTx.filter((t) => shortDebtType(t) === type);
         if (!list.length) return "";
@@ -535,7 +541,7 @@ export function homeView(part = "summary") {
   ${budgetSection(exp)}
   ${recurringSection()}
   ${cardBillSection()}
-  ${section("단기부채", "단기 부채 (이번 달)", "cred", sum(shortDebt), shortDebtRows)}
+  ${section("단기부채", "카드·마통 사용 (이번 달)", "cred", sum(shortDebt), shortDebtRows + owedLine)}
   ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
   ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
   ${loans.length ? section("대출실행", "대출 실행", "cred", sum(loans), subRows(loanTotals(loans))) : ""}`;
@@ -547,7 +553,7 @@ export function homeView(part = "summary") {
     </div>
     <div class="total-bar">
       <div class="tb-main"><span class="home-label"><span class="${cls}">${SUM_ICON}</span>${ui.seg} 합계</span><span class="${cls}">${signed(sum(selTx), sign)}</span></div>
-      ${ui.seg === "단기 부채(이번 달)" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
+      ${ui.seg === "카드·마통 사용" ? Object.entries(SHORT_DEBT).map(([type, info]) => {
         const v = sum(selTx.filter((t) => shortDebtType(t) === type));
         return v ? `<div class="tb-sub"><span>└ ${info.label}</span><span>${won(v)}</span></div>` : "";
       }).join("") : ""}
