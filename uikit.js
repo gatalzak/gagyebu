@@ -25,7 +25,7 @@ export const EXCEL_ICON = `<svg class="excel-ico" width="18" height="18" viewBox
 
 /** 결산 엑셀: 시트 1 '결산'(요약·지난달 대비·카테고리 전체·자산 변화), 시트 2 '내역'(그달 내역) */
 export const FUNNEL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16l-6.2 7.6V19l-3.6-1.8v-4.6z"/></svg>`;
-const BACK_ICON = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>`;
+const BACK_ICON = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>`; // ← 화살표
 /** onBack이 있으면 제목 왼쪽에 뒤로 가기 버튼(예: 내역 추가 → 내역 성격 고르기) */
 export function openModal({ title, headExtra = "", body, cls = "", onBack = null }) {
   $("#modal-root").innerHTML = `
