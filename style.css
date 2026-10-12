@@ -713,3 +713,13 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .rank-row[data-stat-pick] { cursor: pointer; }
 .rank-hint { margin: 8px 0 0; }
 .ct-avg-sw { display: inline-block; width: 16px; border-top: 1px dashed #9a9aa2; vertical-align: middle; margin-right: 6px; }
+
+/* 카드 결제 예정 */
+.cb-set { color: var(--cred); font-size: calc(0.8rem + var(--fs-up)); white-space: nowrap; }
+.cb-done { color: var(--inc) !important; }
+.cb-head { padding: 10px 0 12px; border-bottom: 1px solid var(--line); }
+.cb-head:first-child { padding-top: 2px; }
+.cb-period { color: var(--muted); font-size: calc(0.78rem + var(--fs-up)); margin: 4px 0 6px; }
+.cb-pay { width: 100%; margin-top: 10px; }
+.cb-inst { padding-left: 0; }
+.cb-head + .section-title { border-top: 0; }

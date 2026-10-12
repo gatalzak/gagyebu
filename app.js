@@ -1066,6 +1066,153 @@ function buildRecurTx(r, month, id, date) {
   return rec;
 }
 
+// ---------------- 신용카드 결제일·할부 ----------------
+// 카드(부채)에 payDay(결제일), closeDay(사용 기간 마감일, 31=말일), closeMonth("prev" 전월 | "this" 당월)를 둔다.
+// M월 결제분 = (마감달 직전 마감일 다음 날) ~ (마감달 closeDay). 마감달 = 당월이면 M, 전월이면 M-1.
+// 할부(t.inst=N개월)는 산 날이 속한 결제분부터 N번 나눠 청구(무이자로 계산, 나머지는 마지막 회차).
+const dayIn = (month, day) => `${month}-${pad(Math.min(day, monthLast(month)))}`;
+const addDays = (date, n) => { const d = new Date(`${date}T00:00:00`); d.setDate(d.getDate() + n); return `${ym(d)}-${pad(d.getDate())}`; };
+const monthDiff = (a, b) => { const [ay, am] = a.split("-").map(Number), [by, bm] = b.split("-").map(Number); return (by - ay) * 12 + (bm - am); };
+const hasBilling = (d) => d && d.payDay > 0 && d.closeDay > 0;
+function cardCycle(d, payMonth) {
+  const closeM = d.closeMonth === "this" ? payMonth : shiftMonth(payMonth, -1);
+  const end = dayIn(closeM, d.closeDay);
+  const start = addDays(dayIn(shiftMonth(closeM, -1), d.closeDay), 1);
+  return { start, end, payDate: dayIn(payMonth, d.payDay), payMonth };
+}
+/** 그 날짜에 쓴 돈이 청구되는 결제 달 */
+function payMonthOf(d, date) {
+  const m = date.slice(0, 7);
+  const closeM = date <= dayIn(m, d.closeDay) ? m : shiftMonth(m, 1);
+  return d.closeMonth === "this" ? closeM : shiftMonth(closeM, 1);
+}
+const cardUses = (d) => liveTx().filter((t) => t.kind === "지출" && !t.interest && t.assetDelta?.col === "debts" && t.assetDelta.id === d.id);
+const instPortion = (amt, n, k) => (k === n - 1 ? amt - Math.floor(amt / n) * (n - 1) : Math.floor(amt / n));
+/** payMonth 결제분: 기간·청구 금액·항목(할부는 그 회차 금액) */
+function cardBill(d, payMonth) {
+  const cyc = cardCycle(d, payMonth);
+  const items = [];
+  for (const t of cardUses(d)) {
+    const n = t.inst > 1 ? t.inst : 1;
+    const k = monthDiff(payMonthOf(d, t.date), payMonth);
+    if (k < 0 || k >= n) continue;
+    items.push({ t, n, k, amount: instPortion(Math.round(txKRW(t)), n, k) });
+  }
+  items.sort((a, b) => a.t.date.localeCompare(b.t.date));
+  // 결제분 마감 뒤 ~ 결제일 뒤 10일 사이에 이 카드를 갚은 금액(상환 완료 표시용)
+  const paid = liveTx().filter(isRepayTx).filter((t) => t.date > cyc.end && t.date <= addDays(cyc.payDate, 10))
+    .reduce((a, t) => a + (t.deltas || []).filter((x) => x.col === "debts" && x.id === d.id).reduce((b, x) => b - x.amount, 0), 0);
+  return { ...cyc, items, total: items.reduce((a, x) => a + x.amount, 0), paid };
+}
+/** 다음 결제 달: 이번 달 결제일이 안 지났으면 이번 달, 지났으면 다음 달 */
+const nextPayMonth = (d) => { const m = todayStr().slice(0, 7); return todayStr() <= dayIn(m, d.payDay) ? m : shiftMonth(m, 1); };
+/** 진행 중인 할부: 다음 결제분부터 남은 회차·금액 */
+function activeInstallments(d) {
+  const pm = nextPayMonth(d);
+  return cardUses(d).filter((t) => t.inst > 1).map((t) => {
+    const n = t.inst, amt = Math.round(txKRW(t)), k = monthDiff(payMonthOf(d, t.date), pm);
+    if (k >= n) return null;
+    const from = Math.max(k, 0);
+    let left = 0;
+    for (let i = from; i < n; i++) left += instPortion(amt, n, i);
+    return { t, n, next: from + 1, left, monthly: instPortion(amt, n, from) };
+  }).filter(Boolean);
+}
+const md = (date) => `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`;
+const dday = (date) => { const n = Math.round((new Date(`${date}T00:00:00`) - new Date(`${todayStr()}T00:00:00`)) / 86400000); return n === 0 ? "오늘" : n > 0 ? `D-${n}` : `${-n}일 지남`; };
+
+/** 현황: 카드 결제 예정 (신용카드가 있을 때만) */
+function cardBillSection() {
+  const cards = Object.values(S.debts).filter((d) => !d.deleted && debtType(d) === "신용카드");
+  if (!cards.length) return "";
+  const rows = cards.map((d) => {
+    if (!hasBilling(d)) return `
+    <button class="rc-row cb-row" data-card="${d.id}">
+      <span class="rc-text"><span class="rc-name">${esc(d.name)}</span><span class="rc-sub">결제일·사용 기간을 정하면 청구 예정 금액을 미리 알려 드려요</span></span>
+      <span class="rc-right"><span class="cb-set">결제일 설정 ›</span></span>
+    </button>`;
+    const b = cardBill(d, nextPayMonth(d));
+    const done = b.total > 0 && b.paid >= b.total;
+    const inst = activeInstallments(d).length;
+    return `
+    <button class="rc-row cb-row" data-card="${d.id}">
+      <span class="rc-text"><span class="rc-name">${esc(d.name)}</span>
+        <span class="rc-sub">${md(b.payDate)} 결제 · 사용 ${md(b.start)}~${md(b.end)}${inst ? ` · 할부 ${inst}건` : ""}</span></span>
+      <span class="rc-right"><span class="rc-amt">${won(b.total)}</span><span class="rc-state ${done ? "cb-done" : ""}">${done ? "상환 완료" : dday(b.payDate)}</span></span>
+    </button>`;
+  }).join("");
+  return `
+  <section class="card home-sec">
+    <div class="card-head">${homeLabel("단기부채", "카드 결제 예정", "cred")}<span></span></div>
+    ${rows}
+  </section>`;
+}
+
+/** 카드 결제일 설정 + 청구 예정 내역 + 할부 */
+function openCardDialog(id) {
+  const d = S.debts[id];
+  const form = { payDay: d.payDay || 25, closeDay: d.closeDay || 31, closeMonth: d.closeMonth || "prev" };
+  const draw = () => {
+    const cfg = { ...d, ...form };
+    const pm = hasBilling(d) ? nextPayMonth(d) : null;
+    const b = pm && cardBill(d, pm);
+    const after = pm && cardBill(d, shiftMonth(pm, 1));
+    const insts = hasBilling(d) ? activeInstallments(d) : [];
+    const ex = cardCycle(cfg, todayStr().slice(0, 7)); // 설정 미리보기
+    const dayOpt = (sel, last) => Array.from({ length: 31 }, (_, i) => i + 1).map((n) => `<option value="${n}" ${n === sel ? "selected" : ""}>${n === 31 && last ? "말일" : `${n}일`}</option>`).join("");
+    const itemRow = (x) => `<div class="row-sub"><span>${md(x.t.date)} ${esc(x.t.content || x.t.category)}${x.n > 1 ? ` <span class="muted">할부 ${x.k + 1}/${x.n}</span>` : ""}</span><span>${won(x.amount)}</span></div>`;
+    const panel = openModal({
+      cls: "theme-debts",
+      title: d.name,
+      body: `
+        ${b ? `
+        <div class="cb-head">
+          <div class="row-main"><span>${Number(b.payDate.slice(5, 7))}월 ${Number(b.payDate.slice(8))}일 청구 예정 <span class="muted">${dday(b.payDate)}</span></span><span class="cred">${won(b.total)}</span></div>
+          <div class="cb-period">사용 기간 ${md(b.start)} ~ ${md(b.end)}${b.paid > 0 ? ` · 상환 ${won(b.paid)}${b.paid >= b.total && b.total ? " (완료)" : ""}` : ""}</div>
+          ${b.items.length ? b.items.map(itemRow).join("") : `<div class="row-sub"><span>이 기간 사용 내역이 없어요</span><span></span></div>`}
+          ${b.total > b.paid ? `<button class="btn primary cb-pay" data-cb-pay>${won(b.total - b.paid)} 대금 상환 기록하기</button>` : ""}
+        </div>
+        <div class="cb-head">
+          <div class="row-main"><span>다음 결제분 <span class="muted">지금까지</span></span><span>${won(after.total)}</span></div>
+          <div class="cb-period">${Number(after.payDate.slice(5, 7))}월 ${Number(after.payDate.slice(8))}일 결제 · 사용 기간 ${md(after.start)} ~ ${md(after.end)}</div>
+        </div>
+        ${insts.length ? `<div class="section-title">진행 중인 할부</div>
+          ${insts.map((x) => `<div class="row-sub cb-inst"><span>${esc(x.t.content || x.t.category)} <span class="muted">${x.next}/${x.n}회차 · 월 ${won(x.monthly)}</span></span><span>남은 ${won(x.left)}</span></div>`).join("")}` : ""}
+        <p class="note">할부는 무이자 기준으로 나눠 계산해요. 실제 청구 금액은 카드사 명세서와 조금 다를 수 있어요.</p>` : `
+        <p class="note">결제일과 사용 기간을 정하면 '이번 달 얼마가 청구될지'와 할부 남은 회차를 보여 드려요. 카드사 앱이나 명세서에서 확인할 수 있어요.</p>`}
+        <div class="section-title">결제일 · 사용 기간</div>
+        <div class="field"><label>결제일</label><select class="input" name="payDay">${dayOpt(form.payDay, false)}</select></div>
+        <div class="field"><label>사용 기간 마감</label>
+          <div class="money-line">
+            <select class="input half" name="closeMonth"><option value="prev" ${form.closeMonth === "prev" ? "selected" : ""}>결제일 전월</option><option value="this" ${form.closeMonth === "this" ? "selected" : ""}>결제일 당월</option></select>
+            <select class="input half" name="closeDay">${dayOpt(form.closeDay, true)}</select>
+          </div>
+          <p class="note" style="margin-top:6px">예: ${Number(ex.payDate.slice(5, 7))}월 ${Number(ex.payDate.slice(8))}일 결제분 = <span class="cred">${Number(ex.start.slice(5, 7))}월 ${Number(ex.start.slice(8))}일 ~ ${Number(ex.end.slice(5, 7))}월 ${Number(ex.end.slice(8))}일</span> 사용</p>
+          <p class="note">많이 쓰는 예: 결제일 14일 → 전월 말일 마감(전월 1일~말일) / 결제일 25일 → 당월 11일 마감(전월 12일~당월 11일)</p>
+        </div>
+        <div class="btn-row"><button class="btn" data-cancel>닫기</button><button class="btn primary" data-save>설정 저장</button></div>`,
+    });
+    const q = (sel) => panel.querySelector(sel);
+    const read = () => { form.payDay = Number(q("[name=payDay]").value); form.closeDay = Number(q("[name=closeDay]").value); form.closeMonth = q("[name=closeMonth]").value; };
+    ["payDay", "closeDay", "closeMonth"].forEach((n) => (q(`[name=${n}]`).onchange = () => { read(); draw(); }));
+    q("[data-cancel]").onclick = closeModal;
+    q("[data-save]").onclick = async () => {
+      read();
+      S.debts[id] = { ...S.debts[id], ...form, updatedAt: nowISO() };
+      Object.assign(d, form);
+      await commit();
+      toast(`${d.name} 결제일을 저장했어요`);
+      draw();
+    };
+    q("[data-cb-pay]")?.addEventListener("click", () => openRepayDialog({
+      presetDebt: id,
+      preset: { amount: b.total - b.paid, date: todayStr(), time: nowTime(), memo: `${Number(b.payDate.slice(5, 7))}월 카드 대금` },
+      onDone: () => { closeModal(); render(); },
+    }));
+  };
+  draw();
+}
+
 /** 현황 탭 안의 작은 탭: 현황(종합) / 현황(상세) */
 function homeTabs() {
   return `<div class="tabs sub-tabs home-parts">${[["summary", "현황(종합)"], ["detail", "현황(상세)"]]
@@ -1517,6 +1664,7 @@ function homeView(part = "summary") {
   </section>
   ${budgetSection(exp)}
   ${recurringSection()}
+  ${cardBillSection()}
   ${section("단기부채", "단기 부채 (이번 달)", "cred", sum(shortDebt), shortDebtRows)}
   ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
   ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
@@ -1561,6 +1709,7 @@ function txRow(t, { withDate = false } = {}) {
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
               ${t.kind === "지출" && (t.card || t.transfer) ? `<div class="memo">결제 ${t.card ? esc(t.card) : "계좌이체"}</div>` : ""}
+              ${t.inst > 1 ? `<div class="memo cred">할부 ${t.inst}개월</div>` : ""}
             </div>
             <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "대출 " : ""}${t.currency && t.currency !== "KRW"
               ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
@@ -2444,6 +2593,8 @@ function openTxDialog(existing, presetDate, preset = null, { replaces = null } =
           <select class="input" name="asset">${holdingOptions(linkCfg.cols, draft.link, { balance: false, onlyType: debtMode, exclude: linkCfg.exclude || [] })}</select>
           <div class="fx-hint tx-hint ${KIND_CLASS[draft.kind]}" data-asset-hint></div>
           ${holdingHelp(linkCfg.help || linkCfg.cols)}
+          ${debtMode === "신용카드" ? `<div class="field inst-field"><label>할부</label>
+            <select class="input" name="inst">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24, 36].map((n) => `<option value="${n}" ${(draft.inst || 1) === n ? "selected" : ""}>${n === 1 ? "일시불" : `${n}개월`}</option>`).join("")}</select></div>` : ""}
           ${debtMode ? `<p class="note debt-mode-note">${SHORT_DEBT[debtMode].label} 사용은 지출이 아니라 <span class="cred">단기 부채</span>로 잡혀요. 나중에 대금을 낼 때는 '부채 상환'으로 기록해요.</p>` : ""}
           ${draft.kind === "지출" && !debtMode ? `<div class="repay-tip" data-repay-tip>
             <span>신용카드 대금·마이너스 통장 대금·대출금을 갚는 거라면 지출이 아니라 <b class="tip-em">부채 상환</b>이에요. 부채 상환으로 내역을 저장해주세요.</span>
@@ -2536,6 +2687,7 @@ function openTxDialog(existing, presetDate, preset = null, { replaces = null } =
       if ($p("[name=asset]")) draft.link = $p("[name=asset]").value;
       const payField = $p("[data-pay-field]");
       draft.pay = payField && !payField.hidden ? $p("[name=pay]").value : "";
+      if ($p("[name=inst]")) draft.inst = Number($p("[name=inst]").value);
     };
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); });
     curSel.onchange = () => { amt.value = formatInput(amt.value, curSel.value); krwTouched = false; refreshKRW(); };
@@ -2695,6 +2847,7 @@ function openTxDialog(existing, presetDate, preset = null, { replaces = null } =
         ...(existing?.interest && draft.kind === "지출" ? { interest: true } : {}), // 대출·마통 이자 기록
         ...(existing?.repayOf ? { repayOf: existing.repayOf } : {}),
         ...(draft.recurId ? { recurId: draft.recurId, recurMonth: draft.recurMonth } : {}), // 반복 내역에서 기록
+        ...(draft.kind === "지출" && draft.debtMode === "신용카드" && draft.inst > 1 ? { inst: draft.inst } : {}), // 할부 개월
         createdAt: existing?.createdAt || now,
         updatedAt: now,
         deleted: false,
@@ -3554,6 +3707,8 @@ function bindEvents() {
     if (e.target.closest("[data-recur-manage]")) return openRecurringDialog();
     const fold = e.target.closest("[data-fold]");
     if (fold) { ui[fold.dataset.fold] = !ui[fold.dataset.fold]; render(); return; }
+    const cb = e.target.closest("[data-card]");
+    if (cb) return openCardDialog(cb.dataset.card);
     const rc = e.target.closest("[data-recur]");
     if (rc) return openRecurAction(rc.dataset.recur);
     const part = e.target.closest("[data-home-part]");
