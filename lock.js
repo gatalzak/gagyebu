@@ -40,8 +40,8 @@ async function bioRegister() {
   const cred = await navigator.credentials.create({
     publicKey: {
       challenge: rnd(32),
-      rp: { name: "클로드 가계부" },
-      user: { id: rnd(16), name: "gagyebu", displayName: "클로드 가계부" },
+      rp: { name: "가탈작 가계부" },
+      user: { id: rnd(16), name: "gagyebu", displayName: "가탈작 가계부" },
       pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
       authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "discouraged" },
       attestation: "none",

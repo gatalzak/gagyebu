@@ -589,7 +589,7 @@ function footerHTML() {
   return `
   <footer class="app-footer">
     <nav class="ft-links">${links.map(([k, t]) => `<button class="ft-link${k === "settings" ? " ft-main" : ""}" data-ft="${k}">${t}</button>`).join('<span class="ft-dot">·</span>')}</nav>
-    <div class="ft-meta">클로드 가계부 <span data-app-ver></span> · <a href="privacy.html">개인정보처리방침</a> · <a href="terms.html">이용약관</a></div>
+    <div class="ft-meta">가탈작 가계부 <span data-app-ver></span> · <a href="privacy.html">개인정보처리방침</a> · <a href="terms.html">이용약관</a></div>
   </footer>`;
 }
 /** 버전: 설치된 화면 파일 캐시 이름(gagyebu-vNNN)에서 읽는다 — sw.js만 올리면 자동으로 맞음 */
