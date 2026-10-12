@@ -1858,17 +1858,135 @@ const groupByDate = (list) => {
 };
 
 function listView() {
+  const n = filterCount();
   return `
+  <div class="search-row">
   <div class="search-bar">
     <svg class="search-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
     <input class="search-input" type="search" name="q" placeholder="내역 검색 · 내용, 거래처, 카테고리, 금액" value="${esc(ui.q)}" autocomplete="off" enterkeyhint="search">
     <button class="search-clear" data-search-clear aria-label="검색어 지우기" ${ui.q ? "" : "hidden"}>✕</button>
   </div>
+  <button class="filter-btn${n ? " on" : ""}" data-filter-open aria-label="필터">${FUNNEL}<span>필터${n ? ` ${n}` : ""}</span></button>
+  </div>
+  ${n ? `<div class="filter-chips">${filterChips()}<button class="chip-reset" data-filter-reset>초기화</button></div>` : ""}
   <div id="list-results">${listBody()}</div>`;
 }
 
 function listBody() {
-  return ui.q.trim() ? searchResults(ui.q) : monthList();
+  return ui.q.trim() || filterCount() ? searchResults(ui.q) : monthList();
+}
+
+// ---------------- 내역 필터 ----------------
+// 기간 · 내역 성격 · 카테고리 · 자산/부채 · 금액으로 거르고, 결과를 성격별 합계와 함께 보여 준다(검색어와 함께 써도 됨).
+const FUNNEL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16l-6.2 7.6V19l-3.6-1.8v-4.6z"/></svg>`;
+const PERIODS = { month: "고른 달", "3m": "최근 3개월", "6m": "최근 6개월", year: "올해", all: "전체 기간", custom: "직접 지정" };
+const emptyFilter = () => ({ period: "month", from: "", to: "", natures: [], cats: [], holding: "", min: 0, max: 0 });
+ui.filter = emptyFilter();
+/** 기본값과 다른 조건 수 (기간은 검색할 때 전체가 기본이라 '고른 달'이어도 다른 조건이 있을 때만 셈) */
+function filterCount() {
+  const f = ui.filter;
+  return (f.period !== "month" ? 1 : 0) + (f.natures.length ? 1 : 0) + (f.cats.length ? 1 : 0) + (f.holding ? 1 : 0) + (f.min || f.max ? 1 : 0);
+}
+/** 내역 하나의 성격 키 (입력 창의 8가지와 같음) */
+function txNature(t) {
+  if (t.kind === "수입") return "income";
+  if (t.kind === "자산이동") return isRepayTx(t) ? "repay" : isLoanTx(t) ? "borrow" : "move";
+  const sd = shortDebtType(t);
+  if (sd === "신용카드") return "card";
+  if (sd === "마이너스통장") return "minus";
+  return t.expenseType === "고정" ? "fixed" : "var";
+}
+function filterRange() {
+  const f = ui.filter, today = todayStr(), m = today.slice(0, 7);
+  if (f.period === "month") return [`${ui.month}-01`, monthEnd(ui.month)];
+  if (f.period === "3m") return [`${shiftMonth(m, -2)}-01`, monthEnd(m)];
+  if (f.period === "6m") return [`${shiftMonth(m, -5)}-01`, monthEnd(m)];
+  if (f.period === "year") return [`${m.slice(0, 4)}-01-01`, `${m.slice(0, 4)}-12-31`];
+  if (f.period === "custom") return [f.from || "0000-00-00", f.to || "9999-12-31"];
+  return ["0000-00-00", "9999-12-31"];
+}
+const periodLabel = () => {
+  const f = ui.filter;
+  if (f.period === "month") return `${ui.month.slice(0, 4)}년 ${Number(ui.month.slice(5))}월`;
+  if (f.period === "custom") return `${f.from ? md(f.from) : "처음"} ~ ${f.to ? md(f.to) : "지금"}`;
+  return PERIODS[f.period];
+};
+function txPassesFilter(t) {
+  const f = ui.filter;
+  if (!filterCount()) return true;
+  const [from, to] = filterRange();
+  if (t.date < from || t.date > to) return false;
+  if (f.natures.length && !f.natures.includes(txNature(t))) return false;
+  if (f.cats.length && !f.cats.includes(t.category)) return false;
+  if (f.holding) {
+    const keys = [deltaRef(t.assetDelta), ...(t.deltas || [])].filter(Boolean).map((d) => linkKey(d.col, d.id));
+    if (!keys.includes(f.holding)) return false;
+  }
+  const v = txKRW(t);
+  if (f.min && v < f.min) return false;
+  if (f.max && v > f.max) return false;
+  return true;
+}
+function filterChips() {
+  const f = ui.filter;
+  const chip = (key, text) => `<button class="chip on" data-chip-off="${key}">${esc(text)} <span aria-hidden="true">✕</span></button>`;
+  const holdingName = () => { const r = parseLinkKey(f.holding); return S[r?.col]?.[r?.id]?.name || "자산"; };
+  return [
+    chip("period", periodLabel()),
+    f.natures.length ? chip("natures", f.natures.map((k) => PICK_ITEMS.find((it) => it.key === k)?.name).join(", ")) : "",
+    f.cats.length ? chip("cats", f.cats.join(", ")) : "",
+    f.holding ? chip("holding", holdingName()) : "",
+    f.min || f.max ? chip("amount", `${f.min ? won(f.min) : ""} ~ ${f.max ? won(f.max) : ""}`) : "",
+  ].join("");
+}
+function openFilterDialog() {
+  const f = JSON.parse(JSON.stringify(ui.filter));
+  const draw = () => {
+    const cats = [...new Set([...catsFor("수입"), ...EXPENSE_TYPES.flatMap((et) => catsFor("지출", et))])];
+    const chips = (name, items, sel) => `<div class="chip-wrap">${items.map(([v, t, cls]) => `<button class="chip${sel.includes(v) ? " on" : ""}${cls ? ` ${cls}` : ""}" data-pick-${name}="${esc(v)}">${esc(t)}</button>`).join("")}</div>`;
+    const panel = openModal({
+      title: "내역 필터",
+      body: `
+        <div class="field" style="margin-top:4px"><label>기간</label>
+          ${chips("period", Object.entries(PERIODS).map(([k, v]) => [k, k === "month" ? `${Number(ui.month.slice(5))}월(고른 달)` : v]), [f.period])}
+          ${f.period === "custom" ? `<div class="money-line" style="margin-top:8px"><input class="input" type="date" name="from" value="${f.from}"><input class="input" type="date" name="to" value="${f.to}"></div>` : ""}
+        </div>
+        <div class="field"><label>내역 성격 <span class="muted">(여러 개 선택)</span></label>
+          ${chips("nature", PICK_ITEMS.map((it) => [it.key, it.name, it.cls]), f.natures)}</div>
+        <div class="field"><label>카테고리 <span class="muted">(여러 개 선택)</span></label>
+          ${chips("cat", cats.map((c) => [c, c]), f.cats)}</div>
+        <div class="field"><label>자산 · 부채</label>
+          <select class="input" name="holding">${holdingOptions(["assets", "debts"], f.holding, { balance: false }).replace("선택 안 함", "전체")}</select></div>
+        <div class="field"><label>금액</label>
+          <div class="money-line">
+            <div class="amount-wrap"><input class="input amount-input" name="min" inputmode="numeric" placeholder="최소" value="${f.min ? fmtAmount(f.min) : ""}"><span class="amount-unit">원</span></div>
+            <span class="muted">~</span>
+            <div class="amount-wrap"><input class="input amount-input" name="max" inputmode="numeric" placeholder="최대" value="${f.max ? fmtAmount(f.max) : ""}"><span class="amount-unit">원</span></div>
+          </div></div>
+        <div class="btn-row"><button class="btn" data-f-reset>초기화</button><button class="btn primary" data-f-apply>적용</button></div>`,
+    });
+    const q = (sel) => panel.querySelector(sel);
+    const read = () => {
+      f.holding = q("[name=holding]").value;
+      f.min = parseAmount(q("[name=min]").value);
+      f.max = parseAmount(q("[name=max]").value);
+      if (q("[name=from]")) { f.from = q("[name=from]").value; f.to = q("[name=to]").value; }
+    };
+    ["min", "max"].forEach((n) => bindAmount(q(`[name=${n}]`)));
+    panel.querySelectorAll("[data-pick-period]").forEach((b) => (b.onclick = () => { read(); f.period = b.dataset.pickPeriod; draw(); }));
+    const toggle = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+    panel.querySelectorAll("[data-pick-nature]").forEach((b) => (b.onclick = () => { read(); f.natures = toggle(f.natures, b.dataset.pickNature); draw(); }));
+    panel.querySelectorAll("[data-pick-cat]").forEach((b) => (b.onclick = () => { read(); f.cats = toggle(f.cats, b.dataset.pickCat); draw(); }));
+    q("[data-f-reset]").onclick = () => { Object.assign(f, emptyFilter()); draw(); };
+    q("[data-f-apply]").onclick = () => {
+      read();
+      if (f.min && f.max && f.min > f.max) return toast("최소 금액이 최대 금액보다 커요.");
+      ui.filter = f;
+      closeModal();
+      render();
+    };
+  };
+  draw();
 }
 
 /** 이번 달 목록: 최근 RECENT_DAYS일은 그대로, 그 전 날짜는 '이전 내역' 한 줄로 묶어 펼치기/접기 */
@@ -1907,15 +2025,26 @@ function txMatches(t, words) {
 const SEARCH_MAX = 300;
 function searchResults(q) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const found = liveTx().filter((t) => txMatches(t, words)).sort(txNewestFirst);
-  if (!found.length) return `<div class="card"><div class="empty">'${esc(q.trim())}'에 맞는 내역이 없어요.<br>전체 기간에서 찾았어요.</div></div>`;
+  const filtered = filterCount() > 0;
+  const where = filtered ? periodLabel() : "전체 기간";
+  const found = liveTx().filter((t) => txPassesFilter(t) && txMatches(t, words)).sort(txNewestFirst);
+  if (!found.length) return `<div class="card"><div class="empty">${q.trim() ? `'${esc(q.trim())}'에 맞는 내역이 없어요.` : "조건에 맞는 내역이 없어요."}<br>${where}에서 찾았어요.</div></div>`;
   const shown = found.slice(0, SEARCH_MAX);
   const inc = sum(found.filter((t) => t.kind === "수입")), exp = sum(found.filter(isPlainExpense));
+  // 성격별 합계(0원은 생략)
+  const by = (k) => sum(found.filter((t) => txNature(t) === k));
+  const totals = [
+    ["수입", inc, "inc", "+"], ["지출", exp, "exp", "-"], ["카드·마통 사용", by("card") + by("minus"), "cred", ""],
+    ["자산이동", by("move"), "mov", ""], ["부채 상환", by("repay"), "repay", ""], ["부채 발생", by("borrow"), "cred", ""],
+  ].filter(([, v]) => v);
+  const cardUse = by("card") + by("minus");
+  if (exp && cardUse) totals.push(["쓴 돈 합계 (지출 + 카드·마통)", exp + cardUse, "", ""]);
   return `
   <div class="search-summary">
-    <span>검색 결과 ${found.length}건 <span class="muted">· 전체 기간</span></span>
+    <span>${q.trim() ? "검색" : "필터"} 결과 ${found.length}건 <span class="muted">· ${esc(where)}</span></span>
     <span>${inc ? `<span class="inc">${signed(inc, "+")}</span> ` : ""}${exp ? `<span class="exp">${signed(exp, "-")}</span>` : ""}</span>
   </div>
+  ${filtered && totals.length > 1 ? `<div class="card filter-totals">${totals.map(([label, v, cls, sign]) => `<div class="row-sub${cls ? "" : " ft-total"}"><span>${label}</span><span class="${cls}">${sign ? signed(v, sign) : won(v)}</span></div>`).join("")}</div>` : ""}
   ${groupByDate(shown).map(dayCard).join("")}
   ${found.length > SEARCH_MAX ? `<p class="note" style="text-align:center">최근 ${SEARCH_MAX}건까지 보여요. 검색어를 더 자세히 적어 보세요.</p>` : ""}`;
 }
@@ -3696,6 +3825,18 @@ function bindEvents() {
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
+    if (e.target.closest("[data-filter-open]")) return openFilterDialog();
+    if (e.target.closest("[data-filter-reset]")) { ui.filter = emptyFilter(); render(); return; }
+    const off = e.target.closest("[data-chip-off]");
+    if (off) {
+      const k = off.dataset.chipOff, f = ui.filter;
+      if (k === "period") { f.period = "month"; f.from = f.to = ""; }
+      else if (k === "amount") { f.min = 0; f.max = 0; }
+      else if (k === "holding") f.holding = "";
+      else f[k] = [];
+      render();
+      return;
+    }
     const ft = e.target.closest("[data-ft]");
     if (ft) return openFooterLink(ft.dataset.ft);
     if (e.target.closest("[data-nw-toggle]")) { ui.nwOpen = !ui.nwOpen; render(); return; }
@@ -3804,6 +3945,7 @@ async function selfTestMain() {
     recurDate, recurStatus, recurLastAmount, autoRecur,
     liveBudgets, budgetSection, catTrendSection, networthBody,
     natureOf, natureDraft, openRepayDialog, openTxDialog, newTxDraft,
+    txNature, txPassesFilter, emptyFilter,
   };
 }
 

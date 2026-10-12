@@ -189,6 +189,22 @@ test("내역 성격", "성격 ↔ 입력 값 변환", (G) => {
   eq(G.natureDraft("move", "assets:a").fromAsset, "assets:a", "자산이동은 출금 자산으로");
 });
 
+// ---------------- 내역 필터 ----------------
+test("내역 필터", "성격·카테고리·자산·금액·기간으로 거르기", (G) => {
+  G.reset({ assets: byId([asset("a", "통장", 0), asset("b", "지갑", 0, "현금")]), debts: byId([debt("c", "카드", 0)]), transactions: byId([
+    spend("x1", "2026-10-02", 12000, ["debts", "c"]), spend("x2", "2026-10-03", 5000, ["assets", "a"], { category: "카페/간식" }),
+    spend("x3", "2026-08-03", 50000, ["assets", "a"]), income("x4", "2026-10-10", 3000000, "a"), repay("x5", "2026-10-20", 12000, "c", "a"),
+  ]) });
+  const T = G.S.transactions;
+  eq(["x1", "x2", "x4", "x5"].map((k) => G.txNature(T[k])), ["card", "var", "income", "repay"], "성격");
+  const pass = (f) => Object.keys(T).filter((k) => { G.ui.filter = { ...G.emptyFilter(), ...f }; return G.txPassesFilter(T[k]); }).sort();
+  eq(pass({ natures: ["card"] }), ["x1"], "카드 사용만(10월)");
+  eq(pass({ cats: ["식비"], period: "6m" }), ["x1", "x3"], "식비·최근 6개월");
+  eq(pass({ holding: "assets:a", period: "all" }), ["x2", "x3", "x4", "x5"], "통장이 낀 내역");
+  eq(pass({ min: 10000, max: 60000, period: "all" }), ["x1", "x3", "x5"], "금액 1만~6만");
+  G.ui.filter = G.emptyFilter();
+});
+
 // ---------------- 실행 ----------------
 async function run() {
   const frame = document.getElementById("app");

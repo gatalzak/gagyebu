@@ -724,3 +724,22 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .cb-inst { padding-left: 0; }
 .cb-head + .section-title { border-top: 0; }
 .ft-links { gap: 4px 0; } .ft-link { padding: 6px 4px; font-size: calc(0.78rem + var(--fs-up)); } .ft-dot { font-size: 0.7rem; }
+
+/* 내역 필터 */
+.search-row { display: flex; gap: 8px; align-items: stretch; margin-bottom: 12px; }
+.search-row .search-bar { flex: 1; min-width: 0; margin-bottom: 0; }
+.filter-btn { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 0 12px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--card); color: var(--muted); font-size: calc(0.82rem + var(--fs-up)); }
+.filter-btn.on { color: #f3dc94; border-color: #6b5a2a; }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.chip-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 5px 10px; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--muted); font-size: calc(0.8rem + var(--fs-up)); }
+.chip.on { border-color: #6b5a2a; color: #f3dc94; background: rgba(243, 220, 148, 0.08); }
+.chip.on.inc { color: var(--inc); border-color: #2f6b4a; background: rgba(76, 210, 138, 0.08); }
+.chip.on.exp { color: var(--exp); border-color: #7a3434; background: rgba(255, 107, 107, 0.08); }
+.chip.on.cred { color: var(--cred); border-color: #7a3a5a; background: rgba(255, 126, 182, 0.08); }
+.chip.on.mov { color: var(--mov); border-color: #55555c; background: rgba(228, 228, 232, 0.06); }
+.chip-reset { color: var(--muted); font-size: calc(0.78rem + var(--fs-up)); padding: 5px 6px; text-decoration: underline; text-underline-offset: 2px; }
+.filter-totals { padding: 10px 14px; }
+.filter-totals .row-sub { padding-left: 0; }
+.filter-totals .ft-total { color: var(--text); border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
