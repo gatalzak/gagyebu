@@ -617,3 +617,24 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .fold-line > span:first-child { min-width: 0; word-break: keep-all; }
 .fold-go { flex: none; white-space: nowrap; color: var(--text); }
 .card-head + .fold-line { border-top: 0; }
+
+/* 순자산 */
+.nw-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; margin-bottom: 10px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 4px; text-align: left; }
+.nw-label { color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); flex: none; }
+.nw-val { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; justify-content: flex-end; font-size: 1.05rem; }
+.nw-diff { font-size: calc(0.78rem + var(--fs-up)); }
+.nw-go { color: var(--muted); }
+.nw-chg { font-size: calc(0.85rem + var(--fs-up)); color: var(--muted); margin: 2px 0 6px; }
+.nw-chart { width: 100%; height: auto; display: block; margin: 6px 0 0; }
+.nw-chart .nw-zero { stroke: #3a3a42; stroke-width: 1; }
+.nw-chart path.pos { fill: var(--inc); opacity: 0.45; }
+.nw-chart path.neg { fill: var(--exp); opacity: 0.45; }
+.nw-chart .nw-bar.on path { opacity: 1; }
+.nw-chart .nw-bar { cursor: pointer; }
+.nw-chart .nw-tick { fill: var(--muted); font-size: 10px; }
+.nw-chart .nw-bar.on .nw-tick { fill: var(--text); }
+.nw-hint { margin: 2px 0 6px; text-align: right; }
+.nw-why .row-main { color: var(--text); }
+.nw-why-note { font-size: calc(0.72rem + var(--fs-up)); }
+.nw-debt-head { margin-top: 10px; }

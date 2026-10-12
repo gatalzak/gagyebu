@@ -1078,10 +1078,145 @@ function settleData() {
   return { m, tx, cur, prevKey, prevTx, prev, left, rate, cats, catTotal, assetChg, debtChg, netChg };
 }
 
-/** 결산 탭: 고른 달의 결산 — 요약·저축률 / 지난달 대비 / 많이 쓴 카테고리 / 자산·부채 변화 */
+// ---------------- 순자산 ----------------
+// 자산·부채 잔액 = 시작 잔액(base) + 내역 변화이므로, 날짜까지의 내역만 더하면 그때의 잔액이 된다.
+// (외화는 지금 환율, 지운 항목은 뺌, 앱 쓰기 전 기간은 시작 잔액 그대로)
+const monthEnd = (month) => `${month}-${pad(monthLast(month))}`;
+function holdingsAt(endDate) {
+  const sums = new Map();
+  for (const t of liveTx()) {
+    if (endDate && t.date > endDate) continue;
+    for (const d of [deltaRef(t.assetDelta), ...(t.deltas || [])].filter(Boolean)) sums.set(`${d.col}:${d.id}`, (sums.get(`${d.col}:${d.id}`) || 0) + d.amount);
+  }
+  const out = { assets: {}, debts: {}, asset: 0, debt: 0 };
+  for (const col of ["assets", "debts"]) {
+    for (const a of Object.values(S[col])) {
+      if (a.deleted) continue;
+      const bal = a.base === undefined ? a.amount || 0 : a.base + (sums.get(`${col}:${a.id}`) || 0);
+      const v = toKRW(roundFor(bal, curOf(a)), curOf(a)) ?? 0;
+      const type = col === "debts" ? debtType(a) : a.type;
+      out[col][type] = (out[col][type] || 0) + v;
+      if (col === "assets") out.asset += v; else out.debt += v;
+    }
+  }
+  out.net = out.asset - out.debt;
+  return out;
+}
+const hasHoldings = () => ["assets", "debts"].some((c) => Object.values(S[c]).some((a) => !a.deleted));
+/** 순자산을 보여 줄 수 있는 첫 달: 가장 이른 내역·자산 등록 달 */
+function netStartMonth() {
+  let m = todayStr().slice(0, 7);
+  for (const t of liveTx()) if ((t.assetDelta || t.deltas?.length) && t.date.slice(0, 7) < m) m = t.date.slice(0, 7);
+  for (const c of ["assets", "debts"]) for (const a of Object.values(S[c])) if (!a.deleted && a.createdAt && a.createdAt.slice(0, 7) < m) m = a.createdAt.slice(0, 7);
+  return m;
+}
+
+/** 현황 맨 위 한 줄: 순자산 + 지난달 말 대비 (누르면 결산의 순자산) */
+function netWorthLine() {
+  if (!hasHoldings()) return "";
+  const now = holdingsAt(monthEnd(ui.month)).net;
+  const prevM = shiftMonth(ui.month, -1);
+  const d = prevM >= netStartMonth() ? now - holdingsAt(monthEnd(prevM)).net : null;
+  const cur = ui.month === todayStr().slice(0, 7);
+  return `<button class="nw-line" data-go-networth>
+    <span class="nw-label">순자산${cur ? "" : ` (${Number(ui.month.slice(5))}월 말)`}</span>
+    <span class="nw-val">${signedWon(Math.round(now)).replace(/^\+/, "")}${d === null ? "" : ` <span class="nw-diff ${d > 0 ? "inc" : d < 0 ? "exp" : "muted"}">${d ? `${d > 0 ? "▲" : "▼"} ${won(Math.abs(d))}` : "변화 없음"}</span>`} <span class="nw-go">›</span></span>
+  </button>`;
+}
+
+/** 결산: 순자산 — 지금 값, 최근 12개월 추이, 이번 달 바뀐 이유, 자산·부채 구성 */
+function networthSection() {
+  if (!hasHoldings()) return `
+  <section class="card home-sec" id="networth">
+    <div class="card-head"><span>순자산</span><span></span></div>
+    <div class="empty" style="padding:14px 0">나의 자산·부채를 등록하면 순자산과 달마다 추이를 볼 수 있어요.</div>
+  </section>`;
+  const m = Number(ui.month.slice(5));
+  const end = holdingsAt(monthEnd(ui.month));
+  const prevKey = shiftMonth(ui.month, -1);
+  const start = netStartMonth();
+  const prev = prevKey >= start ? holdingsAt(monthEnd(prevKey)) : null;
+  const chg = prev ? end.net - prev.net : null;
+
+  // 최근 12개월(고른 달까지) 막대: 양수 초록·음수 빨강, 고른 달은 진하게. 막대를 누르면 그 달로
+  const months = [];
+  for (let k = 11; k >= 0; k--) { const mk = shiftMonth(ui.month, -k); if (mk >= start) months.push(mk); }
+  const vals = months.map((mk) => (mk === ui.month ? end.net : holdingsAt(monthEnd(mk)).net));
+  const W = 340, H = 140, top = 18, bottom = 22;
+  const max = Math.max(0, ...vals), min = Math.min(0, ...vals);
+  const span = max - min || 1;
+  const y = (v) => top + ((max - v) / span) * (H - top - bottom);
+  const slot = W / months.length;
+  const bw = Math.min(18, slot - 6);
+  const bars = months.map((mk, i) => {
+    const v = vals[i], x = i * slot + (slot - bw) / 2;
+    const y0 = y(0), y1 = y(v);
+    const h = Math.max(Math.abs(y1 - y0), v ? 2 : 0);
+    const on = mk === ui.month;
+    const r = Math.min(4, h / 2, bw / 2);
+    // 끝(0에서 먼 쪽)만 둥글게
+    const path = v >= 0
+      ? `M${x},${y0} V${y0 - h + r} Q${x},${y0 - h} ${x + r},${y0 - h} H${x + bw - r} Q${x + bw},${y0 - h} ${x + bw},${y0 - h + r} V${y0} Z`
+      : `M${x},${y0} V${y0 + h - r} Q${x},${y0 + h} ${x + r},${y0 + h} H${x + bw - r} Q${x + bw},${y0 + h} ${x + bw},${y0 + h - r} V${y0} Z`;
+    return `<g class="nw-bar${on ? " on" : ""}" data-nw-month="${mk}">
+      <title>${Number(mk.slice(5))}월 말 순자산 ${signedWon(Math.round(v))}</title>
+      <rect x="${i * slot}" y="0" width="${slot}" height="${H}" fill="transparent"/>
+      <path d="${path}" class="${v >= 0 ? "pos" : "neg"}"/>
+      <text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" class="nw-tick">${Number(mk.slice(5))}월</text>
+    </g>`;
+  }).join("");
+  const chart = months.length > 1 ? `
+    <svg class="nw-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 ${months.length}개월 순자산 추이">
+      <line x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" class="nw-zero"/>
+      ${bars}
+    </svg>
+    <p class="note nw-hint">막대를 누르면 그 달로 이동해요.</p>` : "";
+
+  // 이번 달 바뀐 이유: 내역이 자산·부채에 준 변화를 성격별로
+  let inc = 0, expCash = 0, expDebt = 0, moves = 0, anyMove = false;
+  for (const t of monthTx()) {
+    for (const d of [deltaRef(t.assetDelta), ...(t.deltas || [])].filter(Boolean)) {
+      const h = S[d.col]?.[d.id];
+      if (!h || h.deleted) continue;
+      const v = (toKRW(d.amount, curOf(h)) ?? 0) * (d.col === "debts" ? -1 : 1); // 순자산에 준 영향
+      if (t.kind === "수입") inc += v;
+      else if (t.kind === "지출") { if (d.col === "debts") expDebt += v; else expCash += v; }
+      else { moves += v; anyMove = true; }
+    }
+  }
+  const other = chg === null ? 0 : chg - (inc + expCash + expDebt + moves);
+  const why = (label, v, cls = "") => `<div class="row-sub"><span>${label}</span><span class="${cls || (v > 0 ? "inc" : v < 0 ? "exp" : "")}">${signedWon(Math.round(v))}</span></div>`;
+  const reasons = chg === null ? "" : `
+    <div class="row nw-why">
+      <div class="row-main"><span>${m}월에 바뀐 이유</span><span></span></div>
+      ${inc ? why("수입", inc) : ""}
+      ${expCash ? why("지출 (통장·현금)", expCash) : ""}
+      ${expDebt ? why("지출 (카드·마통 등 부채로)", expDebt) : ""}
+      ${anyMove ? `<div class="row-sub"><span>부채 상환·대출·자산이동<br><span class="muted nw-why-note">자산과 부채가 같이 움직여서 순자산은 그대로</span></span><span>${signedWon(Math.round(moves))}</span></div>` : ""}
+      ${Math.abs(other) >= 1 ? why("기타 (환율·잔액 직접 수정 등)", other, "muted") : ""}
+    </div>`;
+
+  const comp = (obj, types, cls) => types.filter((t) => Math.round(obj[t] || 0)).map((t) => `<div class="row-sub"><span>${t}</span><span class="${cls}">${won(obj[t])}</span></div>`).join("");
+  return `
+  <section class="card home-sec" id="networth">
+    <div class="card-head"><span>순자산 <span class="muted settle-note">${m}월 말 · 자산 − 부채</span></span><span>${signedWon(Math.round(end.net)).replace(/^\+/, "")}</span></div>
+    ${chg === null ? "" : `<div class="nw-chg">지난달 말보다 <span class="${chg > 0 ? "inc" : chg < 0 ? "exp" : "muted"}">${chg ? `${chg > 0 ? "▲" : "▼"} ${won(Math.abs(chg))}` : "변화 없음"}</span></div>`}
+    ${chart}
+    ${reasons}
+    <div class="row nw-comp">
+      <div class="row-main"><span>자산</span><span class="inc">${won(end.asset)}</span></div>
+      ${comp(end.assets, ASSET_TYPES, "")}
+      <div class="row-main nw-debt-head"><span>부채</span><span class="cred">${won(end.debt)}</span></div>
+      ${comp(end.debts, DEBT_TYPES, "")}
+    </div>
+    <p class="note">외화는 오늘 환율로, 앱을 쓰기 전 기간은 처음 등록한 잔액으로 계산해요.</p>
+  </section>`;
+}
+
+/** 결산 탭: 고른 달의 결산 — 요약·저축률 / 지난달 대비 / 많이 쓴 카테고리 / 순자산 */
 function settleView() {
   const { m, tx, cur, prevKey, prevTx, prev, left, rate, cats, catTotal, assetChg, debtChg, netChg } = settleData();
-  if (!tx.length) return `<div class="card"><div class="empty">${m}월 기록이 없어요.</div></div>`;
+  if (!tx.length) return `<div class="card"><div class="empty">${m}월 기록이 없어요.</div></div>${networthSection()}`;
   const top = cats.slice(0, 5);
   // 지난달 대비: 늘었으면 ▲, 줄었으면 ▼. 수입은 늘면 초록, 지출·부채는 늘면 레드/핑크
   const diffRow = (label, now, before, upGood, upCls) => {
@@ -1125,14 +1260,7 @@ function settleView() {
       </div>`).join("")}</div>` : `<div class="empty" style="padding:14px 0">지출 기록이 없어요.</div>`}
   </section>
 
-  <section class="card home-sec">
-    <div class="card-head"><span>자산·부채 변화</span><span class="muted settle-note">이번 달 기록 기준</span></div>
-    <div class="row">
-      <div class="row-sub"><span>자산</span><span class="${assetChg >= 0 ? "inc" : "exp"}">${signedWon(Math.round(assetChg))}</span></div>
-      <div class="row-sub"><span>부채</span><span class="cred">${signedWon(Math.round(debtChg))}</span></div>
-    </div>
-    <div class="row"><div class="row-main"><span>순자산 변화 (자산-부채)</span><span class="${netChg >= 0 ? "inc" : "exp"}">${signedWon(Math.round(netChg))}</span></div></div>
-  </section>
+  ${networthSection()}
   <button class="btn excel-btn settle-excel" data-settle-excel>${EXCEL_ICON}${m}월 결산 엑셀 파일로 내보내기</button>`;
 }
 
@@ -1261,6 +1389,7 @@ function homeView(part = "summary") {
     ${body}
   </section>`;
   const summary = `
+  ${netWorthLine()}
   <section class="card">
     <div class="card-head"><span>이번 달 현재 (수입-지출)</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>
     <div class="row"><div class="row-main">${homeLabel("수입", "수입", "inc")}<span class="inc">${signed(sum(inc), "+")}</span></div></div>
@@ -3289,6 +3418,14 @@ function bindEvents() {
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
+    if (e.target.closest("[data-go-networth]")) {
+      ui.tab = "settle";
+      render();
+      setTimeout(() => document.getElementById("networth")?.scrollIntoView({ block: "start" }), 60);
+      return;
+    }
+    const nwm = e.target.closest("[data-nw-month]");
+    if (nwm) { ui.month = nwm.dataset.nwMonth; render(); return; }
     if (e.target.closest("[data-recur-manage]")) return openRecurringDialog();
     const fold = e.target.closest("[data-fold]");
     if (fold) { ui[fold.dataset.fold] = !ui[fold.dataset.fold]; render(); return; }
