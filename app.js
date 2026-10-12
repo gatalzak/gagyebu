@@ -587,9 +587,9 @@ function render() {
 
 // ---------------- 푸터 · 설정 ----------------
 // 모든 탭 맨 아래: 가끔 들어가는 관리 창 지름길 + 앱 버전
-const GEAR = `<svg class="ft-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
+const LOCK_ICON = `<svg class="ft-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>`;
 function footerHTML() {
-  const links = [["settings", `${GEAR}설정`], ["budget", "예산"], ["recur", "반복 내역"], ["cats", "카테고리"], ["backup", "백업/복원"]];
+  const links = [["settings", `${LOCK_ICON}보안 설정`], ["budget", "예산"], ["recur", "반복 내역"], ["cats", "카테고리"], ["backup", "백업/복원"]];
   return `
   <footer class="app-footer">
     <nav class="ft-links">${links.map(([k, t]) => `<button class="ft-link${k === "settings" ? " ft-main" : ""}" data-ft="${k}">${t}</button>`).join('<span class="ft-dot">·</span>')}</nav>
@@ -613,10 +613,10 @@ function openFooterLink(k) {
   if (k === "cats") return openCategoryEditor({ onClose: () => { closeModal(); render(); } });
   if (k === "backup") return openBackupDialog();
 }
-/** 설정: 앱 잠금 · 금액 가리기 (이 기기에만) */
+/** 보안 설정: 앱 잠금 · 금액 가리기 (이 기기에만) */
 function openSettingsDialog() {
   const panel = openModal({
-    title: "설정",
+    title: "보안 설정",
     body: `${lockSection()}
       <p class="note" style="margin-top:18px">백업·동기화는 '백업/복원', 예산·반복 내역·카테고리는 아래 메뉴에서 바꿀 수 있어요.</p>`,
   });

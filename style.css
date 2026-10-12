@@ -723,3 +723,4 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .cb-pay { width: 100%; margin-top: 10px; }
 .cb-inst { padding-left: 0; }
 .cb-head + .section-title { border-top: 0; }
+.ft-links { gap: 4px 0; } .ft-link { padding: 6px 4px; font-size: calc(0.78rem + var(--fs-up)); } .ft-dot { font-size: 0.7rem; }

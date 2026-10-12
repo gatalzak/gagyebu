@@ -157,7 +157,7 @@ function forgotScreen(lockEl) {
     <div class="lock-ico">${LOCK_ICO}</div>
     <h2 class="lock-title">PIN을 잊었어요</h2>
     <ol class="forgot-steps">
-      ${cfg?.bio && bioOk ? `<li><span class="fs-h">폰 잠금(지문·얼굴)으로 열어 보세요</span>'돌아가기'를 누르고 키패드 왼쪽 아래 지문 버튼을 누르면 PIN 없이 열려요. 연 뒤 설정에서 PIN을 바꾸면 돼요.</li>` : ""}
+      ${cfg?.bio && bioOk ? `<li><span class="fs-h">폰 잠금(지문·얼굴)으로 열어 보세요</span>'돌아가기'를 누르고 키패드 왼쪽 아래 지문 버튼을 누르면 PIN 없이 열려요. 연 뒤 맨 아래 '보안 설정'에서 PIN을 바꾸면 돼요.</li>` : ""}
       <li><span class="fs-h">자주 쓰는 숫자를 다시 떠올려 보세요</span>생일·전화번호 끝자리처럼 평소 쓰는 4자리일 수 있어요. 5번 틀리면 30초 기다렸다가 다시 할 수 있어요.</li>
       <li><span class="fs-h">다른 기기에서 먼저 확인하세요</span>PC 등 다른 기기에서도 이 가계부를 쓰고 있다면, 그 기기에서 '백업/복원 → 지금 동기화'를 한 번 눌러 최신 내역을 드라이브에 올려 두세요. 앱 잠금은 기기마다 따로라서 다른 기기는 잠기지 않아요.</li>
       <li><span class="fs-h">그래도 안 되면 이 기기만 초기화</span>
