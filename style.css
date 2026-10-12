@@ -751,3 +751,8 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .panel-head.center { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; }
 .panel-head.center h2 { text-align: center; white-space: nowrap; }
 .panel-head.center .head-actions { justify-self: end; }
+/* 내역 목록 자산이동 경로: 이름 아래 (종류) */
+.rt-block { display: inline-flex; align-items: flex-start; gap: 6px; }
+.rt-end { display: inline-flex; flex-direction: column; line-height: 1.35; }
+.rt-type { font-size: 0.9em; opacity: 0.75; }
+.rt-arrow { line-height: 1.35; }

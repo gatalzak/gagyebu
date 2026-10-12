@@ -1,9 +1,20 @@
 // 가탈작 가계부 — 내역·달력·월별 탭, 검색·필터
 import { formatMoney } from "./fx.js";
 import { $, EXPENSE_TYPES, KIND_CLASS, S, debtType, esc, fmtAmount, liveTx, monthTx, pad, parseAmount, signed, sum, toast, todayStr, txNewestFirst, ui, won, ym } from "./core.js";
-import { PERIODS, PICK_ITEMS, SHORT_DEBT, catsFor, deltaRef, emptyFilter, filterCount, isLoanTx, isPlainExpense, isRepayTx, isShortDebt, moveRoute, parseLinkKey, periodLabel, shortDebtTotals, shortDebtType, txMatches, txNature, txPassesFilter, txSign } from "./model.js";
+import { PERIODS, PICK_ITEMS, SHORT_DEBT, catsFor, deltaRef, emptyFilter, filterCount, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, moveRoute, parseLinkKey, periodLabel, shortDebtTotals, shortDebtType, txMatches, txNature, txPassesFilter, txSign } from "./model.js";
 import { CAMERA, FUNNEL, bindAmount, closeModal, holdingOptions, openModal } from "./uikit.js";
 import { render } from "./app.js";
+/** 자산이동 경로: 자산 이름 아래 줄에 (자산 종류) — 예: 토스 (은행) → 국민763 (은행) */
+function moveRouteBlock(t) {
+  const ds = t.deltas || [];
+  const end = (x) => {
+    const a = x && S.assets[x.id];
+    return a ? `<span class="rt-end"><span>${esc(a.name)}</span><span class="rt-type">(${esc(a.type)})</span></span>` : `<span class="rt-end"><span>?</span></span>`;
+  };
+  const out = ds.find((x) => x.col === "assets" && x.amount < 0), into = ds.find((x) => x.col === "assets" && x.amount > 0);
+  if (!out && !into) return "";
+  return `<span class="rt-block">${end(out)}<span class="rt-arrow">→</span>${end(into)}</span>`;
+}
 export function txRow(t, { withDate = false } = {}) {
   // 뱃지: 카테고리(수입 초록·지출 레드) / 자산이동(화이트) / 부채상환(옐로우: 자산에서 밖으로 나가 빚을 줄임) + 부채로 결제했으면 그 부채 종류(핑크)
   const kindBadge = t.kind === "수입" ? "b-inc" : t.kind === "지출" ? "b-exp" : "b-mov";
@@ -17,7 +28,7 @@ export function txRow(t, { withDate = false } = {}) {
   const sub = [when, t.party ? esc(t.party) : ""].filter(Boolean).join(" · ");
   // 시간 아래 줄: 수입=입금 자산, 지출=출금 자산(신용카드·마통 등 부채는 '결제'), 자산이동=출금 → 입금
   const linked = d && (d.col === "debts" ? S.debts[d.id] : S.assets[d.id]);
-  const via = linked ? `${t.kind === "수입" ? "입금" : d.col === "debts" ? "결제" : "출금"} ${esc(linked.name)}` : route;
+  const via = linked ? `${t.kind === "수입" ? "입금" : d.col === "debts" ? "결제" : "출금"} ${esc(linked.name)}` : isMoveTx(t) ? moveRouteBlock(t) || route : route;
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
