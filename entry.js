@@ -424,11 +424,6 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
   const draw = () => {
-    if (draft.kind === "자산이동" && !draft.catTouched && !existing) {
-      const ty = (key) => { const r = parseLinkKey(key); return r && S.assets[r.id]?.type; };
-      const guess = `${ty(draft.fromAsset)} → ${ty(draft.toAsset)}`;
-      if (ty(draft.fromAsset) && ty(draft.toAsset) && catsFor("자산이동").includes(guess)) draft.category = guess;
-    }
     const cardMode = draft.kind === "지출" && CARD_MODES.includes(draft.debtMode);
     // 카드·마통 사용은 고정/변동을 묻지 않고, 카테고리를 고정·변동 묶음으로 함께 보여 준다(고른 카테고리를 따라감)
     const catList = cardMode ? EXPENSE_TYPES.flatMap((et) => catsFor("지출", et)) : catsFor(draft.kind, draft.kind === "지출" ? draft.expenseType : null);
@@ -665,8 +660,6 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       });
     };
     if (fromSel) {
-      // 출금·입금 자산을 바꾸면(카테고리를 직접 고르기 전) 맞는 경로 카테고리로 다시 그림
-      [fromSel, toSel].forEach((el) => el.addEventListener("change", () => { if (!draft.catTouched && !existing) { read(); draw(); } }));
       [fromSel, toSel, curSel].forEach((el) => el.addEventListener("change", refreshTransferHint));
       [amt, krwIn].forEach((el) => el.addEventListener("input", refreshTransferHint));
       refreshTransferHint();

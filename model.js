@@ -41,8 +41,15 @@ export const catEtype = (c) => c.etype || (DEFAULT_FIXED.has(c.name) ? "고정" 
 // 모든 기기에서 같은 시각으로 지워 동기화 때 다시 살아나지 않게 한다. 이미 입력한 내역의 카테고리 이름은 그대로 남는다.
 export const RETIRED_CATS = { 자산이동: ["저축", "투자", "카드대금", "부채상환", "현금인출", "기타", "계좌이체", "ATM입금", "ATM출금"] };
 export const RETIRE_TIME = "2026-10-10T12:00:00.000Z";
+// 자산이동 경로형 기본값(v186) — 손대지 않은 것만 지운다
+const RETIRED_MOVE = ["현금 → 은행", "은행 → 현금", "은행 → 은행", "은행 → 증권", "증권 → 은행"];
+const RETIRE_MOVE_TIME = "2026-10-13T00:00:00.000Z";
 export function retireOldCats() {
   let n = 0;
+  for (const name of RETIRED_MOVE) {
+    const c = S.cats[`defmove:${name}`];
+    if (c && !c.deleted && c.updatedAt === SEED_TIME) { S.cats[c.id] = { ...c, deleted: true, updatedAt: RETIRE_MOVE_TIME }; n++; }
+  }
   for (const [kind, names] of Object.entries(RETIRED_CATS)) {
     for (const name of names) {
       const c = S.cats[`defcat:${kind}:${name}`];
