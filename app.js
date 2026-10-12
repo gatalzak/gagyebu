@@ -3535,7 +3535,7 @@ async function main() {
   bindEye();
   updateEye();
   render();
-  initLock({ toast, isConnected }); // 앱 잠금(켜 둔 경우)
+  initLock({ toast, status: () => ({ connected: isConfigured() && isConnected(), lastSync: S.meta.lastSync, lastBackup: S.meta.lastBackup }) }); // 앱 잠금(켜 둔 경우)
   runSync();
   if (fresh) toast("구글 드라이브에 연결했어요");
   else if (autoN) toast(`반복 내역 ${autoN}건을 자동 기록했어요`);

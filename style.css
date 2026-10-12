@@ -646,9 +646,9 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .eye-btn[hidden] { display: none; }
 
 /* 앱 잠금 화면 */
-.lock-screen { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; justify-content: center; align-items: center;
+.lock-screen { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: flex; justify-content: center; align-items: flex-start;
   padding: calc(24px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; }
-.lock-box { width: 100%; max-width: 320px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.lock-box { margin: auto; width: 100%; max-width: 340px; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .lock-ico { color: var(--muted); margin-bottom: 10px; }
 .lock-title { margin: 0; font-size: 1.2rem; font-weight: 400; }
 .lock-sub { margin: 8px 0 0; min-height: 1.2em; color: var(--muted); font-size: calc(0.82rem + var(--fs-up)); word-break: keep-all; line-height: 1.5; }
@@ -678,3 +678,21 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .ft-dot { color: #4a4a52; }
 .ft-meta { margin-top: 10px; color: #6a6a72; font-size: calc(0.72rem + var(--fs-up)); }
 .ft-meta a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* PIN 분실 안내 */
+.forgot-steps { text-align: left; margin: 16px 0 18px; padding-left: 20px; display: flex; flex-direction: column; gap: 14px;
+  font-size: calc(0.8rem + var(--fs-up)); color: var(--muted); line-height: 1.55; word-break: keep-all; }
+.forgot-steps .fs-h { display: block; color: var(--text); font-size: calc(0.88rem + var(--fs-up)); margin-bottom: 2px; }
+.fs-what { margin-top: 10px; color: var(--text); }
+.fs-what ul { margin: 4px 0 0; padding-left: 16px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.fs-ok { color: var(--inc); }
+.safety { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 3px; display: flex; flex-direction: column; gap: 4px;
+  font-size: calc(0.78rem + var(--fs-up)); text-align: left; }
+.sf-row { display: flex; gap: 8px; color: var(--text); }
+.sf-row.ok .sf-mark { color: var(--inc); } .sf-row.no .sf-mark { color: var(--exp); }
+.sf-warn { margin: 4px 0 0; color: #f3dc94; word-break: keep-all; line-height: 1.5; }
+.forgot-pre { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 3px; }
+.fp-title { color: var(--text); font-size: calc(0.85rem + var(--fs-up)); cursor: pointer; }
+.lock-help { margin: 8px 0 0; padding-left: 16px; color: var(--muted); font-size: calc(0.78rem + var(--fs-up)); line-height: 1.55;
+  display: flex; flex-direction: column; gap: 4px; word-break: keep-all; }
+.lock-help li > span { color: var(--text); }

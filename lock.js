@@ -14,7 +14,27 @@ let lastActive = Date.now();
 let hiddenAt = null;
 let bioOk = false; // 이 기기에서 지문·얼굴 인증을 쓸 수 있는지
 let fails = 0, waitUntil = 0;
-let hooks = { toast: () => {}, isConnected: () => false };
+let hooks = { toast: () => {}, status: () => ({ connected: false, lastSync: null, lastBackup: null }) };
+const RESET_FLAG = "gagyebu-after-reset";
+const when = (iso) => (iso ? new Date(iso).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+
+/** 지금 데이터를 되살릴 수 있는 상태(드라이브·백업 파일) 요약 */
+function safetyBox(warn = true) {
+  const st = hooks.status();
+  const line = (ok, label, detail) => `<div class="sf-row ${ok ? "ok" : "no"}"><span class="sf-mark">${ok ? "✓" : "✕"}</span><span>${label}${detail ? ` <span class="muted">· ${detail}</span>` : ""}</span></div>`;
+  const risky = !st.connected && !st.lastBackup;
+  return `<div class="safety">
+    ${line(st.connected, st.connected ? "구글 드라이브 연결됨" : "구글 드라이브 연결 안 됨", st.connected && st.lastSync ? `마지막 동기화 ${when(st.lastSync)}` : "")}
+    ${line(!!st.lastBackup, st.lastBackup ? "백업 파일 저장한 적 있음" : "백업 파일 저장한 적 없음", st.lastBackup ? when(st.lastBackup) : "")}
+    ${risky && warn ? `<p class="sf-warn">지금 PIN을 잊으면 데이터를 되살릴 방법이 없어요. 먼저 '백업/복원'에서 드라이브를 연결하거나 백업 파일을 저장해 두세요.</p>` : ""}
+  </div>`;
+}
+const FORGOT_HELP = `
+  <ul class="lock-help">
+    <li><span>지문을 등록해 두면</span> PIN이 생각나지 않아도 지문으로 열 수 있어요.</li>
+    <li><span>그래도 못 열면</span> 잠금 화면의 'PIN을 잊었어요'에서 이 기기의 데이터를 지우고 다시 시작해요. 드라이브에 연결돼 있으면 내역은 드라이브에서 다시 받아와요.</li>
+    <li><span>드라이브도 백업도 없으면</span> 이 기기의 데이터는 되살릴 수 없어요.</li>
+  </ul>`;
 
 function load() {
   try { return JSON.parse(localStorage.getItem(LOCK_KEY)) || null; } catch { return null; }
@@ -131,19 +151,36 @@ function pinScreen({ title, sub = "", onPin, onCancel = null, unlock = false }) 
 /** PIN을 잊었을 때: 이 기기 데이터를 지우고(드라이브에서 다시 받음) 잠금을 푼다 */
 function forgotScreen(lockEl) {
   const box = lockEl.querySelector(".lock-box");
-  const conn = hooks.isConnected();
+  const st = hooks.status();
+  const conn = st.connected;
   box.innerHTML = `
     <div class="lock-ico">${LOCK_ICO}</div>
     <h2 class="lock-title">PIN을 잊었어요</h2>
-    <p class="lock-sub lock-forgot-text">${conn
-      ? "이 기기의 가계부 데이터를 지우고 구글 드라이브에서 다시 받아요. 드라이브에 동기화된 내역은 그대로 돌아오고, 잠금은 꺼져요."
-      : "구글 드라이브에 연결돼 있지 않아서, 초기화하면 이 기기의 가계부 데이터가 <span class=\"lock-warn\">모두 사라져요</span>. 백업 파일이 있으면 나중에 불러올 수 있어요."}</p>
-    <button class="btn danger lock-wide" data-wipe>초기화하고 잠금 풀기</button>
+    <ol class="forgot-steps">
+      ${cfg?.bio && bioOk ? `<li><span class="fs-h">지문으로 열어 보세요</span>'돌아가기'를 누르고 키패드 왼쪽 아래 지문 버튼을 누르면 PIN 없이 열려요. 연 뒤 설정에서 PIN을 바꾸면 돼요.</li>` : ""}
+      <li><span class="fs-h">자주 쓰는 숫자를 다시 떠올려 보세요</span>생일·전화번호 끝자리처럼 평소 쓰는 4자리일 수 있어요. 5번 틀리면 30초 기다렸다가 다시 할 수 있어요.</li>
+      <li><span class="fs-h">다른 기기에서 먼저 확인하세요</span>PC 등 다른 기기에서도 이 가계부를 쓰고 있다면, 그 기기에서 '백업/복원 → 지금 동기화'를 한 번 눌러 최신 내역을 드라이브에 올려 두세요. 앱 잠금은 기기마다 따로라서 다른 기기는 잠기지 않아요.</li>
+      <li><span class="fs-h">그래도 안 되면 이 기기만 초기화</span>
+        ${safetyBox(false)}
+        <div class="fs-what">
+          초기화하면
+          <ul>
+            <li>이 기기의 가계부 데이터와 잠금 설정이 지워지고 앱이 다시 열려요.</li>
+            ${conn ? `<li>드라이브 연결은 그대로라서 <span class="fs-ok">내역을 드라이브에서 자동으로 다시 받아와요</span>(1~2분). 안 보이면 '백업/복원 → 지금 동기화'를 눌러 주세요.</li>
+            <li>마지막 동기화 뒤에 이 기기에서만 입력한 내역은 사라져요.</li>` : `<li>드라이브에 연결돼 있지 않아서 <span class="lock-warn">이 기기의 내역이 모두 사라져요.</span></li>
+            <li>${st.lastBackup ? `백업 파일(${when(st.lastBackup)} 저장)이 있으면 초기화 뒤 '백업/복원 → 백업 파일 불러오기'로 되살릴 수 있어요.` : "백업 파일도 없어서 되살릴 방법이 없어요."}</li>`}
+            <li>다른 기기의 데이터와 드라이브의 파일은 지워지지 않아요.</li>
+          </ul>
+        </div>
+      </li>
+    </ol>
+    <button class="btn danger lock-wide" data-wipe>이 기기 초기화하고 잠금 풀기</button>
     <button class="lock-link" data-back>돌아가기</button>`;
   let armed = false;
   box.querySelector("[data-wipe]").onclick = async (e) => {
     if (!armed) { armed = true; e.target.textContent = "한 번 더 누르면 초기화"; return; }
     cfg = null; save();
+    try { localStorage.setItem(RESET_FLAG, conn ? "drive" : "local"); } catch {}
     await new Promise((res) => { const r = indexedDB.deleteDatabase("claude-gagyebu"); r.onsuccess = r.onerror = r.onblocked = () => res(); });
     location.reload();
   };
@@ -224,12 +261,22 @@ export function lockSection() {
       <div class="money-line" style="margin-top:10px">
         <button class="btn" data-lock-change>PIN 바꾸기</button>
         <button class="btn" data-lock-off>잠금 끄기</button>
-      </div>` : `
+      </div>
+      <details class="forgot-pre">
+        <summary class="fp-title">PIN을 잊으면?</summary>
+        ${FORGOT_HELP}
+        ${safetyBox()}
+      </details>` : `
       <p class="note">켜면 앱을 열 때 4자리 PIN(또는 지문)을 물어봐요. 기본은 꺼져 있어요.</p>
+      <div class="forgot-pre">
+        <div class="fp-title">켜기 전에: PIN을 잊으면 어떻게 되나요?</div>
+        ${FORGOT_HELP}
+        ${safetyBox()}
+      </div>
       <button class="btn" data-lock-on style="margin-top:10px">앱 잠금 켜기</button>`}
     <div class="section-title">금액 가리기 <span class="muted lock-scope">이 기기에만 적용</span></div>
-    <label class="check-line" style="margin-top:4px"><input type="checkbox" data-hide-amt ${hideAmounts() ? "checked" : ""}> 금액 가리기
-      <span class="muted">— 금액을 ●●●●로 가리고, 맨 위 눈 버튼을 누르면 잠깐 보여요</span></label>`;
+    <label class="check-line" style="margin-top:4px"><input type="checkbox" data-hide-amt ${hideAmounts() ? "checked" : ""}> 화면의 금액을 ●●●●로 가리기</label>
+    <p class="note" style="margin-top:4px">맨 위 날짜 오른쪽 눈 버튼을 누르면 15초 동안 보여요.</p>`;
 }
 
 export function bindLockSection(panel, { reopen, onHideChange }) {
@@ -241,7 +288,7 @@ export function bindLockSection(panel, { reopen, onHideChange }) {
     cfg = { hash: await hashPin(pin, salt), salt, timing: "5", bio: null };
     save();
     reopen();
-    hooks.toast("앱 잠금을 켰어요 · 5분 동안 안 쓰면 잠겨요");
+    hooks.toast(bioOk ? "앱 잠금을 켰어요 · 지문도 등록해 두면 PIN을 잊어도 열 수 있어요" : "앱 잠금을 켰어요 · 5분 동안 안 쓰면 잠겨요");
   });
   q("[name=lockTiming]")?.addEventListener("change", (e) => {
     cfg.timing = e.target.value;
@@ -275,8 +322,16 @@ export function bindLockSection(panel, { reopen, onHideChange }) {
 
 // ---------- 시작 ----------
 /** 앱 시작 때 한 번: 잠금 조건 확인 + 화면 전환·사용 감시 */
-export async function initLock({ toast, isConnected }) {
-  hooks = { toast, isConnected };
+export async function initLock({ toast, status }) {
+  hooks = { toast, status };
+  // PIN 분실로 초기화한 직후: 무엇이 일어나는지 알려 줌
+  try {
+    const r = localStorage.getItem(RESET_FLAG);
+    if (r) {
+      localStorage.removeItem(RESET_FLAG);
+      setTimeout(() => toast(r === "drive" ? "초기화했어요 · 드라이브에서 내역을 다시 받는 중이에요" : "초기화했어요 · 백업 파일이 있으면 '백업/복원'에서 불러오세요"), 600);
+    }
+  } catch {}
   try { bioOk = !!window.PublicKeyCredential && (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch { bioOk = false; }
   const seen = Number(localStorage.getItem(SEEN_KEY) || 0);
   const timeout = () => TIMEOUTS[cfg?.timing ?? "5"] ?? 300_000;
