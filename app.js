@@ -1159,10 +1159,14 @@ function netWorthLine() {
   const prevM = shiftMonth(ui.month, -1);
   const d = prevM >= netStartMonth() ? now - holdingsAt(monthEnd(prevM)).net : null;
   const cur = ui.month === todayStr().slice(0, 7);
-  return `<button class="nw-line" data-go-networth>
+  const open = !!ui.nwOpen;
+  return `<section class="nw-card${open ? " open" : ""}">
+  <button class="nw-line" data-nw-toggle aria-expanded="${open}">
     <span class="nw-label">순자산${cur ? "" : ` (${Number(ui.month.slice(5))}월 말)`}</span>
-    <span class="nw-val">${signedWon(Math.round(now)).replace(/^\+/, "")}${d === null ? "" : ` <span class="nw-diff ${d > 0 ? "inc" : d < 0 ? "exp" : "muted"}">${d ? `${d > 0 ? "▲" : "▼"} ${won(Math.abs(d))}` : "변화 없음"}</span>`} <span class="nw-go">›</span></span>
-  </button>`;
+    <span class="nw-val">${signedWon(Math.round(now)).replace(/^\+/, "")}${d === null ? "" : ` <span class="nw-diff ${d > 0 ? "inc" : d < 0 ? "exp" : "muted"}">${d ? `${d > 0 ? "▲" : "▼"} ${won(Math.abs(d))}` : "변화 없음"}</span>`} <span class="nw-go">${open ? "⌃" : "⌄"}</span></span>
+  </button>
+  ${open ? `<div class="nw-body">${networthBody({ withChg: false })}</div>` : ""}
+  </section>`;
 }
 
 /** 결산: 순자산 — 지금 값, 최근 12개월 추이, 이번 달 바뀐 이유, 자산·부채 구성 */
@@ -1172,6 +1176,15 @@ function networthSection() {
     <div class="card-head"><span>순자산</span><span></span></div>
     <div class="empty" style="padding:14px 0">나의 자산·부채를 등록하면 순자산과 달마다 추이를 볼 수 있어요.</div>
   </section>`;
+  const end = holdingsAt(monthEnd(ui.month));
+  return `
+  <section class="card home-sec" id="networth">
+    <div class="card-head"><span>순자산 <span class="muted settle-note">${Number(ui.month.slice(5))}월 말 · 자산 − 부채</span></span><span>${signedWon(Math.round(end.net)).replace(/^\+/, "")}</span></div>
+    ${networthBody({ withChg: true })}
+  </section>`;
+}
+/** 순자산 본문(결산 섹션과 현황 펼침에서 같이 씀) */
+function networthBody({ withChg = true } = {}) {
   const m = Number(ui.month.slice(5));
   const end = holdingsAt(monthEnd(ui.month));
   const prevKey = shiftMonth(ui.month, -1);
@@ -1239,9 +1252,7 @@ function networthSection() {
 
   const comp = (obj, types, cls) => types.filter((t) => Math.round(obj[t] || 0)).map((t) => `<div class="row-sub"><span>${t}</span><span class="${cls}">${won(obj[t])}</span></div>`).join("");
   return `
-  <section class="card home-sec" id="networth">
-    <div class="card-head"><span>순자산 <span class="muted settle-note">${m}월 말 · 자산 − 부채</span></span><span>${signedWon(Math.round(end.net)).replace(/^\+/, "")}</span></div>
-    ${chg === null ? "" : `<div class="nw-chg">지난달 말보다 <span class="${chg > 0 ? "inc" : chg < 0 ? "exp" : "muted"}">${chg ? `${chg > 0 ? "▲" : "▼"} ${won(Math.abs(chg))}` : "변화 없음"}</span></div>`}
+    ${chg === null || !withChg ? "" : `<div class="nw-chg">지난달 말보다 <span class="${chg > 0 ? "inc" : chg < 0 ? "exp" : "muted"}">${chg ? `${chg > 0 ? "▲" : "▼"} ${won(Math.abs(chg))}` : "변화 없음"}</span></div>`}
     ${chart}
     ${reasons}
     <div class="row nw-comp">
@@ -1250,8 +1261,7 @@ function networthSection() {
       <div class="row-main nw-debt-head"><span>부채</span><span class="cred">${won(end.debt)}</span></div>
       ${comp(end.debts, DEBT_TYPES, "")}
     </div>
-    <p class="note">외화는 오늘 환율로, 앱을 쓰기 전 기간은 처음 등록한 잔액으로 계산해요.</p>
-  </section>`;
+    <p class="note">외화는 오늘 환율로, 앱을 쓰기 전 기간은 처음 등록한 잔액으로 계산해요.</p>`;
 }
 
 /** 결산 탭: 고른 달의 결산 — 요약·저축률 / 지난달 대비 / 많이 쓴 카테고리 / 순자산 */
@@ -3462,12 +3472,7 @@ function bindEvents() {
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
     const ft = e.target.closest("[data-ft]");
     if (ft) return openFooterLink(ft.dataset.ft);
-    if (e.target.closest("[data-go-networth]")) {
-      ui.tab = "settle";
-      render();
-      setTimeout(() => document.getElementById("networth")?.scrollIntoView({ block: "start" }), 60);
-      return;
-    }
+    if (e.target.closest("[data-nw-toggle]")) { ui.nwOpen = !ui.nwOpen; render(); return; }
     const nwm = e.target.closest("[data-nw-month]");
     if (nwm) { ui.month = nwm.dataset.nwMonth; render(); return; }
     if (e.target.closest("[data-recur-manage]")) return openRecurringDialog();

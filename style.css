@@ -619,8 +619,10 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .card-head + .fold-line { border-top: 0; }
 
 /* 순자산 */
-.nw-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; margin-bottom: 10px;
-  background: var(--card); border: 1px solid var(--line); border-radius: 4px; text-align: left; }
+.nw-card { background: var(--card); border: 1px solid var(--line); border-radius: 4px; margin-bottom: 10px; }
+.nw-line { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; text-align: left; }
+.nw-card.open .nw-line { border-bottom: 1px solid var(--line); }
+.nw-body { padding: 4px 16px 14px; }
 .nw-label { color: var(--muted); font-size: calc(0.85rem + var(--fs-up)); flex: none; }
 .nw-val { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; justify-content: flex-end; font-size: 1.05rem; }
 .nw-diff { font-size: calc(0.78rem + var(--fs-up)); }
