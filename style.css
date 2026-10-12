@@ -304,7 +304,7 @@ input[type="date"].input { color-scheme: dark; }
 .cat-badge.b-exp { background: #ffe8e8; color: #c9302c; }
 .cat-badge.b-mov { background: #ececef; color: #26262b; }  /* 자산이동: 화이트 바탕·검은 글자 */
 .cat-badge.b-repay { background: #fff6dc; color: #9a7413; } /* 부채 상환: 옐로우 */
-.cat-badge.b-cred { background: #ffe6f1; color: #b8236b; }
+.cat-badge.b-cred { background: #d9488a; color: #fff5fa; } /* 부채(신용카드·마통·대출 등): 핑크 바탕·흰 글자 */
 .tx-content { color: #fff; font-size: calc(0.95rem + var(--fs-up)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx .memo { font-size: calc(0.75rem + var(--fs-up)); margin-top: 1px; }
 /* 탭 5개: 폰 폭에 맞게 글자를 조금 줄임 */
