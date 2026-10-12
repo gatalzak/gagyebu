@@ -1,7 +1,7 @@
 // 가탈작 가계부 — 관리 창(카테고리·자산/부채·백업·동기화·푸터·보안 설정)
 import { saveState, mergeInto, uid, nowISO } from "./store.js";
 import { CURRENCIES, parseMoney, formatInput, toInput, formatMoney, toKRW, refreshRates, ratesDate } from "./fx.js";
-import { sync, isConfigured, isConnected, connect, disconnect } from "./sync.js";
+import { sync, isConfigured, isConnected, connect, disconnect, photoCleanInfo } from "./sync.js";
 import { makeXlsx } from "./xlsx.js";
 import { lockSection, bindLockSection } from "./lock.js";
 import { $, EXPENSE_TYPES, FILE_PREFIX, S, esc, liveTx, nowTime, toast, todayStr, txKRW, ui, won } from "./core.js";
@@ -612,12 +612,13 @@ export function syncBadge() {
 export function syncSection() {
   if (!isConfigured()) return `<p class="note">구글 드라이브 동기화 설정 전이에요. 지금은 이 기기에만 저장되고, 아래처럼 파일로 옮길 수 있어요.</p>`;
   if (!isConnected()) return `
-    <p class="note">구글 드라이브에 연결하면 폰과 PC의 내역이 자동으로 합쳐져요. 이 앱이 만든 파일 하나에만 접근해요.</p>
+    <p class="note">구글 드라이브에 연결하면 폰과 PC의 내역이 자동으로 합쳐져요. 이 앱이 만든 파일(동기화 파일·영수증 사진)에만 접근해요.</p>
     <button class="btn primary" data-connect style="margin-top:10px">구글 드라이브 연결</button>`;
   const last = S.meta.lastSync ? new Date(S.meta.lastSync).toLocaleString("ko-KR") : "아직 없음";
   return `
     <div class="asset-total"><span class="muted">상태</span>${syncBadge()}</div>
     <div class="asset-total"><span class="muted">마지막 동기화</span><span>${last}</span></div>
+    ${(() => { const c = photoCleanInfo(); return c ? `<div class="asset-total"><span class="muted">사진 정리</span><span>${new Date(c.at).toLocaleDateString("ko-KR")} · ${c.drive ? `${c.drive}장 휴지통으로` : "정리할 사진 없음"}</span></div>` : ""; })()}
     ${sync.status === "error" && sync.error ? `<p class="note">오류: ${esc(sync.error)}</p>` : ""}
     <div class="btn-row">
       <button class="btn" data-disconnect>연결 해제</button>

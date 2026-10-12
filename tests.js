@@ -1,3 +1,4 @@
+import { cleanPhotos } from "./photos.js";
 // 계산 자동 테스트: index.html?selftest(메모리 모드 앱)를 띄워 계산 함수를 정해진 예제로 검사한다.
 // 실제 데이터(IndexedDB)·드라이브는 건드리지 않는다. 새 기능을 고칠 때마다 이 페이지가 모두 통과하는지 확인한다.
 
@@ -203,6 +204,24 @@ test("내역 필터", "성격·카테고리·자산·금액·기간으로 거르
   eq(pass({ holding: "assets:a", period: "all" }), ["x2", "x3", "x4", "x5"], "통장이 낀 내역");
   eq(pass({ min: 10000, max: 60000, period: "all" }), ["x1", "x3", "x5"], "금액 1만~6만");
   G.ui.filter = G.emptyFilter();
+});
+
+// ---------------- 사진 정리 ----------------
+test("사진 정리", "안 쓰는 사진만 정리: 드라이브는 휴지통(2일 안 된 파일 제외), 기기 사진 삭제", async () => {
+  const now = Date.parse("2026-10-12T00:00:00Z");
+  const files = [
+    { id: "f1", name: "클로드가계부_사진_keep.jpg", createdTime: "2026-09-01T00:00:00Z" }, // 쓰는 사진
+    { id: "f2", name: "클로드가계부_사진_old.jpg", createdTime: "2026-09-01T00:00:00Z" }, // 안 씀 → 휴지통
+    { id: "f3", name: "클로드가계부_사진_new.jpg", createdTime: "2026-10-11T12:00:00Z" }, // 안 쓰지만 하루 전 → 그대로
+  ];
+  const trashed = [];
+  const api = async (path, opts = {}) => {
+    if (opts.method === "PATCH") { trashed.push(path.split("/").pop()); return { json: async () => ({}) }; }
+    return { json: async () => ({ files }) };
+  };
+  const removed = [];
+  const r = await cleanPhotos(api, ["keep"], { now, list: async () => [{ id: "keep" }, { id: "gone" }], remove: async (id) => removed.push(id) });
+  eq([trashed, removed, r], [["f2"], ["gone"], { drive: 1, local: 1 }], "[휴지통, 기기 삭제, 결과]");
 });
 
 // ---------------- 실행 ----------------

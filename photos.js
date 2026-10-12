@@ -91,3 +91,32 @@ export async function syncPhotos(api, neededIds) {
   }
   return pulled;
 }
+
+/**
+ * 쓰지 않는 사진 정리. neededIds: 살아 있는 내역이 가리키는 사진 id들(동기화로 모든 기기 내역을 합친 뒤).
+ * - 이 기기: 필요 없는 사진을 지운다.
+ * - 드라이브: 필요 없는 사진 파일을 휴지통으로 옮긴다(30일 동안 되살릴 수 있음).
+ *   다른 기기가 막 올리는 중일 수 있어서, 만든 지 minAgeMs(기본 2일)가 안 된 파일은 건드리지 않는다.
+ * 휴지통으로 옮긴 드라이브 파일 수와 지운 기기 사진 수를 돌려준다.
+ */
+export async function cleanPhotos(api, neededIds, { minAgeMs = 2 * 86400000, list = allPhotos, remove = deletePhoto, now = Date.now() } = {}) {
+  const need = new Set(neededIds);
+  let local = 0, drive = 0;
+  for (const p of await list()) {
+    if (!need.has(p.id)) { await remove(p.id); local++; }
+  }
+  const q = encodeURIComponent(`name contains '${PHOTO_PREFIX}' and trashed=false`);
+  let page = "";
+  do {
+    const r = await (await api(`/drive/v3/files?q=${q}&spaces=drive&pageSize=200&fields=nextPageToken,files(id,name,createdTime)${page ? `&pageToken=${encodeURIComponent(page)}` : ""}`)).json();
+    for (const f of r.files || []) {
+      if (!f.name.startsWith(PHOTO_PREFIX)) continue;
+      const id = f.name.slice(PHOTO_PREFIX.length).replace(/\.jpg$/, "");
+      if (need.has(id) || now - new Date(f.createdTime).getTime() < minAgeMs) continue;
+      await api(`/drive/v3/files/${f.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trashed: true }) });
+      drive++;
+    }
+    page = r.nextPageToken || "";
+  } while (page);
+  return { drive, local };
+}
