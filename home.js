@@ -2,7 +2,7 @@
 import { saveState, uid, nowISO } from "./store.js";
 import { toKRW } from "./fx.js";
 import { $, DEBT_TYPES, EXPENSE_TYPES, S, debtType, esc, fmtAmount, liveTx, monthTx, nowTime, parseAmount, shiftMonth, signed, sum, toast, todayStr, txKRW, txNewestFirst, ui, won, ym } from "./core.js";
-import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon } from "./model.js";
+import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, dropTx, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, orphanTxs, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon, txBrief } from "./model.js";
 import { SUM_ICON, bindAmount, closeModal, homeLabel, openModal } from "./uikit.js";
 import { networthBody } from "./settle.js";
 import { txRow } from "./list.js";
@@ -435,6 +435,42 @@ export function netWorthLine() {
 }
 
 /** 결산: 순자산 — 지금 값, 최근 12개월 추이, 이번 달 바뀐 이유, 자산·부채 구성 */
+// ---------------- 지워진 자산·부채에 남은 내역 정리 ----------------
+const ORPHAN_OK = "gagyebu-orphan-ok"; // '그대로 두기'를 고른 내역 id(이 기기)
+const orphanOk = () => { try { return new Set(JSON.parse(localStorage.getItem(ORPHAN_OK) || "[]")); } catch { return new Set(); } };
+const pendingOrphans = () => { const ok = orphanOk(); return orphanTxs().filter((t) => !ok.has(t.id)); };
+function orphanBar() {
+  const list = pendingOrphans();
+  if (!list.length) return "";
+  return `<button class="orphan-bar" data-orphans><span>지워진 자산·부채에 연결된 내역이 <span class="la-n">${list.length}건</span> 남아 있어요</span><span class="ob-go">정리하기 ›</span></button>`;
+}
+export function openOrphanDialog() {
+  const list = pendingOrphans();
+  if (!list.length) return;
+  const panel = openModal({
+    title: "남은 내역 정리",
+    body: `
+      <p class="note">나의 자산·부채에서 지운 항목에 연결된 내역이에요. 그대로 두면 내역 목록과 현황에 보이고, 연결된 다른 통장의 잔액에도 계속 반영돼요.</p>
+      <ul class="orphan-list">${list.map((t) => `<li>${esc(txBrief(t))}</li>`).join("")}</ul>
+      <div class="btn-row"><button class="btn" data-orphan-keep>그대로 두기</button><button class="btn danger" data-orphan-drop>모두 삭제</button></div>`,
+  });
+  panel.querySelector("[data-orphan-keep]").onclick = () => {
+    const ok = orphanOk();
+    list.forEach((t) => ok.add(t.id));
+    try { localStorage.setItem(ORPHAN_OK, JSON.stringify([...ok])); } catch {}
+    closeModal();
+    render();
+    toast("그대로 두었어요 · 다시 묻지 않아요");
+  };
+  panel.querySelector("[data-orphan-drop]").onclick = async () => {
+    const now = nowISO();
+    list.forEach((t) => dropTx(t, now));
+    closeModal();
+    await commit();
+    toast(`내역 ${list.length}건을 삭제했어요 · 통장 잔액도 되돌렸어요`);
+  };
+}
+
 /** 자산이동을 카테고리(예: 증권 → 은행)별로 묶음. 카테고리가 없던 예전 기록은 자산 종류 경로로 */
 function moveCatTotals(list) {
   const by = {};
@@ -565,6 +601,7 @@ export function homeView(part = "summary") {
     ${body}
   </section>`;
   const summary = `
+  ${orphanBar()}
   ${netWorthLine()}
   <section class="card">
     <div class="card-head"><span>이번 달 현재 (수입-지출)</span><span>${won(sum(inc) - sum(fixed) - sum(variable))}</span></div>

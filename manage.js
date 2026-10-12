@@ -5,7 +5,7 @@ import { sync, isConfigured, isConnected, connect, disconnect, photoCleanInfo } 
 import { makeXlsx } from "./xlsx.js";
 import { lockSection, bindLockSection } from "./lock.js";
 import { $, EXPENSE_TYPES, FILE_PREFIX, S, esc, liveTx, nowTime, toast, todayStr, txKRW, ui, won } from "./core.js";
-import { HOLDINGS, NO_ORDER, SHORT_DEBT, balanceOf, catEtype, catRecords, catsFor, clearLinkCache, curOf, currencyOptions, deltaRef, isLoanTx, isRepayTx, krwTotal, linkedSum, makeOrder, moveRoute, parseLinkKey, renameCategory, renameSubcat, roundFor, saveLoanTx, shortDebtType, subcatRecords } from "./model.js";
+import { HOLDINGS, NO_ORDER, SHORT_DEBT, balanceOf, catEtype, catRecords, catsFor, clearLinkCache, curOf, currencyOptions, deltaRef, dropTx, isLoanTx, isRepayTx, krwTotal, linkedSum, linkedTxs, makeOrder, moveRoute, parseLinkKey, renameCategory, renameSubcat, roundFor, saveLoanTx, shortDebtType, subcatRecords, txBrief } from "./model.js";
 import { GRIP, LOCK_ICON, PENCIL, bindMoney, closeModal, enableReorder, holdingOptions, openModal } from "./uikit.js";
 import { openBudgetDialog, openRecurringDialog } from "./home.js";
 import { openRepayDialog } from "./entry.js";
@@ -322,6 +322,7 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
   const liveList = () => Object.values(S[col]).filter((a) => !a.deleted);
   let mode = startAdd ? "add" : null;   // null: 목록 | "add": 등록 | "edit": 전체 편집
   let drafts = null; // 전체 편집 중인 값 [{ id, type, name, currency, amount, del }]
+  let linkedAsk = null; // 삭제할 항목에 연결된 내역(저장 전에 함께 지울지 물어봄)
 
   const sortedAssets = () => liveList().sort(order);
 
@@ -404,7 +405,14 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
           </div>`).join("")}
         </section>`).join("") +
         `<button class="btn edit-add-btn ${col === "debts" ? "red-tone" : "green-tone"}" data-add-item>+ ${cfg.unit} 추가</button>` +
-        `<div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
+        (linkedAsk ? `
+        <div class="link-ask" data-link-ask>
+          <p>삭제하는 ${cfg.unit}에 연결된 내역이 <span class="la-n">${linkedAsk.length}건</span> 있어요.</p>
+          <ul>${linkedAsk.slice(0, 5).map((t) => `<li>${esc(txBrief(t))}</li>`).join("")}${linkedAsk.length > 5 ? `<li>외 ${linkedAsk.length - 5}건</li>` : ""}</ul>
+          <p class="note">함께 삭제하면 그 내역이 연결된 다른 통장의 잔액도 원래대로 돌아가요. 남기면 내역 목록과 현황에 그대로 보여요.</p>
+          <div class="btn-row"><button class="btn" data-keep-tx>내역은 남기기</button><button class="btn danger" data-drop-tx>내역도 함께 삭제</button></div>
+          <button class="lock-link la-cancel" data-ask-cancel>취소</button>
+        </div>` : `<div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`),
     });
     const read = () => panel.querySelectorAll(".edit-item").forEach((el) => {
       const d = drafts.find((x) => x.id === el.dataset.id);
@@ -456,12 +464,38 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
       input?.scrollIntoView({ block: "center" });
       input?.focus();
     };
-    panel.querySelector("[data-cancel]").onclick = () => { mode = null; drafts = null; draw(); };
-    panel.querySelector("[data-save]").onclick = async () => {
+    panel.querySelector("[data-cancel]")?.addEventListener("click", () => { mode = null; drafts = null; linkedAsk = null; draw(); });
+    panel.querySelector("[data-ask-cancel]")?.addEventListener("click", () => { linkedAsk = null; drawEdit(); });
+    const ask = panel.querySelector("[data-link-ask]");
+    if (ask) {
+      ask.scrollIntoView({ block: "center" });
+      panel.querySelector("[data-keep-tx]").onclick = () => doSave(false);
+      panel.querySelector("[data-drop-tx]").onclick = () => doSave(true);
+    }
+    panel.querySelector("[data-save]")?.addEventListener("click", () => {
       read();
       syncOrder();
       if (drafts.some((d) => !d.del && !d.name.trim())) return toast(`이름이 빈 ${cfg.subj} 있어요.`);
+      // 지우는 항목에 연결된 내역이 있으면 먼저 물어봄
+      const delIds = drafts.filter((d) => d.del && !d.isNew).map((d) => d.id);
+      const linked = delIds.length ? linkedTxs(col, delIds) : [];
+      if (linked.length) { linkedAsk = linked; return drawEdit(); }
+      doSave(false);
+    });
+    const doSave = async (dropLinked) => {
+      if (!linkedAsk) { read(); syncOrder(); }
+      const dropList = dropLinked ? linkedAsk || [] : [];
+      if (!dropLinked && linkedAsk) {
+        // 남기기로 했으면 현황의 '남은 내역 정리' 안내에서도 다시 묻지 않음
+        try {
+          const ok = new Set(JSON.parse(localStorage.getItem("gagyebu-orphan-ok") || "[]"));
+          linkedAsk.forEach((t) => ok.add(t.id));
+          localStorage.setItem("gagyebu-orphan-ok", JSON.stringify([...ok]));
+        } catch {}
+      }
+      linkedAsk = null;
       const now = nowISO();
+      for (const t of dropList) dropTx(t, now); // 연결된 내역(과 이자 기록) 삭제
       let changed = 0;
       const pos = {}; // 섹션(원래 종류)별 순번
       for (const d of drafts) {
@@ -493,10 +527,11 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
         await saveState(S);
         scheduleSync();
       }
+      if (dropList.length && !changed) { await saveState(S); scheduleSync(); }
       mode = null;
       drafts = null;
       draw();
-      toast(changed ? `${changed}개 ${cfg.obj} 저장했어요` : "바뀐 내용이 없어요");
+      toast((changed ? `${changed}개 ${cfg.obj} 저장했어요` : "바뀐 내용이 없어요") + (dropList.length ? ` · 연결된 내역 ${dropList.length}건 삭제` : ""));
     };
   };
 

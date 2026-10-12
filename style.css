@@ -756,3 +756,14 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .rt-end { display: inline-flex; flex-direction: column; line-height: 1.35; }
 .rt-type { font-size: 0.9em; opacity: 0.75; }
 .rt-arrow { line-height: 1.35; }
+
+/* 삭제할 때 연결된 내역 묻기 · 남은 내역 정리 */
+.link-ask { margin-top: 14px; padding: 12px; border: 1px solid #6b5a2a; border-radius: 4px; background: rgba(243, 220, 148, 0.06); }
+.link-ask p { margin: 0 0 6px; word-break: keep-all; }
+.link-ask ul, .orphan-list { margin: 6px 0 8px; padding-left: 18px; color: var(--muted); font-size: calc(0.82rem + var(--fs-up)); line-height: 1.6; }
+.la-n { color: #f3dc94; }
+.la-cancel { display: block; margin: 8px auto 0; }
+.orphan-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; margin-bottom: 10px;
+  border: 1px solid #6b5a2a; border-radius: 4px; background: rgba(243, 220, 148, 0.06); color: var(--text); text-align: left;
+  font-size: calc(0.82rem + var(--fs-up)); word-break: keep-all; }
+.ob-go { color: #f3dc94; white-space: nowrap; }

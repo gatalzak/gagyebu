@@ -5,7 +5,7 @@ import { initLock, hideAmounts } from "./lock.js";
 import { $, S, SELFTEST, liveTx, migrateDebtTypes, setS, shiftMonth, toast, ui } from "./core.js";
 import { activeInstallments, autoRecur, balanceOf, cardBill, cardCycle, cleanMoveCategories, clearLinkCache, emptyFilter, freezeCatEtypes, holdingsAt, isLoanTx, isMoveTx, isRepayTx, liveBudgets, migrateBalances, monthFigures, natureDraft, natureOf, newTxDraft, nextPayMonth, payMonthOf, recurDate, recurLastAmount, recurStatus, repairLoanTxs, retireOldCats, saveLoanTx, seedCats, seedSubcats, shortDebtType, txNature, txPassesFilter } from "./model.js";
 import { closeModal, openDatePicker } from "./uikit.js";
-import { budgetSection, homeTabs, homeView, openBudgetDialog, openCardDialog, openRecurAction, openRecurringDialog } from "./home.js";
+import { budgetSection, homeTabs, homeView, openBudgetDialog, openCardDialog, openOrphanDialog, openRecurAction, openRecurringDialog } from "./home.js";
 import { catTrendSection, exportSettlement, networthBody, settleView } from "./settle.js";
 import { bindSearch, calendarView, listView, monthlyView, openFilterDialog } from "./list.js";
 import { openKindPicker, openRepayDialog, openTxDialog } from "./entry.js";
@@ -86,6 +86,7 @@ export function bindEvents() {
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
+    if (e.target.closest("[data-orphans]")) return openOrphanDialog();
     if (e.target.closest("[data-filter-open]")) return openFilterDialog();
     if (e.target.closest("[data-filter-reset]")) { ui.filter = emptyFilter(); render(); return; }
     const off = e.target.closest("[data-chip-off]");

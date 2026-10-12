@@ -693,3 +693,18 @@ export const HOLDINGS = {
  * 끌어서 순서 바꾸기(워드프레스 메뉴처럼): 손잡이를 잡으면 줄이 떠올라 손가락을 따라 움직이고,
  * 놓일 자리는 빈 칸(점선)으로 보이며 다른 줄들은 부드럽게 비켜난다. 같은 묶음(섹션) 안에서만 움직인다.
  */
+
+/** 이 자산·부채(col, id들)에 연결된 살아 있는 내역 */
+export function linkedTxs(col, ids) {
+  const set = new Set(ids);
+  return liveTx().filter((t) => [deltaRef(t.assetDelta), ...(t.deltas || [])].some((x) => x && x.col === col && set.has(x.id)));
+}
+/** 지워진(또는 없는) 자산·부채에 연결된 채 남은 내역 */
+export function orphanTxs() {
+  return liveTx().filter((t) => [deltaRef(t.assetDelta), ...(t.deltas || [])].some((x) => x && (!S[x.col]?.[x.id] || S[x.col][x.id].deleted)));
+}
+/** 내역 한 줄 요약: '10/7 동생 차입 300,000원' */
+export function txBrief(t) {
+  const what = isLoanTx(t) ? "차입" : isRepayTx(t) ? "상환" : t.kind;
+  return `${Number(t.date.slice(5, 7))}/${Number(t.date.slice(8))} ${t.content || t.category || ""} ${what} ${won(txKRW(t))}`;
+}
