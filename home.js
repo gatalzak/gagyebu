@@ -340,7 +340,7 @@ export function creditCardSection(shortDebt) {
   }).join("");
   return `
   <section class="card home-sec">
-    <div class="card-head">${homeLabel("단기부채", "신용카드", "cred")}<span class="cred">${won(sum(cardTx))}</span></div>
+    <div class="card-head">${homeLabel("단기부채", "신용카드 사용", "cred")}<span class="cred">${won(sum(cardTx))}</span></div>
     ${rows}
   </section>`;
 }
