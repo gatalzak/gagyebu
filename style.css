@@ -747,3 +747,7 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 /* 창 제목 왼쪽 뒤로 가기 */
 .head-left { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .back-btn { display: inline-flex; align-items: center; justify-content: center; padding: 2px 4px 2px 0; margin-left: -4px; color: #ddd; }
+/* 입력 창 제목 가운데 (왼쪽 뒤로 가기 · 오른쪽 버튼) */
+.panel-head.center { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; }
+.panel-head.center h2 { text-align: center; white-space: nowrap; }
+.panel-head.center .head-actions { justify-self: end; }

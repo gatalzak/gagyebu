@@ -60,6 +60,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
     const panel = openModal({
       cls: "theme-debts",
       onBack,
+      center: true,
       title: existing ? "부채 상환 수정" : replaces ? "내역 수정" : "부채 상환",
       body: `
         ${natureSelect("repay")}
@@ -284,6 +285,7 @@ export function openLoanDialog({ existing = null, presetDate = "", onBack = null
     const panel = openModal({
       cls: "theme-debts",
       onBack,
+      center: true,
       title: existing ? "부채 발생 수정" : replaces ? "내역 수정" : "부채 발생",
       body: `
         ${natureSelect("borrow")}
@@ -375,6 +377,7 @@ export function goNature(key, c, replaces = null, { onBack = null } = {}) {
 export function openKindPicker(presetDate) {
   const panel = openModal({
     cls: "kind-picker",
+    center: true,
     title: "내역 추가",
     headExtra: `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
     body: `
@@ -441,6 +444,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       : catList.map(optOf).join("");
     const panel = openModal({
       onBack: existing ? null : onBack, // 내역 성격 고르기에서 왔으면 뒤로 가기
+      center: true, // 제목 가운데
       title: existing || replaces ? "내역 수정" : debtMode ? `${SHORT_DEBT[debtMode].title}` : "내역 추가",
       headExtra: existing || replaces ? "" : `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
       body: `
