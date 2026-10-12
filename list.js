@@ -19,14 +19,14 @@ export function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : isLoan ? `<span class="cat-badge b-cred">대출 실행</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
+              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : isLoan ? `<span class="cat-badge b-cred">부채 발생</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(isLoan ? t.content.replace(/ 대출 실행$/, "") : t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
               ${t.kind === "지출" && (t.card || t.transfer) ? `<div class="memo">결제 ${t.card ? esc(t.card) : "계좌이체"}</div>` : ""}
               ${t.inst > 1 ? `<div class="memo cred">할부 ${t.inst}개월</div>` : ""}
             </div>
-            <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "대출 " : ""}${t.currency && t.currency !== "KRW"
+            <span class="amt ${isShortDebt(t) || isLoan ? "cred" : isRepay ? "repay" : KIND_CLASS[t.kind]}">${isShortDebt(t) ? SHORT_DEBT[shortDebtType(t)].short + " " : isRepay ? "상환 " : isLoan ? "발생 " : ""}${t.currency && t.currency !== "KRW"
               ? `${txSign(t)}${formatMoney(t.amount, t.currency)}<span class="fx-sub">≈ ${won(t.krw || 0)}</span>`
               : signed(t.amount, txSign(t))}</span>
           </button>`;

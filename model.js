@@ -159,7 +159,9 @@ export function loanTotals(list) {
   const by = {};
   list.forEach((t) => {
     const d = t.deltas?.find((x) => x.col === "debts");
-    const label = S.debts[d?.id]?.name || "대출";
+    const h = S.debts[d?.id];
+    // 무엇이 생겼는지: '엄마 · 지인에게 빌린 돈', '전세대출 · 대출' (이름이 종류와 같으면 이름만)
+    const label = h ? (h.name === debtType(h) ? h.name : `${h.name} · ${debtType(h)}`) : "부채";
     by[label] = (by[label] || 0) + txKRW(t);
   });
   return Object.entries(by).sort((a, b) => b[1] - a[1]);
@@ -448,7 +450,7 @@ export function txMatches(t, words) {
   const d = deltaRef(t.assetDelta);
   const linked = d && S[d.col]?.[d.id];
   const text = [
-    t.content, t.party, t.memo, t.category, t.subcategory, isRepayTx(t) ? "부채상환 상환" : isLoanTx(t) ? "대출실행 대출" : t.kind,
+    t.content, t.party, t.memo, t.category, t.subcategory, isRepayTx(t) ? "부채상환 상환" : isLoanTx(t) ? "부채발생 부채 발생 대출실행 대출 빌림" : t.kind,
     t.kind === "지출" ? `${t.expenseType || ""}지출` : "", linked?.name, d?.col === "debts" ? debtType(linked) : "",
     moveRoute(t), t.currency && t.currency !== "KRW" ? t.currency : "",
   ].filter(Boolean).join(" ").toLowerCase();

@@ -264,7 +264,7 @@ export function txSheetRows(list) {
   for (const t of list) {
     const sd = shortDebtType(t);
     rows.push([
-      t.date, t.time || "", isRepayTx(t) ? "부채상환" : isLoanTx(t) ? "대출실행" : t.kind, t.kind === "지출" ? `${t.expenseType || ""}지출` : "",
+      t.date, t.time || "", isRepayTx(t) ? "부채상환" : isLoanTx(t) ? "부채발생" : t.kind, t.kind === "지출" ? `${t.expenseType || ""}지출` : "",
       t.category || "", t.subcategory || "", t.content || "", t.party || "",
       t.amount, t.currency || "KRW", txKRW(t), holdingName(t), sd ? SHORT_DEBT[sd].label : "", t.memo || "",
     ]);
@@ -519,7 +519,7 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
           ${col === "debts" ? `<p class="note start-bal-note" data-amt-note hidden></p>` : ""}</div>
         ${col === "debts" ? `<div class="field" data-loan-field><label>받은 돈 입금 자산 <span class="muted">(선택)</span></label>
           <select class="input" name="loanAsset">${holdingOptions(["assets"], "", { balance: false })}</select>
-          <p class="note" style="margin-top:6px">새로 대출을 받아 통장에 들어왔다면 고르세요. 부채와 입금 자산이 같이 늘고 '대출 실행' 내역이 남아요(수입 아님). 예전부터 있던 빚이면 비워 두세요.</p>
+          <p class="note" style="margin-top:6px">새로 대출을 받아 통장에 들어왔다면 고르세요. 부채와 입금 자산이 같이 늘고 '부채 발생' 내역이 남아요(수입 아님). 예전부터 있던 빚이면 비워 두세요.</p>
         </div>` : ""}
         <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
     });

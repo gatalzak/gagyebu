@@ -282,7 +282,7 @@ export function openLoanDialog({ existing = null, presetDate = "", onBack = null
     const cur = debt ? curOf(debt) : "KRW";
     const panel = openModal({
       cls: "theme-debts",
-      title: existing ? "대출 실행 수정" : replaces ? "내역 수정" : "부채 발생",
+      title: existing ? "부채 발생 수정" : replaces ? "내역 수정" : "부채 발생",
       body: `
         ${natureSelect("borrow")}
         ${existing ? "" : `<p class="note kp-lead">이미 등록된 부채(대출·마이너스 통장·지인에게 빌린 돈 등)가 늘어났을 때 기록해요.</p>`}
@@ -303,7 +303,7 @@ export function openLoanDialog({ existing = null, presetDate = "", onBack = null
             <span class="amount-unit">${unitLabel(cur)}</span>
           </div></div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 주택 구입 자금" value="${esc(draft.memo)}"></div>
-        <p class="note">부채 발생(대출 실행)은 수입이 아니에요. 부채와 입금 자산이 같이 늘어나요.</p>
+        <p class="note">부채 발생(대출 실행·돈 빌림)은 수입이 아니에요. 부채와 입금 자산이 같이 늘어나요.</p>
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
           <button class="btn primary" data-act="save">저장</button>
@@ -340,14 +340,14 @@ export function openLoanDialog({ existing = null, presetDate = "", onBack = null
       if (replaces) dropTx(replaces);
       closeModal();
       await commit();
-      toast(existing ? "대출 실행 기록을 고쳤어요" : `${d.name} ${formatMoney(draft.amount, curOf(d))} 부채 발생을 기록했어요`);
+      toast(existing ? "부채 발생 기록을 고쳤어요" : `${d.name} ${formatMoney(draft.amount, curOf(d))} 부채 발생을 기록했어요`);
     };
     if (existing) $p("[data-act=delete]").onclick = async () => {
       if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: nowISO() };
       closeModal();
       await commit();
-      toast("대출 실행 기록을 삭제했어요 · 잔액도 되돌렸어요");
+      toast("부채 발생 기록을 삭제했어요 · 잔액도 되돌렸어요");
     };
   };
   draw();

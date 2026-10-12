@@ -549,7 +549,7 @@ export function homeView(part = "summary") {
   ${section("단기부채", "단기 부채 · 이번 달 새로 생김", "cred", sum(shortDebt), shortDebtRows + owedLine)}
   ${section("자산이동", "자산이동", "mov", sum(mov), subRows(routeTotals(mov)))}
   ${repay.length ? section("부채상환", "부채 상환", "repay", sum(repay), subRows(repayTotals(repay))) : ""}
-  ${loans.length ? section("대출실행", "대출 실행", "cred", sum(loans), subRows(loanTotals(loans))) : ""}`;
+  ${loans.length ? section("대출실행", "부채 발생", "cred", sum(loans), subRows(loanTotals(loans))) : ""}`;
   if (part === "summary") return summary;
   return `
   <section class="card">
