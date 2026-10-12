@@ -699,3 +699,17 @@ input[type="date"], input[type="time"] { cursor: pointer; }
   display: flex; flex-direction: column; gap: 4px; word-break: keep-all; }
 .lock-help li > span { color: var(--text); }
 .bio-note { margin: 4px 0 0 26px; word-break: keep-all; }
+
+/* 카테고리 추이 */
+.ct-select { margin: 2px 0 4px; }
+.ct-chart .ct-bar path { fill: var(--exp); opacity: 0.45; }
+.ct-chart .ct-bar.on path { opacity: 1; }
+.ct-chart .ct-bar { cursor: pointer; }
+.ct-chart .ct-bar.on .nw-tick { fill: var(--text); }
+.ct-chart .ct-val { fill: var(--text); font-size: 10px; }
+.ct-chart .ct-avg { stroke: #9a9aa2; stroke-width: 1; stroke-dasharray: 4 3; }
+.ct-chart .ct-avg-t { fill: var(--muted); font-size: 10px; }
+.ct-sum { margin-top: 6px; }
+.rank-row[data-stat-pick] { cursor: pointer; }
+.rank-hint { margin: 8px 0 0; }
+.ct-avg-sw { display: inline-block; width: 16px; border-top: 1px dashed #9a9aa2; vertical-align: middle; margin-right: 6px; }

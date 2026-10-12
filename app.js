@@ -1264,11 +1264,72 @@ function networthBody({ withChg = true } = {}) {
     <p class="note">외화는 오늘 환율로, 앱을 쓰기 전 기간은 처음 등록한 잔액으로 계산해요.</p>`;
 }
 
+// ---------------- 카테고리 추이 ----------------
+// 고른 카테고리(또는 전체 지출)의 최근 6개월 지출 막대 + 6개월 평균선. 카드·마통으로 쓴 돈도 포함.
+function catTrendSection() {
+  const months = [];
+  for (let k = 5; k >= 0; k--) months.push(shiftMonth(ui.month, -k));
+  const from = months[0], to = ui.month;
+  const exp = liveTx().filter((t) => t.kind === "지출" && t.date.slice(0, 7) >= from && t.date.slice(0, 7) <= to);
+  if (!exp.length) return "";
+  // 고를 수 있는 카테고리: 6개월 동안 쓴 금액 순
+  const tot = {};
+  exp.forEach((t) => (tot[t.category || "미분류"] = (tot[t.category || "미분류"] || 0) + txKRW(t)));
+  const cats = Object.entries(tot).sort((a, b) => b[1] - a[1]).map(([c]) => c);
+  if (ui.statCat && !cats.includes(ui.statCat)) ui.statCat = "";
+  const sel = ui.statCat || "";
+  const vals = months.map((mk) => exp.filter((t) => t.date.startsWith(mk) && (!sel || (t.category || "미분류") === sel)).reduce((a, t) => a + txKRW(t), 0));
+  const used = vals.filter((v, i) => v || i === vals.length - 1);
+  // 평균은 가계부를 쓰기 시작한 달(첫 지출 기록)부터만 — 그 전 달을 0원으로 세지 않음
+  const first = liveTx().filter((t) => t.kind === "지출").reduce((m, t) => (t.date.slice(0, 7) < m ? t.date.slice(0, 7) : m), to);
+  const avgIdx = months.map((mk, i) => (mk >= first ? i : -1)).filter((i) => i >= 0);
+  const avg = avgIdx.reduce((a, i) => a + vals[i], 0) / Math.max(avgIdx.length, 1);
+  const now = vals[vals.length - 1];
+  const W = 340, H = 150, top = 22, bottom = 22;
+  const max = Math.max(...vals, avg) || 1;
+  const y = (v) => top + (1 - v / max) * (H - top - bottom);
+  const slot = W / months.length, bw = Math.min(22, slot - 10);
+  const bars = months.map((mk, i) => {
+    const v = vals[i], x = i * slot + (slot - bw) / 2, h = Math.max(H - bottom - y(v), v ? 2 : 0), y0 = H - bottom;
+    const r = Math.min(4, h / 2, bw / 2);
+    const path = h ? `M${x},${y0} V${y0 - h + r} Q${x},${y0 - h} ${x + r},${y0 - h} H${x + bw - r} Q${x + bw},${y0 - h} ${x + bw},${y0 - h + r} V${y0} Z` : "";
+    const on = mk === ui.month;
+    return `<g class="ct-bar${on ? " on" : ""}" data-stat-month="${mk}">
+      <title>${Number(mk.slice(5))}월 ${sel || "전체 지출"} ${won(v)}</title>
+      <rect x="${i * slot}" y="0" width="${slot}" height="${H}" fill="transparent"/>
+      ${path ? `<path d="${path}"/>` : ""}
+      ${on && v ? `<text x="${x + bw / 2}" y="${y0 - h - 6}" text-anchor="middle" class="ct-val">${won(v).replace("원", "")}</text>` : ""}
+      <text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" class="nw-tick">${Number(mk.slice(5))}월</text>
+    </g>`;
+  }).join("");
+  const ay = y(avg);
+  const diff = now - avg;
+  return `
+  <section class="card home-sec" id="cat-trend">
+    <div class="card-head"><span>카테고리 추이 <span class="muted settle-note">최근 6개월 · 카드·마통 포함</span></span><span></span></div>
+    <select class="input ct-select" data-stat-cat>
+      <option value="" ${sel ? "" : "selected"}>전체 지출</option>
+      ${cats.map((c) => `<option value="${esc(c)}" ${c === sel ? "selected" : ""}>${esc(c)}</option>`).join("")}
+    </select>
+    <svg class="nw-chart ct-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(sel || "전체 지출")} 최근 6개월 지출">
+      <line x1="0" x2="${W}" y1="${H - bottom}" y2="${H - bottom}" class="nw-zero"/>
+      ${bars}
+      ${avg ? `<line x1="0" x2="${W}" y1="${ay}" y2="${ay}" class="ct-avg"/>` : ""}
+    </svg>
+    <div class="ct-sum">
+      <div class="row-sub"><span>${Number(ui.month.slice(5))}월</span><span>${won(now)}</span></div>
+      <div class="row-sub"><span><i class="ct-avg-sw" aria-hidden="true"></i>${avgIdx.length < months.length ? `${avgIdx.length}개월` : "6개월"} 평균 (점선)</span><span>${won(Math.round(avg))}</span></div>
+      <div class="row-sub"><span>평균과 비교</span><span class="${!avg || Math.abs(diff) < 1 ? "muted" : diff > 0 ? "exp" : "inc"}">${!avg ? "-" : Math.abs(diff) < 1 ? "평균과 같아요" : `${diff > 0 ? "▲" : "▼"} ${won(Math.abs(Math.round(diff)))} ${diff > 0 ? "더 씀" : "덜 씀"}`}</span></div>
+    </div>
+    <p class="note nw-hint">막대를 누르면 그 달 결산으로 바뀌어요.${used.length < 3 ? " 기록이 쌓일수록 추이가 정확해져요." : ""}</p>
+  </section>`;
+}
+
 /** 결산 탭: 고른 달의 결산 — 요약·저축률 / 지난달 대비 / 많이 쓴 카테고리 / 순자산 */
 function settleView() {
   const { m, tx, cur, prevKey, prevTx, prev, left, rate, cats, catTotal, assetChg, debtChg, netChg } = settleData();
   if (!tx.length) return `<div class="card"><div class="empty">${m}월 기록이 없어요.</div></div>${networthSection()}`;
-  const top = cats.slice(0, 5);
+  const top = ui.rankAll ? cats : cats.slice(0, 5);
   // 지난달 대비: 늘었으면 ▲, 줄었으면 ▼. 수입은 늘면 초록, 지출·부채는 늘면 레드/핑크
   const diffRow = (label, now, before, upGood, upCls) => {
     const d = now - before;
@@ -1305,11 +1366,14 @@ function settleView() {
   <section class="card home-sec">
     <div class="card-head"><span>많이 쓴 카테고리</span><span class="muted settle-note">카드·마통 사용 포함</span></div>
     ${top.length ? `<div class="row">${top.map(([c, v], i) => `
-      <div class="rank-row">
+      <div class="rank-row" data-stat-pick="${esc(c)}">
         <div class="rank-top"><span><span class="rank-no">${i + 1}</span>${esc(c)}</span><span>${won(v)} <span class="muted">${Math.round((v / catTotal) * 100)}%</span></span></div>
         <div class="rank-bar"><span style="width:${(v / top[0][1]) * 100}%"></span></div>
-      </div>`).join("")}</div>` : `<div class="empty" style="padding:14px 0">지출 기록이 없어요.</div>`}
+      </div>`).join("")}</div>
+      ${cats.length > 5 ? `<button class="fold-line" data-fold="rankAll"><span>${ui.rankAll ? `전체 ${cats.length}개` : `나머지 ${cats.length - 5}개 카테고리`}</span><span class="fold-go">${ui.rankAll ? "접기 ⌃" : "전체 보기 ⌄"}</span></button>` : ""}
+      <p class="note rank-hint">카테고리를 누르면 아래 '카테고리 추이'에서 몇 달 흐름을 볼 수 있어요.</p>` : `<div class="empty" style="padding:14px 0">지출 기록이 없어요.</div>`}
   </section>
+  ${catTrendSection()}
 
   ${networthSection()}
   <button class="btn excel-btn settle-excel" data-settle-excel>${EXCEL_ICON}${m}월 결산 엑셀 파일로 내보내기</button>`;
@@ -3465,6 +3529,9 @@ function bindEvents() {
   setInterval(() => { if (idle()) refreshIfNeeded(5 * 60_000); }, 60_000);
   window.addEventListener("online", () => runSync());
   window.addEventListener("offline", () => { sync.status = "offline"; renderSyncBar(); });
+  $("#view").addEventListener("change", (e) => {
+    if (e.target.matches("[data-stat-cat]")) { ui.statCat = e.target.value; render(); } // 카테고리 추이: 고른 카테고리
+  });
   $("#view").addEventListener("click", (e) => {
     const seg = e.target.closest("[data-seg]");
     if (seg) { ui.seg = seg.dataset.seg; ui.openCat = null; render(); return; }
@@ -3473,6 +3540,15 @@ function bindEvents() {
     const ft = e.target.closest("[data-ft]");
     if (ft) return openFooterLink(ft.dataset.ft);
     if (e.target.closest("[data-nw-toggle]")) { ui.nwOpen = !ui.nwOpen; render(); return; }
+    const sm = e.target.closest("[data-stat-month]");
+    if (sm) { ui.month = sm.dataset.statMonth; render(); return; }
+    const sp = e.target.closest("[data-stat-pick]");
+    if (sp) {
+      ui.statCat = sp.dataset.statPick;
+      render();
+      setTimeout(() => document.getElementById("cat-trend")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
+      return;
+    }
     const nwm = e.target.closest("[data-nw-month]");
     if (nwm) { ui.month = nwm.dataset.nwMonth; render(); return; }
     if (e.target.closest("[data-recur-manage]")) return openRecurringDialog();
