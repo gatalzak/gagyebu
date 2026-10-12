@@ -26,7 +26,7 @@ export async function openPhotoViewer(id) {
 }
 
 // ---------------- 화면 그리기 ----------------
-export function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal, preset = null, replaces = null } = {}) {
+export function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal, preset = null, replaces = null, onBack = null } = {}) {
   const prevDebt = existing?.deltas?.find((d) => d.col === "debts");
   const prevAsset = existing?.deltas?.find((d) => d.col === "assets");
   // 이자: 상환과 같이 낸 이자는 '금융/이자' 고정지출로 따로 기록하고 상환 내역에 연결해 둔다
@@ -59,6 +59,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
     const cur = debt ? curOf(debt) : "KRW";
     const panel = openModal({
       cls: "theme-debts",
+      onBack,
       title: existing ? "부채 상환 수정" : replaces ? "내역 수정" : "부채 상환",
       body: `
         ${natureSelect("repay")}
@@ -135,7 +136,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, cur); amountTouched = true; hints(); });
     $p("[name=nature]").onchange = (e) => {
       read();
-      goNature(e.target.value, { amount: draft.amount, date: draft.date, time: draft.time, text: draft.memo, asset: draft.asset }, existing || replaces);
+      goNature(e.target.value, { amount: draft.amount, date: draft.date, time: draft.time, text: draft.memo, asset: draft.asset }, existing || replaces, { onBack });
     };
     const intIn = $p("[name=interest]");
     intIn.addEventListener("input", () => { intIn.value = formatInput(intIn.value, cur); hints(); });
@@ -282,6 +283,7 @@ export function openLoanDialog({ existing = null, presetDate = "", onBack = null
     const cur = debt ? curOf(debt) : "KRW";
     const panel = openModal({
       cls: "theme-debts",
+      onBack,
       title: existing ? "부채 발생 수정" : replaces ? "내역 수정" : "부채 발생",
       body: `
         ${natureSelect("borrow")}
@@ -318,7 +320,6 @@ export function openLoanDialog({ existing = null, presetDate = "", onBack = null
     const amt = $p("[name=amount]");
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, cur); });
     $p("[name=debt]").onchange = () => { read(); draw(); };
-    if (onBack) $p("[data-close]").onclick = onBack;
     $p("[name=nature]").onchange = (e) => {
       read();
       goNature(e.target.value, { amount: draft.amount, date: draft.date, time: draft.time, text: draft.memo, asset: draft.asset }, existing || replaces, { onBack });
@@ -366,9 +367,9 @@ export function natureSelect(key) {
 /** 다른 성격의 창으로 넘어가기. c: 이어받을 값 {date, time, amount, text, asset}, replaces: 저장하면 지울 원래 내역 */
 export function goNature(key, c, replaces = null, { onBack = null } = {}) {
   const done = () => { closeModal(); render(); };
-  if (key === "repay") return openRepayDialog({ preset: { amount: c.amount, date: c.date, time: c.time, memo: c.text, asset: c.asset || "" }, replaces, onDone: done });
+  if (key === "repay") return openRepayDialog({ preset: { amount: c.amount, date: c.date, time: c.time, memo: c.text, asset: c.asset || "" }, replaces, onDone: done, onBack });
   if (key === "borrow") return openLoanDialog({ preset: { amount: c.amount, date: c.date, time: c.time, memo: c.text, asset: c.asset || "" }, replaces, onBack });
-  openTxDialog(null, null, newTxDraft(c.date, { ...natureDraft(key, c.asset || ""), amount: c.amount || 0, time: c.time || nowTime(), content: c.text || "" }), { replaces });
+  openTxDialog(null, null, newTxDraft(c.date, { ...natureDraft(key, c.asset || ""), amount: c.amount || 0, time: c.time || nowTime(), content: c.text || "" }), { replaces, onBack });
 }
 /** 성격을 바꿔 다른 창에서 저장할 때 원래 내역(과 연결된 이자 기록)을 지운다 */
 export function openKindPicker(presetDate) {
@@ -390,12 +391,12 @@ export function openKindPicker(presetDate) {
   panel.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () =>
     goNature(b.dataset.pick, { date: presetDate || todayStr(), time: nowTime(), amount: 0, text: "" }, null, { onBack: back })));
   panel.querySelector("[data-act=favs]").onclick = () => openFavorites({
-    onPick: (f) => { const d = applyFav(newTxDraft(presetDate), f); delete d.debtMode; openTxDialog(null, null, d); },
+    onPick: (f) => { const d = applyFav(newTxDraft(presetDate), f); delete d.debtMode; openTxDialog(null, null, d, { onBack: back }); },
     onBack: back,
   });
 }
 
-export function openTxDialog(existing, presetDate, preset = null, { replaces = null } = {}) {
+export function openTxDialog(existing, presetDate, preset = null, { replaces = null, onBack = null } = {}) {
   if (existing && isRepayTx(existing)) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
   if (existing && isLoanTx(existing)) return openLoanDialog({ existing }); // 대출 실행 기록은 대출 창에서
   const draft = preset ? { ...preset } : existing ? { currency: "KRW", ...existing } : newTxDraft(presetDate);
@@ -439,6 +440,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
         + catList.filter((c) => !EXPENSE_TYPES.some((et) => catsFor("지출", et).includes(c))).map(optOf).join("")
       : catList.map(optOf).join("");
     const panel = openModal({
+      onBack: existing ? null : onBack, // 내역 성격 고르기에서 왔으면 뒤로 가기
       title: existing || replaces ? "내역 수정" : debtMode ? `${SHORT_DEBT[debtMode].title}` : "내역 추가",
       headExtra: existing || replaces ? "" : `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
       body: `
@@ -615,7 +617,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       if (key === "repay" || key === "borrow") {
         const ref = parseLinkKey(draft.link);
         return goNature(key, { amount: draft.amount, date: draft.date, time: draft.time, text: draft.content,
-          asset: draft.kind === "자산이동" ? draft.fromAsset : ref?.col === "assets" ? draft.link : "" }, existing || replaces);
+          asset: draft.kind === "자산이동" ? draft.fromAsset : ref?.col === "assets" ? draft.link : "" }, existing || replaces, { onBack });
       }
       Object.assign(draft, natureDraft(key, draft.kind === "자산이동" ? draft.fromAsset : draft.link));
       draft.subcategory = "";
@@ -782,7 +784,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
         read();
         const ref = parseLinkKey(draft.link);
         goNature("repay", { amount: draft.amount, date: draft.date, time: draft.time, text: draft.content,
-          asset: ref?.col === "assets" ? draft.link : "" }, existing || replaces);
+          asset: ref?.col === "assets" ? draft.link : "" }, existing || replaces, { onBack });
       };
     }
     panel.querySelectorAll("[data-reg]").forEach((b) => (b.onclick = () => {
@@ -796,7 +798,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
             if (draft.kind === "자산이동") { if (!draft.fromAsset) draft.fromAsset = key; else if (!draft.toAsset) draft.toAsset = key; }
             else draft.link = key;
           }
-          openTxDialog(existing, null, draft, { replaces });
+          openTxDialog(existing, null, draft, { replaces, onBack });
         },
       });
     }));
@@ -868,8 +870,8 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
     if (favBtn) favBtn.onclick = () => {
       read();
       openFavorites({
-        onPick: (f) => { const d = applyFav(draft, f); delete d.debtMode; openTxDialog(null, null, d); },
-        onBack: () => openTxDialog(null, null, draft),
+        onPick: (f) => { const d = applyFav(draft, f); delete d.debtMode; openTxDialog(null, null, d, { onBack }); },
+        onBack: () => openTxDialog(null, null, draft, { onBack }),
       });
     };
     if (!existing && !draft.amount) amt.focus();

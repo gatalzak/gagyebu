@@ -743,3 +743,7 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .filter-totals { padding: 10px 14px; }
 .filter-totals .row-sub { padding-left: 0; }
 .filter-totals .ft-total { color: var(--text); border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; }
+
+/* 창 제목 왼쪽 뒤로 가기 */
+.head-left { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.back-btn { display: inline-flex; align-items: center; justify-content: center; padding: 2px 4px 2px 0; margin-left: -4px; color: #ddd; }
