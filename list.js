@@ -32,7 +32,7 @@ export function txRow(t, { withDate = false } = {}) {
   return `
           <button class="tx" data-tx="${t.id}">
             <div class="left">
-              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : isLoan ? `<span class="cat-badge b-cred">${esc(loanType(t))}</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" ? `<span class="cat-badge ${kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
+              <div class="badges">${isRepay ? `<span class="cat-badge b-repay">부채상환</span>` : isLoan ? `<span class="cat-badge b-cred">${esc(loanType(t))}</span>` : t.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${debt ? `<span class="cat-badge b-cred">${esc(debtType(debt) || debt.name)}</span>` : ""}${t.kind !== "자산이동" || (isMoveTx(t) && t.category) ? `<span class="cat-badge ${t.kind === "자산이동" ? "b-mov-cat" : kindBadge}">${esc(t.category)}</span>` : ""}${t.photos?.length ? `<span class="tx-photo" title="영수증 사진">${CAMERA}</span>` : ""}</div>
               ${t.content ? `<div class="tx-content">${esc(isLoan ? t.content.replace(/ 대출 실행$/, "") : t.content)}</div>` : ""}
               ${sub ? `<div class="memo">${sub}</div>` : ""}
               ${via ? `<div class="memo${isRepay ? " repay" : isLoan ? " cred" : t.kind === "자산이동" ? " mov" : ""}">${via}</div>` : ""}
