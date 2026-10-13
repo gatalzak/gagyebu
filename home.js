@@ -471,15 +471,14 @@ export function openOrphanDialog() {
   };
 }
 
-/** 자산이동을 카테고리(예: 증권 → 은행)별로 묶음. 카테고리가 없던 예전 기록은 자산 종류 경로로 */
+/** 자산이동을 '자산 종류 경로 (카테고리)'별로 묶음. 예: 증권 → 은행 (생활비) */
 function moveCatTotals(list) {
   const by = {};
   list.forEach((t) => {
-    let c = t.category;
-    if (!c) {
-      const ty = (sign) => S.assets[(t.deltas || []).find((x) => x.col === "assets" && Math.sign(x.amount) === sign)?.id]?.type;
-      c = ty(-1) || ty(1) ? `${ty(-1) || "?"} → ${ty(1) || "?"}` : "기타";
-    }
+    // '출금 자산 종류 → 입금 자산 종류 (카테고리)', 예: 증권 → 은행 (생활비)
+    const ty = (sign) => S.assets[(t.deltas || []).find((x) => x.col === "assets" && Math.sign(x.amount) === sign)?.id]?.type;
+    const route = ty(-1) || ty(1) ? `${ty(-1) || "?"} → ${ty(1) || "?"}` : "";
+    const c = route && t.category ? `${route} (${t.category})` : route || t.category || "기타";
     by[c] = (by[c] || 0) + txKRW(t);
   });
   return Object.entries(by).sort((a, b) => b[1] - a[1]);
