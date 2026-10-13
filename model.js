@@ -46,6 +46,17 @@ const RETIRED_MOVE = ["현금 → 은행", "은행 → 현금", "은행 → 은�
 const RETIRE_MOVE_TIME = "2026-10-13T00:00:00.000Z";
 export function retireOldCats() {
   let n = 0;
+  // v194 기본값 '단순 계좌이체' → '단순 이체'(2026-10-13): 손대지 않은 기본값이면 지우고, 그 이름을 쓰던 내역·자주 쓰는 내역·반복 내역도 새 이름으로
+  const oldMove = S.cats["defmove:단순 계좌이체"];
+  if (oldMove && !oldMove.deleted && oldMove.updatedAt === SEED_TIME) {
+    const now = nowISO();
+    S.cats[oldMove.id] = { ...oldMove, deleted: true, updatedAt: now };
+    for (const col of ["transactions", "favorites"]) {
+      for (const t of Object.values(S[col] || {})) if (!t.deleted && t.kind === "자산이동" && t.category === "단순 계좌이체") S[col][t.id] = { ...t, category: "단순 이체", updatedAt: now };
+    }
+    for (const r of Object.values(S.recurring || {})) if (!r.deleted && r.fields?.kind === "자산이동" && r.fields.category === "단순 계좌이체") S.recurring[r.id] = { ...r, fields: { ...r.fields, category: "단순 이체" }, updatedAt: now };
+    n++;
+  }
   for (const name of RETIRED_MOVE) {
     const c = S.cats[`defmove:${name}`];
     if (c && !c.deleted && c.updatedAt === SEED_TIME) { S.cats[c.id] = { ...c, deleted: true, updatedAt: RETIRE_MOVE_TIME }; n++; }
