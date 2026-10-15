@@ -281,10 +281,18 @@ export function downloadBlob(blob, name) {
 }
 
 export function footerHTML() {
-  const links = [["settings", `${LOCK_ICON}보안 설정`], ["budget", "예산"], ["recur", "반복 내역"], ["cats", "카테고리"], ["backup", "백업/복원"]];
+  const ico = (paths) => `<svg class="ft-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  const ICONS = {
+    budget: ico('<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8a8.5 8.5 0 0 1 5.2 5.2H15z"/>'), // 원그래프(예산)
+    recur: ico('<path d="M4.5 11a7.5 7.5 0 0 1 13-4.5L19.5 8.5"/><path d="M19.5 4v4.5H15"/><path d="M19.5 13a7.5 7.5 0 0 1-13 4.5L4.5 15.5"/><path d="M4.5 20v-4.5H9"/>'), // 반복
+    cats: ico('<path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9z"/><circle cx="8" cy="8" r="1.4"/>'), // 꼬리표(카테고리)
+    backup: ico('<path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5"/><path d="M12 12v7"/><path d="M9 15l3-3 3 3"/>'), // 구름(백업)
+  };
+  // 두 줄: 보안 설정 · 예산 · 반복 내역 / 카테고리 · 백업/복원
+  const rows = [[["settings", `${LOCK_ICON}보안 설정`], ["budget", `${ICONS.budget}예산`], ["recur", `${ICONS.recur}반복 내역`]], [["cats", `${ICONS.cats}카테고리`], ["backup", `${ICONS.backup}백업/복원`]]];
   return `
   <footer class="app-footer">
-    <nav class="ft-links">${links.map(([k, t]) => `<button class="ft-link${k === "settings" ? " ft-main" : ""}" data-ft="${k}">${t}</button>`).join('<span class="ft-dot">·</span>')}</nav>
+    <nav class="ft-links">${rows.map((r) => `<div class="ft-row">${r.map(([k, t]) => `<button class="ft-link${k === "settings" ? " ft-main" : ""}" data-ft="${k}">${t}</button>`).join("")}</div>`).join("")}</nav>
     <div class="ft-meta">가탈작 가계부 <span data-app-ver></span> · <a href="privacy.html">개인정보처리방침</a> · <a href="terms.html">이용약관</a></div>
   </footer>`;
 }
