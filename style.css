@@ -782,3 +782,4 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .phrase-acts .phrase-edit { color: var(--muted); margin-left: auto; }
 .phrase-empty { font-size: calc(0.8rem + var(--fs-up)); }
 .rt-end { align-items: center; } /* 자산 이름 아래 (종류)는 가운데 */
+.holding-help .reg-link[data-new-debt] { color: #ff9fae; } /* 부채 발생 창의 새 부채 등록: 부채 색 */
