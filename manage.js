@@ -6,7 +6,7 @@ import { makeXlsx } from "./xlsx.js";
 import { lockSection, bindLockSection } from "./lock.js";
 import { $, EXPENSE_TYPES, FILE_PREFIX, S, esc, liveTx, nowTime, toast, todayStr, txKRW, ui, won } from "./core.js";
 import { HOLDINGS, NO_ORDER, SHORT_DEBT, balanceOf, catEtype, catRecords, catsFor, clearLinkCache, curOf, currencyOptions, deltaRef, dropTx, isLoanTx, isRepayTx, krwTotal, linkedSum, linkedTxs, makeOrder, moveRoute, parseLinkKey, renameCategory, renameSubcat, roundFor, saveLoanTx, shortDebtType, subcatRecords, txBrief } from "./model.js";
-import { GRIP, LOCK_ICON, PENCIL, bindMoney, closeModal, enableReorder, holdingOptions, openModal } from "./uikit.js";
+import { GRIP, LOCK_ICON, PENCIL, bindMoney, closeModal, enableReorder, holdingOptions, openModal, setMenuBack } from "./uikit.js";
 import { openBudgetDialog, openRecurringDialog } from "./home.js";
 import { openRepayDialog } from "./entry.js";
 import { openNetworthDialog, openStatsDialog } from "./settle.js";
@@ -87,6 +87,7 @@ export function openCategoryEditor({ kind: startKind = "지출", etype: startEty
     };
     const panel = openModal({
       title: "카테고리 설정",
+      onBack: () => drawList(), // ← 도 카테고리 목록으로
       body: `
         <button class="back-link" data-act="back">‹ ${kind} 카테고리 목록</button>
         <div class="field"><label>카테고리 이름</label><input class="input" name="catName" value="${esc(s.name)}"></div>
@@ -308,6 +309,7 @@ const SETTING_ITEMS = [
   ["backup", ICONS.backup, "백업/복원", "드라이브 동기화, 백업 파일·엑셀 저장, 불러오기"],
 ];
 export function openSettingsMenu() {
+  setMenuBack(null);
   const panel = openModal({
     title: "설정",
     center: true,
@@ -318,7 +320,7 @@ export function openSettingsMenu() {
         <span class="set-go">›</span>
       </button>`).join("")}</div>`,
   });
-  panel.querySelectorAll("[data-set]").forEach((b) => (b.onclick = () => openFooterLink(b.dataset.set)));
+  panel.querySelectorAll("[data-set]").forEach((b) => (b.onclick = () => { setMenuBack(openSettingsMenu); openFooterLink(b.dataset.set); }));
 }
 /** 버전: 설치된 화면 파일 캐시 이름(gagyebu-vNNN)에서 읽는다 — sw.js만 올리면 자동으로 맞음 */
 export let appVersion = "";
