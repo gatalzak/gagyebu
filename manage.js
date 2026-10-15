@@ -289,7 +289,7 @@ export function footerHTML() {
     backup: ico('<path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5"/><path d="M12 12v7"/><path d="M9 15l3-3 3 3"/>'), // 구름(백업)
   };
   // 두 줄: 보안 설정 · 예산 · 반복 내역 / 카테고리 · 백업/복원
-  const rows = [[["settings", `${LOCK_ICON}보안 설정`], ["budget", `${ICONS.budget}예산`], ["recur", `${ICONS.recur}반복 내역`]], [["cats", `${ICONS.cats}카테고리`], ["backup", `${ICONS.backup}백업/복원`]]];
+  const rows = [[["settings", `${LOCK_ICON}보안 설정`], ["budget", `${ICONS.budget}예산 설정`], ["recur", `${ICONS.recur}반복 내역`]], [["cats", `${ICONS.cats}카테고리`], ["backup", `${ICONS.backup}백업/복원`]]];
   return `
   <footer class="app-footer">
     <nav class="ft-links">${rows.map((r) => `<div class="ft-row">${r.map(([k, t]) => `<button class="ft-link${k === "settings" ? " ft-main" : ""}" data-ft="${k}">${t}</button>`).join("")}</div>`).join("")}</nav>
