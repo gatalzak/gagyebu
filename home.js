@@ -590,9 +590,20 @@ export function homeView(part = "summary") {
     // 자산이동: 경로(출금 → 입금)마다 섹션, 하위 줄은 내역의 '내용'별 금액
     // 자산이동: '출금 → 입금 + 카테고리'마다 섹션(머리: 카테고리 뱃지 위, 경로 아래), 하위 줄은 내역 내용별
     : ui.seg === "자산이동" ? buildCatSections(selTx, "", [], {
-        keyOf: (t) => `${moveRoute(t) || MOVE_NONE}\u0001${t.category || ""}`,
+        keyOf: (t) => {
+          const ds = t.deltas || [];
+          const o = ds.find((x) => x.col === "assets" && x.amount < 0)?.id || "", n = ds.find((x) => x.col === "assets" && x.amount > 0)?.id || "";
+          return `${o}>${n}\u0001${t.category || ""}`;
+        },
         subOf: (t) => (t.content || "").trim() || "내용 없음",
-        headOf: (k) => { const [route, cat] = k.split("\u0001"); return `<span class="mv-head">${cat ? `<span class="cat-badge b-mov-cat">${esc(cat)}</span>` : ""}<span>${esc(route)}</span></span>`; },
+        headOf: (k) => {
+          // 카테고리 뱃지 위, 아래에 '출금 자산(종류) → 입금 자산(종류)' — 이름 아래 줄에 종류
+          const [ids, cat] = k.split("\u0001");
+          const [o, n] = ids.split(">");
+          const end = (id) => { const a = S.assets[id]; return `<span class="rt-end"><span>${esc(a?.name || "?")}</span>${a ? `<span class="rt-type">(${esc(a.type)})</span>` : ""}</span>`; };
+          const route = o || n ? `<span class="rt-block">${end(o)}<span class="rt-arrow">→</span>${end(n)}</span>` : esc(MOVE_NONE);
+          return `<span class="mv-head">${cat ? `<span class="cat-badge b-mov-cat">${esc(cat)}</span>` : ""}${route}</span>`;
+        },
       })
     : ui.seg === "부채 상환" ? "" // 부채 상환은 합계 아래 경로별 하위 항목만
     : buildCatSections(selTx, "", ui.seg === "고정지출" ? catsFor("지출", "고정") : []);
