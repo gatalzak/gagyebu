@@ -85,15 +85,20 @@ export function networthBody({ withChg = true } = {}) {
       <title>${Number(mk.slice(5))}월 말 순자산 ${signedWon(Math.round(v))}</title>
       <rect x="${i * slot}" y="0" width="${slot}" height="${H}" fill="transparent"/>
       <path d="${path}" class="${v >= 0 ? "pos" : "neg"}"/>
+      ${on ? `<text x="${x + bw / 2}" y="${v >= 0 ? y0 - h - 5 : y0 + h + 12}" text-anchor="${i === 0 ? "start" : i === months.length - 1 ? "end" : "middle"}" class="ct-val">${won(Math.round(v)).replace("원", "")}</text>` : ""}
       <text x="${x + bw / 2}" y="${H - 6}" text-anchor="middle" class="nw-tick">${Number(mk.slice(5))}월</text>
     </g>`;
   }).join("");
-  const chart = months.length > 1 ? `
-    <svg class="nw-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 ${months.length}개월 순자산 추이">
-      <line x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" class="nw-zero"/>
-      ${bars}
-    </svg>
-    <p class="note nw-hint">막대를 누르면 그 달로 이동해요.</p>` : "";
+  // 자산·부채 구성 아래에 둔다. 한 달뿐이어도 보여 주고, 기록이 쌓이면 달마다 늘어난다
+  const chart = `
+    <div class="nw-trend">
+      <div class="nw-trend-head"><span>순자산 추이</span><span class="muted">최근 ${months.length}개월 · 달마다 말일 기준</span></div>
+      <svg class="nw-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 ${months.length}개월 순자산 추이">
+        <line x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" class="nw-zero"/>
+        ${bars}
+      </svg>
+      <p class="note nw-hint">${months.length > 1 ? "막대를 누르면 그 달로 이동해요." : "다음 달부터 달마다 막대가 늘어나 추이를 볼 수 있어요."}</p>
+    </div>`;
 
   // 이번 달 바뀐 이유: 내역이 자산·부채에 준 변화를 성격별로
   let inc = 0, expCash = 0, expDebt = 0, moves = 0, anyMove = false;
@@ -122,14 +127,16 @@ export function networthBody({ withChg = true } = {}) {
   const comp = (obj, types, cls) => types.filter((t) => Math.round(obj[t] || 0)).map((t) => `<div class="row-sub"><span>${t}</span><span class="${cls}">${won(obj[t])}</span></div>`).join("");
   return `
     ${chg === null || !withChg ? "" : `<div class="nw-chg">지난달 말보다 <span class="${chg > 0 ? "inc" : chg < 0 ? "exp" : "muted"}">${chg ? `${chg > 0 ? "▲" : "▼"} ${won(Math.abs(chg))}` : "변화 없음"}</span></div>`}
-    ${chart}
     ${reasons}
     <div class="row nw-comp">
-      <div class="row-main"><span>자산</span><span class="inc">${won(end.asset)}</span></div>
+      <div class="row-main"><span class="nw-badge nb-asset">자산</span><span class="inc">${won(end.asset)}</span></div>
       ${comp(end.assets, ASSET_TYPES, "")}
-      <div class="row-main nw-debt-head"><span>부채</span><span class="cred">${won(end.debt)}</span></div>
+    </div>
+    <div class="row nw-comp nw-comp-debt">
+      <div class="row-main"><span class="nw-badge nb-debt">부채</span><span class="cred">${won(end.debt)}</span></div>
       ${comp(end.debts, DEBT_TYPES, "")}
     </div>
+    ${chart}
     <p class="note">외화는 오늘 환율로, 앱을 쓰기 전 기간은 처음 등록한 잔액으로 계산해요.</p>`;
 }
 

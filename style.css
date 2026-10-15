@@ -816,3 +816,14 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .sd-nav { display: flex; justify-content: center; align-items: center; gap: 14px; margin-bottom: 14px; color: var(--text); }
 .sd-nw-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
 .sd-nw-val { font-size: 1.15rem; }
+
+/* 순자산: 자산(초록)·부채(레드) 뱃지, 두 덩어리 사이 간격, 아래 추이 그래프 */
+.nw-badge { display: inline-block; padding: 2px 9px; border-radius: 3px; line-height: 1.4; font-size: calc(0.85rem + var(--fs-up)); border: 1px solid; }
+.nw-badge.nb-asset { background: var(--green-bg); border-color: var(--green-line); color: var(--green-text); }
+.nw-badge.nb-debt { background: #3a1d24; border-color: #5e2a35; color: #ffc9d2; }
+.nw-comp .row-main { align-items: center; }
+.row.nw-comp-debt { margin-top: 22px; }
+.nw-trend { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line); }
+.nw-trend-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: calc(0.9rem + var(--fs-up)); }
+.nw-trend-head .muted { font-size: calc(0.72rem + var(--fs-up)); }
+.nw-chart .ct-val { fill: var(--text); font-size: 10px; }
