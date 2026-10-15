@@ -26,7 +26,7 @@ function safetyBox(warn = true) {
   return `<div class="safety">
     ${line(st.connected, st.connected ? "구글 드라이브 연결됨" : "구글 드라이브 연결 안 됨", st.connected && st.lastSync ? `마지막 동기화 ${when(st.lastSync)}` : "")}
     ${line(!!st.lastBackup, st.lastBackup ? "백업 파일 저장한 적 있음" : "백업 파일 저장한 적 없음", st.lastBackup ? when(st.lastBackup) : "")}
-    ${risky && warn ? `<p class="sf-warn">지금 PIN을 잊으면 데이터를 되살릴 방법이 없어요. 먼저 '백업/복원'에서 드라이브를 연결하거나 백업 파일을 저장해 두세요.</p>` : ""}
+    ${risky && warn ? `<p class="sf-warn">지금 PIN을 잊으면 데이터를 되살릴 방법이 없어요. 먼저 '설정 → 백업/복원'에서 드라이브를 연결하거나 백업 파일을 저장해 두세요.</p>` : ""}
   </div>`;
 }
 const FORGOT_HELP = `
@@ -159,16 +159,16 @@ function forgotScreen(lockEl) {
     <ol class="forgot-steps">
       ${cfg?.bio && bioOk ? `<li><span class="fs-h">폰 잠금(지문·얼굴)으로 열어 보세요</span>'돌아가기'를 누르고 키패드 왼쪽 아래 지문 버튼을 누르면 PIN 없이 열려요. 연 뒤 맨 아래 '보안 설정'에서 PIN을 바꾸면 돼요.</li>` : ""}
       <li><span class="fs-h">자주 쓰는 숫자를 다시 떠올려 보세요</span>생일·전화번호 끝자리처럼 평소 쓰는 4자리일 수 있어요. 5번 틀리면 30초 기다렸다가 다시 할 수 있어요.</li>
-      <li><span class="fs-h">다른 기기에서 먼저 확인하세요</span>PC 등 다른 기기에서도 이 가계부를 쓰고 있다면, 그 기기에서 '백업/복원 → 지금 동기화'를 한 번 눌러 최신 내역을 드라이브에 올려 두세요. 앱 잠금은 기기마다 따로라서 다른 기기는 잠기지 않아요.</li>
+      <li><span class="fs-h">다른 기기에서 먼저 확인하세요</span>PC 등 다른 기기에서도 이 가계부를 쓰고 있다면, 그 기기에서 '설정 → 백업/복원 → 지금 동기화'를 한 번 눌러 최신 내역을 드라이브에 올려 두세요. 앱 잠금은 기기마다 따로라서 다른 기기는 잠기지 않아요.</li>
       <li><span class="fs-h">그래도 안 되면 이 기기만 초기화</span>
         ${safetyBox(false)}
         <div class="fs-what">
           초기화하면
           <ul>
             <li>이 기기의 가계부 데이터와 잠금 설정이 지워지고 앱이 다시 열려요.</li>
-            ${conn ? `<li>드라이브 연결은 그대로라서 <span class="fs-ok">내역을 드라이브에서 자동으로 다시 받아와요</span>(1~2분). 안 보이면 '백업/복원 → 지금 동기화'를 눌러 주세요.</li>
+            ${conn ? `<li>드라이브 연결은 그대로라서 <span class="fs-ok">내역을 드라이브에서 자동으로 다시 받아와요</span>(1~2분). 안 보이면 '설정 → 백업/복원 → 지금 동기화'를 눌러 주세요.</li>
             <li>마지막 동기화 뒤에 이 기기에서만 입력한 내역은 사라져요.</li>` : `<li>드라이브에 연결돼 있지 않아서 <span class="lock-warn">이 기기의 내역이 모두 사라져요.</span></li>
-            <li>${st.lastBackup ? `백업 파일(${when(st.lastBackup)} 저장)이 있으면 초기화 뒤 '백업/복원 → 백업 파일 불러오기'로 되살릴 수 있어요.` : "백업 파일도 없어서 되살릴 방법이 없어요."}</li>`}
+            <li>${st.lastBackup ? `백업 파일(${when(st.lastBackup)} 저장)이 있으면 초기화 뒤 '설정 → 백업/복원 → 백업 파일 불러오기'로 되살릴 수 있어요.` : "백업 파일도 없어서 되살릴 방법이 없어요."}</li>`}
             <li>다른 기기의 데이터와 드라이브의 파일은 지워지지 않아요.</li>
           </ul>
         </div>
@@ -330,7 +330,7 @@ export async function initLock({ toast, status }) {
     const r = localStorage.getItem(RESET_FLAG);
     if (r) {
       localStorage.removeItem(RESET_FLAG);
-      setTimeout(() => toast(r === "drive" ? "초기화했어요 · 드라이브에서 내역을 다시 받는 중이에요" : "초기화했어요 · 백업 파일이 있으면 '백업/복원'에서 불러오세요"), 600);
+      setTimeout(() => toast(r === "drive" ? "초기화했어요 · 드라이브에서 내역을 다시 받는 중이에요" : "초기화했어요 · 백업 파일이 있으면 '설정 → 백업/복원'에서 불러오세요"), 600);
     }
   } catch {}
   try { bioOk = !!window.PublicKeyCredential && (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); } catch { bioOk = false; }

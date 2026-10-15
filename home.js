@@ -264,7 +264,7 @@ export function openRecurringDialog() {
   const rows = liveRecurs().map((r) => ({ ...r, del: false }));
   const draw = () => {
     const panel = openModal({
-      title: "반복 내역 관리",
+      title: "반복 내역 설정",
       body: `
         <p class="note">기록된 내역을 열고 '반복 내역으로 등록'을 누르면 여기에 추가돼요. 내용·카테고리를 바꾸려면 삭제하고 다시 등록하세요.</p>
         ${rows.length ? rows.map((r, i) => {

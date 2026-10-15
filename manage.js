@@ -9,6 +9,7 @@ import { HOLDINGS, NO_ORDER, SHORT_DEBT, balanceOf, catEtype, catRecords, catsFo
 import { GRIP, LOCK_ICON, PENCIL, bindMoney, closeModal, enableReorder, holdingOptions, openModal } from "./uikit.js";
 import { openBudgetDialog, openRecurringDialog } from "./home.js";
 import { openRepayDialog } from "./entry.js";
+import { openNetworthDialog, openStatsDialog } from "./settle.js";
 import { commit, main, render, runSync, scheduleSync, updateEye } from "./app.js";
 export function openCategoryEditor({ kind: startKind = "지출", etype: startEtype = "고정", onClose = closeModal } = {}) {
   const CAT_KINDS = ["수입", "지출", "자산이동"];
@@ -18,7 +19,7 @@ export function openCategoryEditor({ kind: startKind = "지출", etype: startEty
   const drawList = () => {
     const cats = catRecords(kind);
     const panel = openModal({
-      title: "카테고리 편집",
+      title: "카테고리 설정",
       body: `
         <div class="seg" data-role="kind">${CAT_KINDS.map((k) => `<button data-v="${k}" class="${k === kind ? "on" : ""}">${k}</button>`).join("")}</div>
         ${kind === "지출" ? `<div class="tabs sub-tabs" data-role="etab">${["고정", "변동"].map((k) => `<button data-v="${k}" class="${k === etab ? "active" : ""}">${k}지출</button>`).join("")}</div>` : ""}
@@ -85,7 +86,7 @@ export function openCategoryEditor({ kind: startKind = "지출", etype: startEty
       confirmDelete: false,
     };
     const panel = openModal({
-      title: "카테고리 편집",
+      title: "카테고리 설정",
       body: `
         <button class="back-link" data-act="back">‹ ${kind} 카테고리 목록</button>
         <div class="field"><label>카테고리 이름</label><input class="input" name="catName" value="${esc(s.name)}"></div>
@@ -280,21 +281,44 @@ export function downloadBlob(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+const ico = (paths) => `<svg class="ft-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+const ICONS = {
+  budget: ico('<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8a8.5 8.5 0 0 1 5.2 5.2H15z"/>'), // 원그래프(예산)
+  recur: ico('<path d="M4.5 11a7.5 7.5 0 0 1 13-4.5L19.5 8.5"/><path d="M19.5 4v4.5H15"/><path d="M19.5 13a7.5 7.5 0 0 1-13 4.5L4.5 15.5"/><path d="M4.5 20v-4.5H9"/>'), // 반복
+  cats: ico('<path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9z"/><circle cx="8" cy="8" r="1.4"/>'), // 꼬리표(카테고리)
+  backup: ico('<path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5"/><path d="M12 12v7"/><path d="M9 15l3-3 3 3"/>'), // 구름(백업)
+  stats: ico('<path d="M4 20h16"/><path d="M7 16v-5"/><path d="M12 16V6"/><path d="M17 16v-8"/>'), // 막대그래프(통계)
+  networth: ico('<path d="M3.5 17l5.5-5.5 4 4 7.5-7.5"/><path d="M15 8h5.5v5.5"/>'), // 오르는 선(순자산)
+};
+/** 모든 탭 맨 아래: 통계 · 순자산 창 지름길 + 앱 버전 */
 export function footerHTML() {
-  const ico = (paths) => `<svg class="ft-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
-  const ICONS = {
-    budget: ico('<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8a8.5 8.5 0 0 1 5.2 5.2H15z"/>'), // 원그래프(예산)
-    recur: ico('<path d="M4.5 11a7.5 7.5 0 0 1 13-4.5L19.5 8.5"/><path d="M19.5 4v4.5H15"/><path d="M19.5 13a7.5 7.5 0 0 1-13 4.5L4.5 15.5"/><path d="M4.5 20v-4.5H9"/>'), // 반복
-    cats: ico('<path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9z"/><circle cx="8" cy="8" r="1.4"/>'), // 꼬리표(카테고리)
-    backup: ico('<path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9.5a4 4 0 0 1-.5 8.5"/><path d="M12 12v7"/><path d="M9 15l3-3 3 3"/>'), // 구름(백업)
-  };
-  // 두 줄: 보안 설정 · 예산 · 반복 내역 / 카테고리 · 백업/복원
-  const rows = [[["settings", `${LOCK_ICON}보안 설정`], ["budget", `${ICONS.budget}예산 설정`], ["recur", `${ICONS.recur}반복 내역`]], [["cats", `${ICONS.cats}카테고리`], ["backup", `${ICONS.backup}백업/복원`]]];
+  const links = [["stats", `${ICONS.stats}통계`], ["networth", `${ICONS.networth}순자산`]];
   return `
   <footer class="app-footer">
-    <nav class="ft-links">${rows.map((r) => `<div class="ft-row">${r.map(([k, t]) => `<button class="ft-link${k === "settings" ? " ft-main" : ""}" data-ft="${k}">${t}</button>`).join("")}</div>`).join("")}</nav>
+    <nav class="ft-links"><div class="ft-row">${links.map(([k, t]) => `<button class="ft-link ft-main" data-ft="${k}">${t}</button>`).join("")}</div></nav>
     <div class="ft-meta">가탈작 가계부 <span data-app-ver></span> · <a href="privacy.html">개인정보처리방침</a> · <a href="terms.html">이용약관</a></div>
   </footer>`;
+}
+// 홈 위 '설정' 창: 가끔 들어가는 관리 창 모음
+const SETTING_ITEMS = [
+  ["settings", LOCK_ICON, "보안 설정", "앱 잠금(PIN·지문), 금액 가리기"],
+  ["budget", ICONS.budget, "예산 설정", "카테고리별·전체 한 달 예산"],
+  ["recur", ICONS.recur, "반복 내역 설정", "월세·구독료처럼 매달 나가는 내역"],
+  ["cats", ICONS.cats, "카테고리 설정", "카테고리·하위 카테고리 추가, 이름·순서 바꾸기"],
+  ["backup", ICONS.backup, "백업/복원", "드라이브 동기화, 백업 파일·엑셀 저장, 불러오기"],
+];
+export function openSettingsMenu() {
+  const panel = openModal({
+    title: "설정",
+    center: true,
+    body: `<div class="set-list">${SETTING_ITEMS.map(([k, icon, name, desc]) => `
+      <button class="set-item" data-set="${k}">
+        <span class="set-ico">${icon}</span>
+        <span class="set-txt"><span class="set-name">${name}</span><span class="set-desc">${desc}</span></span>
+        <span class="set-go">›</span>
+      </button>`).join("")}</div>`,
+  });
+  panel.querySelectorAll("[data-set]").forEach((b) => (b.onclick = () => openFooterLink(b.dataset.set)));
 }
 /** 버전: 설치된 화면 파일 캐시 이름(gagyebu-vNNN)에서 읽는다 — sw.js만 올리면 자동으로 맞음 */
 export let appVersion = "";
@@ -307,6 +331,8 @@ export function fillVersion() {
   }).catch(() => {});
 }
 export function openFooterLink(k) {
+  if (k === "stats") return openStatsDialog();
+  if (k === "networth") return openNetworthDialog();
   if (k === "settings") return openSettingsDialog();
   if (k === "budget") return openBudgetDialog();
   if (k === "recur") return openRecurringDialog();
@@ -318,7 +344,7 @@ export function openSettingsDialog() {
   const panel = openModal({
     title: "보안 설정",
     body: `${lockSection()}
-      <p class="note" style="margin-top:18px">백업·동기화는 '백업/복원', 예산·반복 내역·카테고리는 아래 메뉴에서 바꿀 수 있어요.</p>`,
+      <p class="note" style="margin-top:18px">예산·반복 내역·카테고리·백업/복원은 홈 위 '설정'에서 바꿀 수 있어요.</p>`,
   });
   bindLockSection(panel, { reopen: openSettingsDialog, onHideChange: (on) => { globalThis.__hideAmt = on; updateEye(); render(); } });
 }

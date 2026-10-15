@@ -780,7 +780,7 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .holding-help .reg-link[data-new-debt] { color: #ff9fae; } /* 부채 발생 창의 새 부채 등록: 부채 색 */
 /* 푸터 두 줄 + 아이콘 */
 .ft-links { flex-direction: column; gap: 2px; }
-.ft-row { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+.ft-row { display: flex; justify-content: center; gap: 22px; flex-wrap: wrap; }
 .ft-link { padding: 6px 2px; gap: 5px; font-size: calc(0.8rem + var(--fs-up)); }
 
 /* 자주 쓰는 내용·거래처 큰 창 (내역 창 위) */
@@ -798,3 +798,21 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .ps-go { color: var(--muted); }
 .ps-item.del .ps-x { color: var(--exp); }
 .ps-empty { margin-top: 14px; word-break: keep-all; }
+
+/* 홈 위 '설정' 창: 관리 메뉴 모음 */
+.set-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.set-item { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px 4px; border-bottom: 1px solid var(--line); text-align: left; color: var(--text); }
+.set-item:active { background: rgba(255, 255, 255, 0.04); }
+.set-ico { flex: none; display: inline-flex; color: var(--muted); }
+.set-ico .ft-ico { width: 20px; height: 20px; }
+.set-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.set-name { font-size: 1rem; }
+.set-desc { color: var(--muted); font-size: calc(0.78rem + var(--fs-up)); word-break: keep-all; }
+.set-go { flex: none; color: var(--muted); }
+
+/* 푸터의 통계·순자산 창: 창 안에서는 카드 테두리 없이 */
+.stat-panel .card { background: none; border: 0; padding: 0; margin: 0; }
+.stat-panel .card.home-sec { margin-top: 28px; }
+.sd-nav { display: flex; justify-content: center; align-items: center; gap: 14px; margin-bottom: 14px; color: var(--text); }
+.sd-nw-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.sd-nw-val { font-size: 1.15rem; }

@@ -9,7 +9,7 @@ import { budgetSection, homeTabs, homeView, openBudgetDialog, openCardDialog, op
 import { catTrendSection, exportSettlement, networthBody, settleView } from "./settle.js";
 import { bindSearch, calendarView, listView, monthlyView, openFilterDialog } from "./list.js";
 import { openKindPicker, openRepayDialog, openTxDialog } from "./entry.js";
-import { fillVersion, footerHTML, openBackupDialog, openFooterLink, openHoldingsDialog, renderBackupBar, renderSyncBar } from "./manage.js";
+import { fillVersion, footerHTML, openFooterLink, openHoldingsDialog, openSettingsMenu, renderBackupBar, renderSyncBar } from "./manage.js";
 export async function commit() {
   await saveState(S);
   render();
@@ -65,7 +65,7 @@ export function bindEvents() {
   $("#fab").onclick = () => openKindPicker(ui.tab === "calendar" && ui.day ? ui.day : undefined);
   $("#open-assets").onclick = () => openHoldingsDialog("assets");
   $("#open-debts").onclick = () => openHoldingsDialog("debts");
-  $("#open-backup").onclick = openBackupDialog;
+  $("#open-settings").onclick = openSettingsMenu;
   $("#sync-bar").onclick = () => (sync.status === "need-login" ? connect() : runSync());
   // 앱으로 돌아왔을 때: 토큰이 끝났으면(창이 열려 있지 않을 때) 조용히 재로그인, 아니면 바로 동기화
   const idle = () => !SELFTEST && document.visibilityState === "visible" && !$("#modal-root").children.length; // 테스트 모드에선 로그인·동기화 안 함

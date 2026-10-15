@@ -3,9 +3,9 @@ import { toKRW } from "./fx.js";
 import { makeXlsxBook } from "./xlsx.js";
 import { $, ASSET_TYPES, DEBT_TYPES, FILE_PREFIX, S, esc, liveTx, monthTx, shiftMonth, signed, sum, toast, txKRW, ui, won } from "./core.js";
 import { curOf, deltaRef, hasHoldings, holdingsAt, isLoanTx, isShortDebt, monthEnd, monthFigures, netStartMonth, signedWon } from "./model.js";
-import { EXCEL_ICON, homeLabel } from "./uikit.js";
+import { EXCEL_ICON, homeLabel, openModal } from "./uikit.js";
 import { TX_SHEET_WIDTHS, downloadBlob, txSheetRows } from "./manage.js";
-import { main } from "./app.js";
+import { main, render } from "./app.js";
 export function settleData() {
   const m = Number(ui.month.slice(5));
   const tx = monthTx();
@@ -194,11 +194,26 @@ export function catTrendSection() {
   </section>`;
 }
 
+/** 많이 쓴 카테고리(결산 탭·통계 창) */
+export function rankSection(cats, catTotal) {
+  const top = ui.rankAll ? cats : cats.slice(0, 5);
+  return `
+  <section class="card home-sec">
+    <div class="card-head"><span>많이 쓴 카테고리</span><span class="muted settle-note">카드·마통 사용 포함</span></div>
+    ${top.length ? `<div class="row">${top.map(([c, v], i) => `
+      <div class="rank-row" data-stat-pick="${esc(c)}">
+        <div class="rank-top"><span><span class="rank-no">${i + 1}</span>${esc(c)}</span><span>${won(v)} <span class="muted">${Math.round((v / catTotal) * 100)}%</span></span></div>
+        <div class="rank-bar"><span style="width:${(v / top[0][1]) * 100}%"></span></div>
+      </div>`).join("")}</div>
+      ${cats.length > 5 ? `<button class="fold-line" data-fold="rankAll"><span>${ui.rankAll ? `전체 ${cats.length}개` : `나머지 ${cats.length - 5}개 카테고리`}</span><span class="fold-go">${ui.rankAll ? "접기 ⌃" : "전체 보기 ⌄"}</span></button>` : ""}
+      <p class="note rank-hint">카테고리를 누르면 아래 '카테고리 추이'에서 몇 달 흐름을 볼 수 있어요.</p>` : `<div class="empty" style="padding:14px 0">지출 기록이 없어요.</div>`}
+  </section>`;
+}
+
 /** 결산 탭: 고른 달의 결산 — 요약·저축률 / 지난달 대비 / 많이 쓴 카테고리 / 순자산 */
 export function settleView() {
   const { m, tx, cur, prevKey, prevTx, prev, left, rate, cats, catTotal, assetChg, debtChg, netChg } = settleData();
   if (!tx.length) return `<div class="card"><div class="empty">${m}월 기록이 없어요.</div></div>${networthSection()}`;
-  const top = ui.rankAll ? cats : cats.slice(0, 5);
   // 지난달 대비: 늘었으면 ▲, 줄었으면 ▼. 수입은 늘면 초록, 지출·부채는 늘면 레드/핑크
   const diffRow = (label, now, before, upGood, upCls) => {
     const d = now - before;
@@ -238,16 +253,7 @@ export function settleView() {
     </div>` : `<div class="empty" style="padding:14px 0">지난달 기록이 없어요.</div>`}
   </section>
 
-  <section class="card home-sec">
-    <div class="card-head"><span>많이 쓴 카테고리</span><span class="muted settle-note">카드·마통 사용 포함</span></div>
-    ${top.length ? `<div class="row">${top.map(([c, v], i) => `
-      <div class="rank-row" data-stat-pick="${esc(c)}">
-        <div class="rank-top"><span><span class="rank-no">${i + 1}</span>${esc(c)}</span><span>${won(v)} <span class="muted">${Math.round((v / catTotal) * 100)}%</span></span></div>
-        <div class="rank-bar"><span style="width:${(v / top[0][1]) * 100}%"></span></div>
-      </div>`).join("")}</div>
-      ${cats.length > 5 ? `<button class="fold-line" data-fold="rankAll"><span>${ui.rankAll ? `전체 ${cats.length}개` : `나머지 ${cats.length - 5}개 카테고리`}</span><span class="fold-go">${ui.rankAll ? "접기 ⌃" : "전체 보기 ⌄"}</span></button>` : ""}
-      <p class="note rank-hint">카테고리를 누르면 아래 '카테고리 추이'에서 몇 달 흐름을 볼 수 있어요.</p>` : `<div class="empty" style="padding:14px 0">지출 기록이 없어요.</div>`}
-  </section>
+  ${rankSection(cats, catTotal)}
   ${catTrendSection()}
 
   ${networthSection()}
@@ -286,3 +292,58 @@ export function exportSettlement() {
 }
 
 /** part: "summary" = 현황(종합), "detail" = 현황(상세) */
+
+// ---------------- 푸터: 통계·순자산 창 ----------------
+// 창 안에서 달을 바꾸거나 막대·카테고리를 누르면 창을 다시 그린다(뒤 화면도 같은 달로)
+function monthNav() {
+  return `<div class="sd-nav"><button class="icon-btn" data-sd-month="-1" aria-label="이전 달">‹</button><span>${ui.month.slice(0, 4)}년 ${Number(ui.month.slice(5))}월</span><button class="icon-btn" data-sd-month="1" aria-label="다음 달">›</button></div>`;
+}
+function bindStatPanel(panel, redraw) {
+  const go = (fn) => { fn(); render(); redraw(true); };
+  panel.addEventListener("change", (e) => {
+    if (e.target.matches("[data-stat-cat]")) go(() => (ui.statCat = e.target.value));
+  });
+  panel.addEventListener("click", (e) => {
+    const nav = e.target.closest("[data-sd-month]");
+    if (nav) return go(() => (ui.month = shiftMonth(ui.month, Number(nav.dataset.sdMonth))));
+    const sm = e.target.closest("[data-stat-month]") || e.target.closest("[data-nw-month]");
+    if (sm) return go(() => (ui.month = sm.dataset.statMonth || sm.dataset.nwMonth));
+    const fold = e.target.closest("[data-fold]");
+    if (fold) return go(() => (ui[fold.dataset.fold] = !ui[fold.dataset.fold]));
+    const sp = e.target.closest("[data-stat-pick]");
+    if (sp) {
+      go(() => (ui.statCat = sp.dataset.statPick));
+      setTimeout(() => $("#modal-root #cat-trend")?.scrollIntoView({ block: "start", behavior: "smooth" }), 30);
+    }
+  });
+}
+export function openStatsDialog() {
+  const draw = (keep = false) => {
+    const { cats, catTotal } = settleData();
+    const panel = openModal({
+      title: "통계",
+      center: true,
+      cls: "stat-panel",
+      keepScroll: keep,
+      body: `${monthNav()}
+        ${rankSection(cats, catTotal)}
+        ${catTrendSection().replace("그 달 결산으로 바뀌어요", "그 달로 바뀌어요")}`,
+    });
+    bindStatPanel(panel, draw);
+  };
+  draw();
+}
+export function openNetworthDialog() {
+  const draw = (keep = false) => {
+    const body = hasHoldings()
+      ? (() => {
+          const end = holdingsAt(monthEnd(ui.month));
+          return `<div class="sd-nw-head"><span class="muted">${Number(ui.month.slice(5))}월 말 · 자산 − 부채</span><span class="sd-nw-val">${signedWon(Math.round(end.net)).replace(/^\+/, "")}</span></div>
+            ${networthBody({ withChg: true })}`;
+        })()
+      : `<div class="empty" style="padding:14px 0">나의 자산·부채를 등록하면 순자산과 달마다 추이를 볼 수 있어요.</div>`;
+    const panel = openModal({ title: "순자산", center: true, cls: "stat-panel", keepScroll: keep, body: `${monthNav()}${body}` });
+    bindStatPanel(panel, draw);
+  };
+  draw();
+}
