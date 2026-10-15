@@ -827,3 +827,7 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .nw-trend-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: calc(0.9rem + var(--fs-up)); }
 .nw-trend-head .muted { font-size: calc(0.72rem + var(--fs-up)); }
 .nw-chart .ct-val { fill: var(--text); font-size: 10px; }
+
+/* 푸터 통계·순자산: 위 탭(현황·내역…) 글자 크기와 같게 */
+.app-footer .ft-row .ft-link { font-size: calc(0.94rem + var(--fs-up)); padding: 8px 4px; gap: 6px; }
+.app-footer .ft-row .ft-ico { width: 17px; height: 17px; }
