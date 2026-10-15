@@ -53,11 +53,14 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
     return balanceOf("debts", d) + already;
   };
 
+  let drawnOnce = false;
   const draw = () => {
+    const keepPos = drawnOnce; drawnOnce = true;
     const debtRef = parseLinkKey(draft.debt);
     const debt = debtRef && S.debts[debtRef.id];
     const cur = debt ? curOf(debt) : "KRW";
     const panel = openModal({
+      keepScroll: keepPos, // 다시 그릴 때(카테고리 고르기 등) 화면 위치 유지
       cls: "theme-debts",
       onBack,
       center: true,
@@ -279,10 +282,13 @@ export function openLoanDialog({ existing = null, presetDate = "", onBack = null
       date: existing.date, time: existing.time || "", memo: existing.memo || "" }
     : { debt: "", asset: preset?.asset || "", amount: preset?.amount || 0, date: preset?.date || presetDate || todayStr(), time: preset?.time || nowTime(), memo: preset?.memo || "" };
   let confirmDelete = false;
+  let drawnOnce = false;
   const draw = () => {
+    const keepPos = drawnOnce; drawnOnce = true;
     const debt = S.debts[parseLinkKey(draft.debt)?.id];
     const cur = debt ? curOf(debt) : "KRW";
     const panel = openModal({
+      keepScroll: keepPos, // 다시 그릴 때(카테고리 고르기 등) 화면 위치 유지
       cls: "theme-debts",
       onBack,
       center: true,
@@ -432,7 +438,9 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
     </div>
     <div class="phrase-pop" data-pop="${field}" hidden></div>`;
   };
+  let drawnOnce = false;
   const draw = () => {
+    const keepPos = drawnOnce; drawnOnce = true;
     const cardMode = draft.kind === "지출" && CARD_MODES.includes(draft.debtMode);
     // 카드·마통 사용은 고정/변동을 묻지 않고, 카테고리를 고정·변동 묶음으로 함께 보여 준다(고른 카테고리를 따라감)
     const catList = cardMode ? EXPENSE_TYPES.flatMap((et) => catsFor("지출", et)) : catsFor(draft.kind, draft.kind === "지출" ? draft.expenseType : null);
@@ -447,6 +455,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
         + catList.filter((c) => !EXPENSE_TYPES.some((et) => catsFor("지출", et).includes(c))).map(optOf).join("")
       : catList.map(optOf).join("");
     const panel = openModal({
+      keepScroll: keepPos, // 다시 그릴 때(카테고리 고르기 등) 화면 위치 유지
       onBack: existing ? null : onBack, // 내역 성격 고르기에서 왔으면 뒤로 가기
       center: true, // 제목 가운데
       title: existing || replaces ? "내역 수정" : debtMode ? `${SHORT_DEBT[debtMode].title}` : "내역 추가",
