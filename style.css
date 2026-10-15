@@ -781,3 +781,4 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .phrase-acts .reg-link { color: #f3dc94; font-size: calc(0.8rem + var(--fs-up)); }
 .phrase-acts .phrase-edit { color: var(--muted); margin-left: auto; }
 .phrase-empty { font-size: calc(0.8rem + var(--fs-up)); }
+.rt-end { align-items: center; } /* 자산 이름 아래 (종류)는 가운데 */
