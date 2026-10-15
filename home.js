@@ -541,14 +541,15 @@ export function homeView(part = "summary") {
   if (!segs[ui.seg]) ui.seg = "수입"; // 이전 버전의 구분 이름이 남아 있을 때
   const [selTx, cls, sign] = segs[ui.seg];
   // 카테고리마다 섹션 하나: 머리줄(카테고리·합계, 색 유지) → 구분선 → 하위 카테고리별 금액(회색)
-  const buildCatSections = (list, group = "", allCats = []) => {
+  // opts: keyOf(내역 → 섹션 키), subOf(→ 하위 줄 이름), headOf(키 → 머리 HTML). 기본은 카테고리·하위 카테고리
+  const buildCatSections = (list, group = "", allCats = [], { keyOf = (t) => t.category, subOf = (t) => t.subcategory || "", headOf = (c) => esc(c) } = {}) => {
     const byCat = {};
     allCats.forEach((c) => (byCat[c] = { total: 0, subs: {} })); // 0원이어도 보여 줄 카테고리(고정지출)
     list.forEach((t) => {
-      const c = (byCat[t.category] ||= { total: 0, subs: {} });
+      const c = (byCat[keyOf(t)] ||= { total: 0, subs: {} });
       const v = txKRW(t);
       c.total += v;
-      const sub = t.subcategory || "";
+      const sub = subOf(t);
       c.subs[sub] = (c.subs[sub] || 0) + v;
     });
     return Object.entries(byCat)
@@ -561,10 +562,10 @@ export function homeView(part = "summary") {
         // 섹션을 누르면 그 카테고리 내역을 펼친다(다시 누르면 접힘)
         const key = `${ui.seg}|${group}|${c}`;
         const open = ui.openCat === key;
-        const items = open ? list.filter((t) => t.category === c).sort(txNewestFirst) : [];
+        const items = open ? list.filter((t) => keyOf(t) === c).sort(txNewestFirst) : [];
         return `
       <section class="asset-group detail-cat${open ? " open" : ""}" data-detail-cat="${esc(key)}">
-        <div class="asset-group-head"><span>${esc(c)} <span class="cat-chev">${open ? "⌄" : "›"}</span></span><span class="${total ? cls : "muted"}">${total ? signed(total, sign) : "0원"}</span></div>
+        <div class="asset-group-head"><span>${headOf(c)} <span class="cat-chev">${open ? "⌄" : "›"}</span></span><span class="${total ? cls : "muted"}">${total ? signed(total, sign) : "0원"}</span></div>
         ${rows.map(([s, v]) => `<div class="asset-row detail-sub"><span class="name">${esc(s)}</span><span class="amt">${signed(v, sign)}</span></div>`).join("")}
         ${open ? `<div class="detail-items">${items.map((t) => txRow(t, { withDate: true })).join("")}</div>` : ""}
       </section>`;
@@ -587,7 +588,12 @@ export function homeView(part = "summary") {
       ${buildCatSections(list.map((t) => ({ ...t, category: `${loanDebt(t)?.name || "부채"}(차입)`, subcategory: "" })), `loan|${type}`)}`;
       }).join("")
     // 자산이동: 경로(출금 → 입금)마다 섹션, 하위 줄은 내역의 '내용'별 금액
-    : ui.seg === "자산이동" ? buildCatSections(selTx.map((t) => ({ ...t, category: moveRoute(t) || MOVE_NONE, subcategory: (t.content || "").trim() || "내용 없음" })))
+    // 자산이동: '출금 → 입금 + 카테고리'마다 섹션(머리: 카테고리 뱃지 위, 경로 아래), 하위 줄은 내역 내용별
+    : ui.seg === "자산이동" ? buildCatSections(selTx, "", [], {
+        keyOf: (t) => `${moveRoute(t) || MOVE_NONE}\u0001${t.category || ""}`,
+        subOf: (t) => (t.content || "").trim() || "내용 없음",
+        headOf: (k) => { const [route, cat] = k.split("\u0001"); return `<span class="mv-head">${cat ? `<span class="cat-badge b-mov-cat">${esc(cat)}</span>` : ""}<span>${esc(route)}</span></span>`; },
+      })
     : ui.seg === "부채 상환" ? "" // 부채 상환은 합계 아래 경로별 하위 항목만
     : buildCatSections(selTx, "", ui.seg === "고정지출" ? catsFor("지출", "고정") : []);
 
@@ -638,7 +644,7 @@ export function homeView(part = "summary") {
         loans.forEach((t) => { const d = loanDebt(t); const k = d?.id || "?"; by[k] = (by[k] || 0) + txKRW(t); });
         return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([id, v]) => `<div class="tb-sub"><span>└ ${esc(S.debts[id]?.name || "부채")}(차입)</span><span>${won(v)}</span></div>`).join("");
       })() : ""}
-      ${ui.seg === "자산이동" || ui.seg === "부채 상환" ? (ui.seg === "부채 상환" ? repayTotals : routeTotals)(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
+      ${ui.seg === "자산이동" || ui.seg === "부채 상환" ? (ui.seg === "부채 상환" ? repayTotals : moveCatTotals)(selTx).map(([r, v]) => `<div class="tb-sub"><span>└ ${esc(r)}</span><span>${won(v)}</span></div>`).join("") : ""}
     </div>
     ${selTx.length ? catSections : `<div class="empty" style="padding:16px 0">이번 달 내역이 없어요.</div>`}
   </section>`;
