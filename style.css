@@ -776,14 +776,25 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .phrase-btn { flex: none; color: var(--muted); padding: 0 6px; }
 .phrase-btn.on { color: #f3dc94; }
 .phrase-btn.on svg path { fill: #f3dc94; }
-.phrase-pop { margin-top: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 4px; }
-.phrase-acts { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; }
-.phrase-acts .reg-link { color: #f3dc94; font-size: calc(0.8rem + var(--fs-up)); }
-.phrase-acts .phrase-edit { color: var(--muted); margin-left: auto; }
-.phrase-empty { font-size: calc(0.8rem + var(--fs-up)); }
 .rt-end { align-items: center; } /* 자산 이름 아래 (종류)는 가운데 */
 .holding-help .reg-link[data-new-debt] { color: #ff9fae; } /* 부채 발생 창의 새 부채 등록: 부채 색 */
 /* 푸터 두 줄 + 아이콘 */
 .ft-links { flex-direction: column; gap: 2px; }
 .ft-row { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
 .ft-link { padding: 6px 2px; gap: 5px; font-size: calc(0.8rem + var(--fs-up)); }
+
+/* 자주 쓰는 내용·거래처 큰 창 (내역 창 위) */
+.sheet-overlay { z-index: 25; background: rgba(0, 0, 0, 0.6); }
+.ps-add .input { flex: 1; min-width: 0; }
+.ps-add .btn { flex: none; width: auto; padding: 0 18px; }
+.sheet-overlay .panel { min-height: 60vh; }
+.ps-head { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 6px; font-size: calc(0.8rem + var(--fs-up)); }
+.ps-edit { color: var(--muted); font-size: calc(0.82rem + var(--fs-up)); }
+.ps-list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.ps-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; padding: 14px 4px; border-bottom: 1px solid var(--line);
+  text-align: left; font-size: 1rem; color: var(--text); word-break: keep-all; }
+.ps-item:active { background: rgba(255, 255, 255, 0.04); }
+.ps-item.on { color: #f3dc94; }
+.ps-go { color: var(--muted); }
+.ps-item.del .ps-x { color: var(--exp); }
+.ps-empty { margin-top: 14px; word-break: keep-all; }

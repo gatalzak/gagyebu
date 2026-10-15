@@ -405,6 +405,63 @@ export function openKindPicker(presetDate) {
   });
 }
 
+/** 자주 쓰는 내용·거래처 창: 내역 창을 닫지 않고 그 위에 띄운다 */
+function openPhraseSheet({ field, kind, current, onPick, onChange }) {
+  const name = field === "content" ? "내용" : "거래처";
+  document.getElementById("phrase-sheet")?.remove();
+  const el = document.createElement("div");
+  el.id = "phrase-sheet";
+  el.className = "overlay sheet-overlay";
+  document.body.appendChild(el);
+  let editing = false;
+  const close = () => el.remove();
+  const draw = () => {
+    const list = livePhrases(field, kind);
+    el.innerHTML = `
+      <div class="panel" role="dialog" aria-label="자주 쓰는 ${name}">
+        <div class="panel-head center">
+          <div class="head-left"></div><h2>자주 쓰는 ${name}</h2>
+          <div class="head-actions"><button class="x-btn" data-sheet-close aria-label="닫기">✕</button></div>
+        </div>
+        <div class="panel-body">
+          <div class="money-line ps-add">
+            <input class="input" name="phNew" placeholder="새 ${name} 입력" value="${esc(current && !list.some((x) => x.text === current) ? current : "")}">
+            <button class="btn primary" data-ph-add>등록</button>
+          </div>
+          ${list.length ? `
+          <div class="ps-head"><span class="muted">${editing ? "지울 항목을 누르세요" : "눌러서 바로 입력"}</span><button class="reg-link ps-edit" data-ph-edit>${editing ? "완료" : "편집"}</button></div>
+          <div class="ps-list">${list.map((x, i) => `<button class="ps-item${editing ? " del" : ""}${x.text === current ? " on" : ""}" data-ph="${i}"><span>${esc(x.text)}</span>${editing ? `<span class="ps-x">✕</span>` : `<span class="ps-go">›</span>`}</button>`).join("")}</div>` : `
+          <p class="note ps-empty">아직 등록한 ${name}이 없어요. 위 칸에 입력하고 등록하면, 다음부터 눌러서 바로 넣을 수 있어요.</p>`}
+        </div>
+      </div>`;
+    el.querySelector("[data-sheet-close]").onclick = close;
+    el.querySelectorAll("[data-ph]").forEach((b) => (b.onclick = async () => {
+      const x = list[Number(b.dataset.ph)];
+      if (editing) {
+        removePhrase(x.id, nowISO());
+        await saveState(S); scheduleSync(); onChange(); draw();
+        return;
+      }
+      close();
+      onPick(x.text);
+    }));
+    el.querySelector("[data-ph-edit]")?.addEventListener("click", () => { editing = !editing; draw(); });
+    const add = async () => {
+      const text = el.querySelector("[name=phNew]").value.trim();
+      if (!text) return toast(`등록할 ${name}을 입력하세요`);
+      if (list.some((x) => x.text === text)) return toast("이미 등록돼 있어요");
+      addPhrase(field, kind, text, nowISO());
+      await saveState(S); scheduleSync(); onChange();
+      toast(`'${text}' 등록했어요`);
+      current = "";
+      draw();
+    };
+    el.querySelector("[data-ph-add]").onclick = add;
+    el.querySelector("[name=phNew]").addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
+  };
+  draw();
+}
+
 export function openTxDialog(existing, presetDate, preset = null, { replaces = null, onBack = null } = {}) {
   if (existing && isRepayTx(existing)) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
   if (existing && isLoanTx(existing)) return openLoanDialog({ existing }); // 대출 실행 기록은 대출 창에서
@@ -435,8 +492,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
     return `<div class="money-line phrase-line">
       <input class="input" name="${field}" placeholder="${ph}" value="${esc(val || "")}">
       <button class="icon-only phrase-btn${saved ? " on" : ""}" data-phrase="${field}" aria-label="자주 쓰는 ${field === "content" ? "내용" : "거래처"}">${STAR}</button>
-    </div>
-    <div class="phrase-pop" data-pop="${field}" hidden></div>`;
+    </div>`;
   };
   let drawnOnce = false;
   const draw = () => {
@@ -654,43 +710,15 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       toast(`이전 내역과 같아서 카테고리를 '${g.category}'(으)로 골랐어요`);
     };
     ["content", "party"].forEach((f) => $p(`[name=${f}]`)?.addEventListener("change", autoCat));
-    // 자주 쓰는 내용·거래처: 별을 누르면 칸 아래에 목록(누르면 채움), 지금 글자 등록, 편집(✕로 삭제)
+    // 자주 쓰는 내용·거래처: 별을 누르면 내역 창 위에 큰 창(목록을 누르면 바로 채움, 새로 등록, 편집으로 삭제)
     panel.querySelectorAll("[data-phrase]").forEach((btn) => (btn.onclick = () => {
       const field = btn.dataset.phrase;
-      const pop = $p(`[data-pop=${field}]`), input = $p(`[name=${field}]`);
-      const name = field === "content" ? "내용" : "거래처";
-      let editing = false;
-      const paint = () => {
-        const list = livePhrases(field, draft.kind);
-        const cur = input.value.trim();
-        btn.classList.toggle("on", !!cur && list.some((x) => x.text === cur));
-        pop.innerHTML = `
-          <div class="chip-wrap">${list.length ? list.map((x, i) => `<button class="chip${x.text === cur ? " on" : ""}" data-ph="${i}">${esc(x.text)}${editing ? " ✕" : ""}</button>`).join("") : `<span class="muted phrase-empty">자주 쓰는 ${name}이 아직 없어요</span>`}</div>
-          <div class="phrase-acts">
-            ${cur && !list.some((x) => x.text === cur) ? `<button class="reg-link" data-ph-add>+ '${esc(cur)}' 등록</button>` : ""}
-            ${list.length ? `<button class="reg-link phrase-edit" data-ph-edit>${editing ? "완료" : "편집"}</button>` : ""}
-          </div>`;
-        pop.querySelectorAll("[data-ph]").forEach((c) => (c.onclick = async () => {
-          const x = list[Number(c.dataset.ph)];
-          if (editing) { removePhrase(x.id, nowISO()); await saveState(S); scheduleSync(); return paint(); }
-          input.value = x.text;
-          pop.hidden = true;
-          btn.classList.add("on");
-          autoCat();
-        }));
-        pop.querySelector("[data-ph-add]")?.addEventListener("click", async () => {
-          addPhrase(field, draft.kind, cur, nowISO());
-          await saveState(S);
-          scheduleSync();
-          toast(`자주 쓰는 ${name}에 '${cur}' 등록했어요`);
-          paint();
-        });
-        pop.querySelector("[data-ph-edit]")?.addEventListener("click", () => { editing = !editing; paint(); });
-      };
-      if (!pop.hidden) { pop.hidden = true; return; }
-      panel.querySelectorAll("[data-pop]").forEach((x) => (x.hidden = true));
-      paint();
-      pop.hidden = false;
+      const input = $p(`[name=${field}]`);
+      openPhraseSheet({
+        field, kind: draft.kind, current: input.value.trim(),
+        onPick: (text) => { input.value = text; btn.classList.add("on"); autoCat(); },
+        onChange: () => { const cur = input.value.trim(); btn.classList.toggle("on", !!cur && livePhrases(field, draft.kind).some((x) => x.text === cur)); },
+      });
     }));
     $p("[data-act=edit-cats]").onclick = () => {
       read();
