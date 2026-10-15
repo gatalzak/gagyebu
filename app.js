@@ -3,7 +3,7 @@ import { loadState, saveState, setMemoryMode, emptyState } from "./store.js";
 import { sync, isConfigured, isConnected, connect, handleRedirect, refreshIfNeeded, syncNow, syncDrivePhotos } from "./sync.js";
 import { initLock, hideAmounts } from "./lock.js";
 import { $, S, SELFTEST, liveTx, migrateDebtTypes, setS, shiftMonth, toast, ui } from "./core.js";
-import { activeInstallments, autoRecur, balanceOf, cardBill, cardCycle, cleanMoveCategories, clearLinkCache, emptyFilter, freezeCatEtypes, holdingsAt, isLoanTx, isMoveTx, isRepayTx, liveBudgets, migrateBalances, monthFigures, natureDraft, natureOf, newTxDraft, nextPayMonth, payMonthOf, recurDate, recurLastAmount, recurStatus, repairLoanTxs, retireOldCats, saveLoanTx, seedCats, seedSubcats, shortDebtType, txNature, txPassesFilter } from "./model.js";
+import { activeInstallments, autoRecur, balanceOf, cardBill, cardCycle, cleanMoveCategories, clearLinkCache, emptyFilter, freezeCatEtypes, guessCategory, holdingsAt, isLoanTx, isMoveTx, isRepayTx, liveBudgets, migrateBalances, monthFigures, natureDraft, natureOf, newTxDraft, nextPayMonth, payMonthOf, recurDate, recurLastAmount, recurStatus, repairLoanTxs, retireOldCats, saveLoanTx, seedCats, seedSubcats, shortDebtType, txNature, txPassesFilter } from "./model.js";
 import { closeModal, openDatePicker } from "./uikit.js";
 import { budgetSection, homeTabs, homeView, openBudgetDialog, openCardDialog, openOrphanDialog, openRecurAction, openRecurringDialog } from "./home.js";
 import { catTrendSection, exportSettlement, networthBody, settleView } from "./settle.js";
@@ -208,6 +208,7 @@ export async function selfTestMain() {
     liveBudgets, budgetSection, catTrendSection, networthBody,
     natureOf, natureDraft, openRepayDialog, openTxDialog, newTxDraft,
     txNature, txPassesFilter, emptyFilter,
+    guessCategory,
   };
 }
 

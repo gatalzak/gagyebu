@@ -206,6 +206,18 @@ test("내역 필터", "성격·카테고리·자산·금액·기간으로 거르
   G.ui.filter = G.emptyFilter();
 });
 
+// ---------------- 카테고리 자동 선택 ----------------
+test("입력", "내용·거래처가 같은 최근 내역의 카테고리를 고름 (거래처가 다르면 안 고름)", (G) => {
+  G.reset({ assets: byId([asset("a", "통장", 0)]), transactions: byId([
+    spend("x1", "2026-09-01", 9000, ["assets", "a"], { content: "점심", party: "김밥천국", category: "식비" }),
+    spend("x2", "2026-10-01", 9000, ["assets", "a"], { content: "점심", party: "김밥천국", category: "카페/간식", subcategory: "" }),
+    spend("x3", "2026-10-02", 9000, ["assets", "a"], { content: "점심", party: "회사", category: "식비" }),
+  ]) });
+  eq(G.guessCategory("지출", "점심", "김밥천국")?.category, "카페/간식", "가장 최근 것");
+  eq(G.guessCategory("지출", "점심", "다른 곳"), null, "거래처 다름");
+  eq(G.guessCategory("지출", "", "김밥천국"), null, "내용 없음");
+});
+
 // ---------------- 사진 정리 ----------------
 test("사진 정리", "안 쓰는 사진만 정리: 드라이브는 휴지통(2일 안 된 파일 제외), 기기 사진 삭제", async () => {
   const now = Date.parse("2026-10-12T00:00:00Z");

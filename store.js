@@ -6,7 +6,7 @@ const STORE = "kv";
 const KEY = "state";
 
 /** 기기 간에 합치는 기록 묶음 */
-export const COLLECTIONS = ["transactions", "assets", "debts", "subcats", "cats", "favorites", "budgets", "recurring"];
+export const COLLECTIONS = ["transactions", "assets", "debts", "subcats", "cats", "favorites", "budgets", "recurring", "phrases"];
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -22,7 +22,7 @@ let memoryOnly = false;
 export function setMemoryMode(on) { memoryOnly = !!on; }
 
 export function emptyState() {
-  return { version: 1, transactions: {}, assets: {}, debts: {}, subcats: {}, cats: {}, favorites: {}, budgets: {}, recurring: {}, meta: {} };
+  return { version: 1, transactions: {}, assets: {}, debts: {}, subcats: {}, cats: {}, favorites: {}, budgets: {}, recurring: {}, phrases: {}, meta: {} };
 }
 
 export async function loadState() {

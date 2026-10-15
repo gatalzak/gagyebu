@@ -3,7 +3,7 @@ import { saveState, uid, nowISO } from "./store.js";
 import { CURRENCIES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates } from "./fx.js";
 import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
 import { $, EXPENSE_TYPES, KIND_CLASS, KIND_SIGN, S, debtType, esc, fmtAmount, nowTime, parseAmount, signed, toast, todayStr, ui } from "./core.js";
-import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addSubcat, amountInCurrency, applyFav, balanceOf, catsFor, curOf, deltaRef, dropTx, favFromDraft, favKey, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, natureDraft, natureOf, newTxDraft, parseLinkKey, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
+import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addPhrase, addSubcat, amountInCurrency, applyFav, balanceOf, catsFor, curOf, deltaRef, dropTx, favFromDraft, favKey, guessCategory, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, livePhrases, natureDraft, natureOf, newTxDraft, parseLinkKey, removePhrase, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
 import { CAMERA, HOME_ICONS, PENCIL, STAR, bindAmount, closeModal, holdingHelp, holdingOptions, openModal } from "./uikit.js";
 import { registerRecurring } from "./home.js";
 import { openCategoryEditor, openHoldingsDialog } from "./manage.js";
@@ -423,6 +423,15 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
 
   refreshRates(); // 외화를 고를 때를 대비해 환율 준비
 
+  // 내용·거래처 칸 + 오른쪽 별(자주 쓰는 내용·거래처). 등록된 글자면 별이 채워짐
+  const phraseInput = (field, ph, val) => {
+    const saved = (val || "").trim() && livePhrases(field, draft.kind).some((x) => x.text === (val || "").trim());
+    return `<div class="money-line phrase-line">
+      <input class="input" name="${field}" placeholder="${ph}" value="${esc(val || "")}">
+      <button class="icon-only phrase-btn${saved ? " on" : ""}" data-phrase="${field}" aria-label="자주 쓰는 ${field === "content" ? "내용" : "거래처"}">${STAR}</button>
+    </div>
+    <div class="phrase-pop" data-pop="${field}" hidden></div>`;
+  };
   const draw = () => {
     const cardMode = draft.kind === "지출" && CARD_MODES.includes(draft.debtMode);
     // 카드·마통 사용은 고정/변동을 묻지 않고, 카테고리를 고정·변동 묶음으로 함께 보여 준다(고른 카테고리를 따라감)
@@ -492,8 +501,8 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
           <select class="input" name="toAsset">${holdingOptions(["assets"], draft.toAsset, { balance: false })}</select>
           <div class="fx-hint tx-hint inc" data-to-hint></div>
         </div>` : ""}
-        <div class="field"><label>내용 <span class="req">*</span></label><input class="input" name="content" placeholder="${draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사"}" value="${esc(draft.content || "")}"></div>
-        ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label><input class="input" name="party" placeholder="${draft.kind === "수입" ? "예: (주)회사명 / 통장에 입력된 내역 이름" : "예: 김밥천국 / 통장에 입력된 내역 이름"}" value="${esc(draft.party || "")}"></div>
+        <div class="field"><label>내용 <span class="req">*</span></label>${phraseInput("content", draft.kind === "수입" ? "예: 10월 급여" : draft.kind === "자산이동" ? "예: 비상금 통장으로 이체" : "예: 점심 식사", draft.content)}</div>
+        ${draft.kind !== "자산이동" ? `<div class="field"><label>거래처/출처</label>${phraseInput("party", draft.kind === "수입" ? "예: (주)회사명 / 통장에 입력된 내역 이름" : "예: 김밥천국 / 통장에 입력된 내역 이름", draft.party)}</div>
         ` : ""}
         ${true ? `<div class="field"><label>카테고리 · 하위 카테고리 <span class="req">*</span></label>
           <div class="money-line">
@@ -624,6 +633,56 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
     };
     if ($p("[name=category]")) {
     $p("[name=category]").onchange = () => { read(); draft.subcategory = ""; draft.catTouched = true; draw(); };
+    // 내용·거래처가 이전 내역과 같으면 그 카테고리로(새 내역, 카테고리를 직접 고르기 전)
+    const autoCat = () => {
+      if (existing || draft.catTouched) return;
+      read();
+      const g = guessCategory(draft.kind, draft.content, draft.party);
+      if (!g || g.category === draft.category || !catList.includes(g.category)) return;
+      draft.category = g.category;
+      draft.subcategory = g.subcategory;
+      draw();
+      toast(`이전 내역과 같아서 카테고리를 '${g.category}'(으)로 골랐어요`);
+    };
+    ["content", "party"].forEach((f) => $p(`[name=${f}]`)?.addEventListener("change", autoCat));
+    // 자주 쓰는 내용·거래처: 별을 누르면 칸 아래에 목록(누르면 채움), 지금 글자 등록, 편집(✕로 삭제)
+    panel.querySelectorAll("[data-phrase]").forEach((btn) => (btn.onclick = () => {
+      const field = btn.dataset.phrase;
+      const pop = $p(`[data-pop=${field}]`), input = $p(`[name=${field}]`);
+      const name = field === "content" ? "내용" : "거래처";
+      let editing = false;
+      const paint = () => {
+        const list = livePhrases(field, draft.kind);
+        const cur = input.value.trim();
+        btn.classList.toggle("on", !!cur && list.some((x) => x.text === cur));
+        pop.innerHTML = `
+          <div class="chip-wrap">${list.length ? list.map((x, i) => `<button class="chip${x.text === cur ? " on" : ""}" data-ph="${i}">${esc(x.text)}${editing ? " ✕" : ""}</button>`).join("") : `<span class="muted phrase-empty">자주 쓰는 ${name}이 아직 없어요</span>`}</div>
+          <div class="phrase-acts">
+            ${cur && !list.some((x) => x.text === cur) ? `<button class="reg-link" data-ph-add>+ '${esc(cur)}' 등록</button>` : ""}
+            ${list.length ? `<button class="reg-link phrase-edit" data-ph-edit>${editing ? "완료" : "편집"}</button>` : ""}
+          </div>`;
+        pop.querySelectorAll("[data-ph]").forEach((c) => (c.onclick = async () => {
+          const x = list[Number(c.dataset.ph)];
+          if (editing) { removePhrase(x.id, nowISO()); await saveState(S); scheduleSync(); return paint(); }
+          input.value = x.text;
+          pop.hidden = true;
+          btn.classList.add("on");
+          autoCat();
+        }));
+        pop.querySelector("[data-ph-add]")?.addEventListener("click", async () => {
+          addPhrase(field, draft.kind, cur, nowISO());
+          await saveState(S);
+          scheduleSync();
+          toast(`자주 쓰는 ${name}에 '${cur}' 등록했어요`);
+          paint();
+        });
+        pop.querySelector("[data-ph-edit]")?.addEventListener("click", () => { editing = !editing; paint(); });
+      };
+      if (!pop.hidden) { pop.hidden = true; return; }
+      panel.querySelectorAll("[data-pop]").forEach((x) => (x.hidden = true));
+      paint();
+      pop.hidden = false;
+    }));
     $p("[data-act=edit-cats]").onclick = () => {
       read();
       openCategoryEditor({ kind: draft.kind, etype: draft.expenseType || "고정", onClose: () => draw() });

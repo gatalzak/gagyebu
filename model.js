@@ -1,7 +1,7 @@
 // 가탈작 가계부 — 데이터 계산(잔액·카테고리·반복·카드·필터 등, 화면 없음)
 import { uid, nowISO } from "./store.js";
 import { CURRENCIES, CURRENCY_NAMES, toKRW, rateKRW, decimals } from "./fx.js";
-import { $, ASSET_TYPES, CATEGORIES, DEBT_TYPES, DEFAULT_SUBCATS, EXPENSE_TYPES, KIND_SIGN, S, debtType, liveTx, nowTime, pad, shiftMonth, sum, todayStr, txKRW, ui, won, ym } from "./core.js";
+import { $, ASSET_TYPES, CATEGORIES, DEBT_TYPES, DEFAULT_SUBCATS, EXPENSE_TYPES, KIND_SIGN, S, debtType, liveTx, nowTime, pad, shiftMonth, sum, todayStr, txKRW, txNewestFirst, ui, won, ym } from "./core.js";
 export const SEED_TIME = "2026-01-01T00:00:00.000Z";
 export function seedSubcats() {
   let added = 0;
@@ -725,4 +725,26 @@ export function orphanTxs() {
 export function txBrief(t) {
   const what = isLoanTx(t) ? "차입" : isRepayTx(t) ? "상환" : t.kind;
   return `${Number(t.date.slice(5, 7))}/${Number(t.date.slice(8))} ${t.content || t.category || ""} ${what} ${won(txKRW(t))}`;
+}
+
+// ---------------- 자주 쓰는 내용·거래처 ----------------
+// phrases: { id: 'phrase:필드:종류:글자', field: 'content'|'party', kind, text } — 같은 글자는 기기끼리 겹치지 않게 id를 글자로
+export const phraseId = (field, kind, text) => `phrase:${field}:${kind}:${text}`;
+export const livePhrases = (field, kind) => Object.values(S.phrases || {})
+  .filter((p) => !p.deleted && p.field === field && p.kind === kind)
+  .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+export function addPhrase(field, kind, text, now) {
+  const id = phraseId(field, kind, text);
+  S.phrases ||= {};
+  S.phrases[id] = { id, field, kind, text, createdAt: S.phrases[id]?.createdAt || now, updatedAt: now, deleted: false };
+}
+export function removePhrase(id, now) {
+  if (S.phrases?.[id]) S.phrases[id] = { ...S.phrases[id], deleted: true, updatedAt: now };
+}
+/** 내용·거래처가 같은 가장 최근 내역의 카테고리(새 내역 자동 선택용). 내용이 비면 null */
+export function guessCategory(kind, content, party) {
+  const c = (content || "").trim(), p = (party || "").trim();
+  if (!c) return null;
+  const hit = liveTx().filter((t) => t.kind === kind && t.category && (t.content || "").trim() === c && (t.party || "").trim() === p).sort(txNewestFirst)[0];
+  return hit ? { category: hit.category, subcategory: hit.subcategory || "" } : null;
 }
