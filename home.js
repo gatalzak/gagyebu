@@ -572,21 +572,11 @@ export function homeView(part = "summary") {
       })
       .join("");
   };
-  // 부채: 신용카드 / 마이너스통장 / 미납금 … 으로 나눠 카테고리 섹션, 빌린 돈(차입)은 부채 이름별 섹션
+  // 부채·부채 상환: 합계(종류·경로별) 아래에 이번 달 내역을 내역 탭 모양 그대로 모아서(최근 것부터, 누르면 수정)
+  const txList = (title) => `<div class="repay-list-head"><span>${title}</span><span class="muted">${selTx.length}건</span></div>
+        <div class="detail-items repay-items">${[...selTx].sort(txNewestFirst).map((t) => txRow(t, { withDate: true })).join("")}</div>`;
   const catSections = ui.seg === "부채"
-    ? Object.entries(SHORT_DEBT).map(([type, info]) => {
-        const list = selTx.filter((t) => shortDebtType(t) === type);
-        if (!list.length) return "";
-        return `
-      <div class="group-title"><span class="cat-badge b-cred">${info.label}</span></div>
-      ${buildCatSections(list, type)}`;
-      }).join("") + loanTypes.map((type) => {
-        // 빌린 돈: 나의 부채의 종류(대출·지인에게 빌린 돈 등)마다 묶음, 섹션은 '부채 이름(차입)'
-        const list = loans.filter((t) => (debtType(loanDebt(t)) || "부채") === type);
-        return `
-      <div class="group-title"><span class="cat-badge b-cred">${esc(type)}</span></div>
-      ${buildCatSections(list.map((t) => ({ ...t, category: `${loanDebt(t)?.name || "부채"}(차입)`, subcategory: "" })), `loan|${type}`)}`;
-      }).join("")
+    ? txList("이번 달 부채 내역")
     // 자산이동: 경로(출금 → 입금)마다 섹션, 하위 줄은 내역의 '내용'별 금액
     // 자산이동: '출금 → 입금 + 카테고리'마다 섹션(머리: 카테고리 뱃지 위, 경로 아래), 하위 줄은 내역 내용별
     : ui.seg === "자산이동" ? buildCatSections(selTx, "", [], {
@@ -605,9 +595,7 @@ export function homeView(part = "summary") {
           return `<span class="mv-head">${cat ? `<span class="cat-badge b-mov-cat">${esc(cat)}</span>` : ""}${route}</span>`;
         },
       })
-    : ui.seg === "부채 상환" // 합계(경로별) 아래에 이번 달 상환 내역을 모아서(최근 것부터, 누르면 수정)
-      ? `<div class="repay-list-head"><span>이번 달 상환 내역</span><span class="muted">${selTx.length}건</span></div>
-        <div class="detail-items repay-items">${[...selTx].sort(txNewestFirst).map((t) => txRow(t, { withDate: true })).join("")}</div>`
+    : ui.seg === "부채 상환" ? txList("이번 달 상환 내역")
     : buildCatSections(selTx, "", ui.seg === "고정지출" ? catsFor("지출", "고정") : []);
 
 
