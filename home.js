@@ -605,7 +605,9 @@ export function homeView(part = "summary") {
           return `<span class="mv-head">${cat ? `<span class="cat-badge b-mov-cat">${esc(cat)}</span>` : ""}${route}</span>`;
         },
       })
-    : ui.seg === "부채 상환" ? "" // 부채 상환은 합계 아래 경로별 하위 항목만
+    : ui.seg === "부채 상환" // 합계(경로별) 아래에 이번 달 상환 내역을 모아서(최근 것부터, 누르면 수정)
+      ? `<div class="repay-list-head"><span>이번 달 상환 내역</span><span class="muted">${selTx.length}건</span></div>
+        <div class="detail-items repay-items">${[...selTx].sort(txNewestFirst).map((t) => txRow(t, { withDate: true })).join("")}</div>`
     : buildCatSections(selTx, "", ui.seg === "고정지출" ? catsFor("지출", "고정") : []);
 
 

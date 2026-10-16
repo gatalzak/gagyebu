@@ -838,3 +838,8 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 /* 필수 항목이 비면 저장 버튼을 흐리게(눌리지 않음) */
 .btn.primary:disabled { opacity: 0.35; cursor: not-allowed; }
 .req-left { margin-top: 8px; text-align: right; word-break: keep-all; }
+
+/* 현황(상세) 부채 상환: 합계 아래 이번 달 상환 내역 */
+.repay-list-head { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 0 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: calc(0.9rem + var(--fs-up)); }
+.repay-list-head .muted { font-size: calc(0.8rem + var(--fs-up)); }
+.detail-items.repay-items { border-top: 0; }
