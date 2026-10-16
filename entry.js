@@ -105,7 +105,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       title: existing ? "부채 상환 수정" : replaces ? "내역 수정" : "부채 상환",
       body: `
         ${natureSelect("repay")}
-        <div class="field"><label>상환할 부채</label>
+        <div class="field"><label>상환할 부채 <span class="req">*</span></label>
           <select class="input" name="debt">${holdingOptions(["debts"], draft.debt).replace("선택 안 함", "부채를 골라 주세요")}</select>
           <div class="fx-hint" data-debt-hint></div>
           <div class="start-fix" data-start-fix hidden>
@@ -113,17 +113,17 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
             <label class="check-line"><input type="checkbox" name="addStart" ${addStart ? "checked" : ""}> 네, 앱 쓰기 전 사용분이에요 · 시작 잔액에 더하기</label>
           </div>
         </div>
-        <div class="field"><label>출금 자산</label>
-          <select class="input" name="asset">${holdingOptions(["assets"], draft.asset)}</select>
+        <div class="field"><label>출금 자산 <span class="req">*</span></label>
+          <select class="input" name="asset">${holdingOptions(["assets"], draft.asset).replace("선택 안 함", "출금 자산을 골라 주세요")}</select>
           <div class="fx-hint" data-asset-hint></div>
         </div>
-        <div class="field"><label>날짜 · 시간</label>
+        <div class="field"><label>날짜 · 시간 <span class="req">*</span></label>
           <div class="money-line">
             <input class="input" type="date" name="date" value="${draft.date}">
             <input class="input time-input" type="time" name="time" value="${draft.time}">
           </div>
         </div>
-        <div class="field"><label>상환 금액 <span class="muted">(원금)</span></label>
+        <div class="field"><label>상환 금액 <span class="muted">(원금)</span> <span class="req">*</span></label>
           <div class="amount-wrap" data-long="${cur !== "KRW"}">
             <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, cur)}">
             <span class="amount-unit">${unitLabel(cur)}</span>
@@ -134,14 +134,15 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
             <input class="input amount-input" name="interest" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.interest, cur)}">
             <span class="amount-unit">${unitLabel(cur)}</span>
           </div>
-          <p class="note" style="margin-top:6px">원금은 부채에서 빠지고, 이자는 지출(${INTEREST_CAT})로 기록돼요. 이자만 기록하려면 상환 금액을 0으로 두세요. 출금 자산을 비우면 이자는 이 부채에 더해져요(마통 이자 자동 차감처럼).</p>
+          <p class="note" style="margin-top:6px">원금은 부채에서 빠지고, 이자는 지출(${INTEREST_CAT})로 기록돼요. 이자만 기록하려면 상환 금액을 0으로 두세요. 이자만 기록할 때는 출금 자산을 비워도 되고, 그러면 이자가 이 부채에 더해져요(마통 이자 자동 차감처럼).</p>
         </div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 10월 카드값" value="${esc(draft.memo)}"></div>
         ${existing && !S.transactions[existing.id]?.recurId && draft.amount > 0 ? `<button class="btn fav-add-btn rec-add-btn" data-act="add-recur">${HOME_ICONS.반복} 반복 내역으로 등록 <span class="muted">(매달 ${Number(existing.date.slice(8))}일)</span></button>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : `<button class="btn" data-act="cancel">취소</button>`}
-          <button class="btn primary" data-act="save">${existing || replaces ? "저장" : "상환하기"}</button>
-        </div>`,
+          <button class="btn primary" data-act="save" disabled>${existing || replaces ? "저장" : "상환하기"}</button>
+        </div>
+        <p class="note req-left" data-req-left></p>`,
     });
     const $p = (s) => panel.querySelector(s);
     const read = () => {
@@ -193,6 +194,20 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       draw();
     };
     hints();
+    // 필수 항목(*)이 다 채워져야 상환하기 버튼이 눌린다. 빠진 항목은 버튼 아래에 알려 줌
+    const checkReq = () => {
+      const pay = parseMoney(amt.value, cur), intr = parseMoney(intIn.value, cur);
+      const left = [];
+      if (!debt) left.push("상환할 부채");
+      if (pay > 0 && !$p("[name=asset]").value) left.push("출금 자산");
+      if (!$p("[name=date]").value) left.push("날짜");
+      if (!(pay > 0) && !(intr > 0)) left.push("상환 금액");
+      $p("[data-act=save]").disabled = left.length > 0;
+      $p("[data-req-left]").textContent = left.length ? `필수 항목을 채워 주세요 · ${left.join(", ")}` : "";
+    };
+    panel.addEventListener("input", checkReq);
+    panel.addEventListener("change", checkReq);
+    checkReq();
 
     const cancel = $p("[data-act=cancel]");
     if (cancel) cancel.onclick = () => onDone();
@@ -207,6 +222,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       const d = ref && S.debts[ref.id];
       if (!d || d.deleted) return toast("상환할 부채를 골라 주세요.");
       if (draft.amount <= 0 && !(draft.interest > 0)) return toast("상환 금액이나 이자를 입력해 주세요.");
+      if (draft.amount > 0 && !draft.asset) return toast("출금 자산을 골라 주세요.");
       if (draft.amount < 0) return toast("상환 금액을 확인해 주세요.");
       if (!draft.date) return toast("날짜를 입력해 주세요.");
       const now = nowISO();

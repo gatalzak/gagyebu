@@ -834,3 +834,7 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 
 /* 부채 상환 완료: 목록에서 지울지 묻기 */
 .paid-msg { line-height: 1.7; word-break: keep-all; margin: 4px 0 10px; }
+
+/* 필수 항목이 비면 저장 버튼을 흐리게(눌리지 않음) */
+.btn.primary:disabled { opacity: 0.35; cursor: not-allowed; }
+.req-left { margin-top: 8px; text-align: right; word-break: keep-all; }
