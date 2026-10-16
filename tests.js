@@ -218,6 +218,23 @@ test("입력", "내용·거래처가 같은 최근 내역의 카테고리를 고
   eq(G.guessCategory("지출", "", "김밥천국"), null, "내용 없음");
 });
 
+// ---------------- 다 갚고 지운 부채 ----------------
+test("부채", "다 갚고 지운 부채: 지난달 순자산에는 남고, 남은 내역 정리 대상이 아님", (G) => {
+  G.reset({
+    assets: byId([asset("a", "통장", 100000)]),
+    debts: byId([debt("p", "휴대폰 요금 9월", 75740, "미납금", { createdAt: "2026-09-01T00:00:00.000Z" })]),
+    transactions: byId([repay("r", "2026-10-05", 75740, "p", "a")]),
+  });
+  eq(Math.round(G.holdingsAt("2026-09-30").net), 100000 - 75740, "지우기 전 9월 말");
+  G.S.debts.p = { ...G.S.debts.p, deleted: true, paidOff: true };
+  G.clearCache();
+  eq(Math.round(G.holdingsAt("2026-09-30").net), 100000 - 75740, "지운 뒤에도 9월 말은 그대로");
+  eq(Math.round(G.holdingsAt("2026-10-31").net), 100000 - 75740, "10월 말");
+  eq(G.orphanTxs().length, 0, "정리할 내역 없음");
+  G.S.debts.p = { ...G.S.debts.p, paidOff: false };
+  eq(G.orphanTxs().length, 1, "그냥 지운 부채는 정리 대상");
+});
+
 // ---------------- 사진 정리 ----------------
 test("사진 정리", "안 쓰는 사진만 정리: 드라이브는 휴지통(2일 안 된 파일 제외), 기기 사진 삭제", async () => {
   const now = Date.parse("2026-10-12T00:00:00Z");

@@ -3,7 +3,7 @@ import { saveState, uid, nowISO } from "./store.js";
 import { CURRENCIES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates } from "./fx.js";
 import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
 import { $, EXPENSE_TYPES, KIND_CLASS, KIND_SIGN, S, debtType, esc, fmtAmount, nowTime, parseAmount, signed, toast, todayStr, ui } from "./core.js";
-import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addPhrase, addSubcat, amountInCurrency, applyFav, balanceOf, catsFor, curOf, deltaRef, dropTx, favFromDraft, favKey, guessCategory, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, livePhrases, natureDraft, natureOf, newTxDraft, parseLinkKey, removePhrase, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
+import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addPhrase, addSubcat, amountInCurrency, applyFav, balanceOf, catsFor, clearLinkCache, curOf, deltaRef, dropTx, favFromDraft, favKey, guessCategory, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, livePhrases, natureDraft, natureOf, newTxDraft, parseLinkKey, removePhrase, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
 import { CAMERA, HOME_ICONS, PENCIL, STAR, bindAmount, closeModal, holdingHelp, holdingOptions, openModal } from "./uikit.js";
 import { registerRecurring } from "./home.js";
 import { openCategoryEditor, openHoldingsDialog } from "./manage.js";
@@ -26,6 +26,44 @@ export async function openPhotoViewer(id) {
 }
 
 // ---------------- 화면 그리기 ----------------
+/** 상환 저장·삭제 뒤: 다 갚아 0원이 된 부채는 목록에서 지울지 묻고, 지웠던(다 갚은) 부채에 다시 잔액이 생기면 목록에 되살린다.
+ *  신용카드·마이너스 통장은 계속 쓰는 것이라 묻지 않는다. 지워도 상환 기록·지난 순자산은 그대로(paidOff) */
+async function afterRepay(debtId, paid) {
+  const d = debtId && S.debts[debtId];
+  if (!d) return;
+  clearLinkCache();
+  const bal = balanceOf("debts", d);
+  if (d.deleted && d.paidOff && bal !== 0) {
+    S.debts[d.id] = { ...d, deleted: false, paidOff: false, updatedAt: nowISO() };
+    await saveState(S);
+    scheduleSync();
+    clearLinkCache();
+    render();
+    return;
+  }
+  if (!paid || d.deleted || bal !== 0 || CARD_MODES.includes(debtType(d))) return;
+  setTimeout(() => {
+    const panel = openModal({
+      title: "부채 상환 완료",
+      center: true,
+      body: `
+        <p class="paid-msg">'${esc(d.name)}' 부채를 모두 상환해서 <span class="inc">0원</span>이 되었어요.<br>나의 부채 목록에서 삭제할까요?</p>
+        <p class="note">삭제해도 상환 기록은 내역에 그대로 남아요.</p>
+        <div class="btn-row"><button class="btn" data-paid-keep>그대로 두기</button><button class="btn primary" data-paid-del>예, 삭제</button></div>`,
+    });
+    panel.querySelector("[data-paid-keep]").onclick = () => { closeModal(); render(); };
+    panel.querySelector("[data-paid-del]").onclick = async () => {
+      S.debts[d.id] = { ...S.debts[d.id], deleted: true, paidOff: true, updatedAt: nowISO() };
+      await saveState(S);
+      scheduleSync();
+      clearLinkCache();
+      closeModal();
+      render();
+      toast(`'${d.name}'을(를) 나의 부채에서 삭제했어요`);
+    };
+  }, 0);
+}
+
 export function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal, preset = null, replaces = null, onBack = null } = {}) {
   const prevDebt = existing?.deltas?.find((d) => d.col === "debts");
   const prevAsset = existing?.deltas?.find((d) => d.col === "assets");
@@ -252,6 +290,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       await saveState(S);
       scheduleSync();
       onDone();
+      afterRepay(d.id, draft.amount > 0);
       toast(draft.amount > 0
         ? `${d.name} ${formatMoney(draft.amount, dcur)} 상환했어요${draft.interest > 0 ? ` · 이자 ${formatMoney(draft.interest, dcur)} → 지출` : ""}`
         : `${d.name} 이자 ${formatMoney(draft.interest, dcur)} 지출로 기록했어요${aRef ? "" : ` · ${d.name}에 더해짐`}`);
@@ -265,6 +304,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       await saveState(S);
       scheduleSync();
       onDone();
+      afterRepay(prevDebt?.id, false);
       toast(`상환 기록을 삭제했어요${liveInterest ? " · 이자 기록도" : ""} · 잔액도 되돌렸어요`);
     };
   };

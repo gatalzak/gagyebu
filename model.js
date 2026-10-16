@@ -396,7 +396,7 @@ export function holdingsAt(endDate) {
   const out = { assets: {}, debts: {}, asset: 0, debt: 0 };
   for (const col of ["assets", "debts"]) {
     for (const a of Object.values(S[col])) {
-      if (a.deleted) continue;
+      if (a.deleted && !a.paidOff) continue; // 다 갚고 지운 부채는 지난 달 순자산 계산에 남긴다(지금은 0원)
       const bal = a.base === undefined ? a.amount || 0 : a.base + (sums.get(`${col}:${a.id}`) || 0);
       const v = toKRW(roundFor(bal, curOf(a)), curOf(a)) ?? 0;
       const type = col === "debts" ? debtType(a) : a.type;
@@ -412,7 +412,7 @@ export const hasHoldings = () => ["assets", "debts"].some((c) => Object.values(S
 export function netStartMonth() {
   let m = todayStr().slice(0, 7);
   for (const t of liveTx()) if ((t.assetDelta || t.deltas?.length) && t.date.slice(0, 7) < m) m = t.date.slice(0, 7);
-  for (const c of ["assets", "debts"]) for (const a of Object.values(S[c])) if (!a.deleted && a.createdAt && a.createdAt.slice(0, 7) < m) m = a.createdAt.slice(0, 7);
+  for (const c of ["assets", "debts"]) for (const a of Object.values(S[c])) if ((!a.deleted || a.paidOff) && a.createdAt && a.createdAt.slice(0, 7) < m) m = a.createdAt.slice(0, 7);
   return m;
 }
 
@@ -719,7 +719,7 @@ export function linkedTxs(col, ids) {
 }
 /** 지워진(또는 없는) 자산·부채에 연결된 채 남은 내역 */
 export function orphanTxs() {
-  return liveTx().filter((t) => [deltaRef(t.assetDelta), ...(t.deltas || [])].some((x) => x && (!S[x.col]?.[x.id] || S[x.col][x.id].deleted)));
+  return liveTx().filter((t) => [deltaRef(t.assetDelta), ...(t.deltas || [])].some((x) => x && (!S[x.col]?.[x.id] || (S[x.col][x.id].deleted && !S[x.col][x.id].paidOff)))); // 다 갚고 지운 부채의 내역은 정리 대상 아님
 }
 /** 내역 한 줄 요약: '10/7 동생 차입 300,000원' */
 export function txBrief(t) {

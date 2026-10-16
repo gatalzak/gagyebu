@@ -831,3 +831,6 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 /* 푸터 통계·순자산: 위 탭(현황·내역…) 글자 크기와 같게 */
 .app-footer .ft-row .ft-link { font-size: calc(0.94rem + var(--fs-up)); padding: 8px 4px; gap: 6px; }
 .app-footer .ft-row .ft-ico { width: 17px; height: 17px; }
+
+/* 부채 상환 완료: 목록에서 지울지 묻기 */
+.paid-msg { line-height: 1.7; word-break: keep-all; margin: 4px 0 10px; }
