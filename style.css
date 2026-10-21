@@ -850,3 +850,8 @@ input[type="date"], input[type="time"] { cursor: pointer; }
   display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; line-height: 1; color: var(--muted); background: #2c2c32; }
 .amount-clear[hidden] { display: none; }
 .amount-clear:active { background: #3a3a42; color: var(--text); }
+
+/* 자주 쓰는 자산이동 */
+.btn.route-pick-btn { margin-top: 14px; display: flex; align-items: center; justify-content: center; gap: 7px; color: #ececef; }
+.route-item .rt-block { flex: 1; min-width: 0; }
+.route-n { flex: none; font-size: calc(0.8rem + var(--fs-up)); }

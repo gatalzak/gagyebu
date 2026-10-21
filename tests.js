@@ -235,6 +235,17 @@ test("부채", "다 갚고 지운 부채: 지난달 순자산에는 남고, 남�
   eq(G.orphanTxs().length, 1, "그냥 지운 부채는 정리 대상");
 });
 
+// ---------------- 자주 쓰는 자산이동 ----------------
+test("입력", "자주 쓰는 자산이동: 많이 쓴 경로 순(같으면 최근 것), 상환·지운 자산은 뺌", (G) => {
+  const mv = (id, date, o, n) => tx({ id, date, kind: "자산이동", amount: 1000, deltas: [{ col: "assets", id: o, amount: -1000 }, { col: "assets", id: n, amount: 1000 }] });
+  G.reset({
+    assets: byId([asset("a", "통장", 0), asset("s", "증권", 0, "증권"), asset("w", "비상금", 0), asset("x", "지운 통장", 0, "은행", { deleted: true })]),
+    debts: byId([debt("c", "카드", 0)]),
+    transactions: byId([mv("1", "2026-09-01", "a", "s"), mv("2", "2026-09-02", "a", "s"), mv("3", "2026-09-03", "a", "w"), mv("4", "2026-10-01", "s", "a"), mv("5", "2026-10-02", "a", "x"), repay("6", "2026-10-03", 1000, "c", "a")]),
+  });
+  eq(G.frequentRoutes().map((r) => `${r.from}>${r.to}:${r.count}`), ["a>s:2", "s>a:1", "a>w:1"]);
+});
+
 // ---------------- 사진 정리 ----------------
 test("사진 정리", "안 쓰는 사진만 정리: 드라이브는 휴지통(2일 안 된 파일 제외), 기기 사진 삭제", async () => {
   const now = Date.parse("2026-10-12T00:00:00Z");

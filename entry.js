@@ -3,7 +3,7 @@ import { saveState, uid, nowISO } from "./store.js";
 import { CURRENCIES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates } from "./fx.js";
 import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
 import { $, EXPENSE_TYPES, KIND_CLASS, KIND_SIGN, S, debtType, esc, fmtAmount, nowTime, parseAmount, signed, toast, todayStr, ui } from "./core.js";
-import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addPhrase, addSubcat, amountInCurrency, applyFav, balanceOf, catsFor, clearLinkCache, curOf, deltaRef, dropTx, favFromDraft, favKey, guessCategory, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, livePhrases, natureDraft, natureOf, newTxDraft, parseLinkKey, removePhrase, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
+import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addPhrase, addSubcat, amountInCurrency, applyFav, balanceOf, catsFor, clearLinkCache, curOf, deltaRef, dropTx, favFromDraft, favKey, frequentRoutes, guessCategory, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, livePhrases, natureDraft, natureOf, newTxDraft, parseLinkKey, removePhrase, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
 import { CAMERA, HOME_ICONS, PENCIL, STAR, bindAmount, closeModal, holdingHelp, holdingOptions, openModal } from "./uikit.js";
 import { registerRecurring } from "./home.js";
 import { openCategoryEditor, openHoldingsDialog } from "./manage.js";
@@ -461,6 +461,36 @@ export function openKindPicker(presetDate) {
   });
 }
 
+const ROUTE_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h13"/><path d="M14 4.5 17.5 8 14 11.5"/><path d="M20 16H7"/><path d="M10 12.5 6.5 16 10 19.5"/></svg>`;
+/** 자주 쓰는 자산이동 창: 내역 창 위에 띄우고, 고르면 닫고 onPick(경로) */
+function openRouteSheet(onPick) {
+  document.getElementById("phrase-sheet")?.remove();
+  const el = document.createElement("div");
+  el.id = "phrase-sheet";
+  el.className = "overlay sheet-overlay";
+  const list = frequentRoutes();
+  const end = (id) => { const a = S.assets[id]; return `<span class="rt-end"><span>${esc(a.name)}</span><span class="rt-type">(${esc(a.type)})</span></span>`; };
+  el.innerHTML = `
+    <div class="panel" role="dialog" aria-label="자주 쓰는 자산이동">
+      <div class="panel-head center">
+        <div class="head-left"></div><h2>자주 쓰는 자산이동</h2>
+        <div class="head-actions"><button class="x-btn" data-sheet-close aria-label="닫기">✕</button></div>
+      </div>
+      <div class="panel-body">
+        ${list.length ? `
+        <div class="ps-head"><span class="muted">많이 쓴 순서 · 누르면 출금·입금 자산이 채워져요</span></div>
+        <div class="ps-list">${list.map((r, i) => `<button class="ps-item route-item" data-route="${i}">
+          <span class="rt-block">${end(r.from)}<span class="rt-arrow">→</span>${end(r.to)}</span>
+          <span class="route-n muted">${r.count}회</span></button>`).join("")}</div>` : `
+        <p class="note ps-empty">아직 자산이동 내역이 없어요. 자산이동을 기록하면, 많이 쓴 출금 자산 → 입금 자산이 여기에 차례로 모여요.</p>`}
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  const close = () => el.remove();
+  el.querySelector("[data-sheet-close]").onclick = close;
+  el.querySelectorAll("[data-route]").forEach((b) => (b.onclick = () => { close(); onPick(list[Number(b.dataset.route)]); }));
+}
+
 /** 자주 쓰는 내용·거래처 창: 내역 창을 닫지 않고 그 위에 띄운다 */
 function openPhraseSheet({ field, kind, current, onPick, onChange }) {
   const name = field === "content" ? "내용" : "거래처";
@@ -612,6 +642,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
         ${draft.kind === "지출" ? `<div class="field" data-pay-field hidden><label>결제 수단 <span class="req">*</span></label>
           <select class="input" name="pay"></select></div>` : ""}` : ""}
         ${draft.kind === "자산이동" ? `
+        <button class="btn route-pick-btn" data-route-pick>${ROUTE_ICON}자주 쓰는 자산이동</button>
         <div class="field"><label>출금 자산 <span class="req">*</span></label>
           <select class="input" name="fromAsset">${holdingOptions(["assets"], draft.fromAsset, { balance: false })}</select>
           <div class="fx-hint tx-hint exp" data-from-hint></div>
@@ -767,6 +798,14 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
     };
     ["content", "party"].forEach((f) => $p(`[name=${f}]`)?.addEventListener("change", autoCat));
     // 자주 쓰는 내용·거래처: 별을 누르면 내역 창 위에 큰 창(목록을 누르면 바로 채움, 새로 등록, 편집으로 삭제)
+    // 자주 쓰는 자산이동: 많이 쓴 '출금 → 입금' 목록에서 고르면 두 칸을 채움
+    const rp = $p("[data-route-pick]");
+    if (rp) rp.onclick = () => openRouteSheet((r) => {
+      read();
+      draft.fromAsset = linkKey("assets", r.from);
+      draft.toAsset = linkKey("assets", r.to);
+      draw();
+    });
     panel.querySelectorAll("[data-phrase]").forEach((btn) => (btn.onclick = () => {
       const field = btn.dataset.phrase;
       const input = $p(`[name=${field}]`);

@@ -748,3 +748,21 @@ export function guessCategory(kind, content, party) {
   const hit = liveTx().filter((t) => t.kind === kind && t.category && (t.content || "").trim() === c && (t.party || "").trim() === p).sort(txNewestFirst)[0];
   return hit ? { category: hit.category, subcategory: hit.subcategory || "" } : null;
 }
+
+// ---------------- 자주 쓰는 자산이동 경로 ----------------
+/** 지금까지 자산이동(상환·차입 제외)에 쓴 '출금 자산 → 입금 자산'을 많이 쓴 순서로(같으면 최근 것 먼저). 지운 자산은 뺌 */
+export function frequentRoutes() {
+  const by = new Map();
+  for (const t of liveTx()) {
+    if (!isMoveTx(t)) continue;
+    const ds = t.deltas || [];
+    const o = ds.find((x) => x.col === "assets" && x.amount < 0)?.id, n = ds.find((x) => x.col === "assets" && x.amount > 0)?.id;
+    if (!o || !n || o === n || !S.assets[o] || S.assets[o].deleted || !S.assets[n] || S.assets[n].deleted) continue;
+    const k = `${o}>${n}`;
+    const r = by.get(k) || { from: o, to: n, count: 0, last: "" };
+    r.count += 1;
+    if (t.date > r.last) r.last = t.date;
+    by.set(k, r);
+  }
+  return [...by.values()].sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
+}
