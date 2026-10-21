@@ -843,3 +843,10 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .repay-list-head { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 0 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: calc(0.9rem + var(--fs-up)); }
 .repay-list-head .muted { font-size: calc(0.8rem + var(--fs-up)); }
 .detail-items.repay-items { border-top: 0; }
+
+/* 금액 칸 지우기 ✕ (칸 왼쪽, 숫자는 오른쪽 정렬이라 겹치지 않음) */
+.amount-wrap .amount-input { padding-left: 38px; }
+.amount-clear { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; line-height: 1; color: var(--muted); background: #2c2c32; }
+.amount-clear[hidden] { display: none; }
+.amount-clear:active { background: #3a3a42; color: var(--text); }

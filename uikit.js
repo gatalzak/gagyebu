@@ -46,10 +46,35 @@ export function openModal({ title, headExtra = "", body, cls = "", onBack = null
       </div>
     </div>`;
   const root = $("#modal-root");
+  addAmountClear(root);
   root.querySelector("[data-close]").onclick = closeModal; // 창 밖 여백을 눌러도 닫히지 않고, ✕(또는 창 안의 닫기·취소)로만 닫힌다
   if (onBack) root.querySelector("[data-back]").onclick = onBack;
   if (keepScroll) root.querySelector(".overlay").scrollTop = prevScroll;
   return root.querySelector(".panel");
+}
+/** 금액 칸 왼쪽의 작은 ✕: 누르면 금액을 비우고 바로 다시 입력(숫자가 있을 때만 보임) */
+function addAmountClear(root) {
+  root.querySelectorAll(".amount-wrap").forEach((wrap) => {
+    const input = wrap.querySelector("input");
+    if (!input || input.disabled || input.readOnly || wrap.querySelector(".amount-clear")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "amount-clear";
+    btn.setAttribute("aria-label", "금액 지우기");
+    btn.textContent = "✕";
+    const sync = () => (btn.hidden = !input.value);
+    btn.onclick = () => {
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      sync();
+      input.focus();
+    };
+    input.addEventListener("input", sync);
+    input.addEventListener("focus", sync); // 다른 칸이 값을 채워 넣은 경우도
+    wrap.appendChild(btn);
+    sync();
+  });
 }
 export function closeModal() {
   menuBack = null;
