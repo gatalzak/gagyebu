@@ -891,3 +891,20 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .nw-notes li::before { content: "•"; position: absolute; left: 2px; top: 0; }
 .app-footer .ft-meta { margin-top: 0; }
 .set-list + .set-list { border-top: 0; } /* 묶음 사이 줄은 하나만 */
+
+/* 처음 쓰는 사람용 '시작하기' 칸 */
+.start-card { border-color: #5a2a36; }
+.st-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.st-step { display: flex; align-items: center; gap: 12px; }
+.st-no { flex: none; width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--wine); color: #fff; font-size: 0.85rem; }
+.st-step.done .st-no { background: var(--green-bg); color: var(--green-text); border: 1px solid var(--green-line); }
+.st-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.st-title { font-size: calc(0.95rem + var(--fs-up)); }
+.st-step.done .st-title { color: var(--muted); }
+.st-desc { color: var(--muted); font-size: calc(0.78rem + var(--fs-up)); line-height: 1.5; word-break: keep-all; }
+.st-btn { flex: none; padding: 7px 12px; border: 1px solid #3a3a42; border-radius: 4px; background: var(--row); font-size: calc(0.82rem + var(--fs-up)); white-space: nowrap; }
+.st-step:not(.done) .st-btn { border-color: var(--wine); color: #fff; background: var(--wine); }
+.start-bal-note { margin-top: 6px; word-break: keep-all; }
+.st-step.opt:not(.done) .st-btn { border-color: #3a3a42; background: var(--row); color: var(--text); } /* 선택 단계는 회색 버튼 */
+.st-step.opt:not(.done) .st-no { background: var(--row); color: var(--muted); border: 1px solid #3a3a42; }

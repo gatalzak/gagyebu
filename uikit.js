@@ -118,7 +118,11 @@ export function bindAmount(input) {
 /** 금액칸 단위 표시: 원화는 '원', 외화는 통화 코드 */
 export function holdingHelp(cols) {
   const has = cols.some((col) => Object.values(S[col]).some((a) => !a.deleted));
-  const msg = has ? "찾는 항목이 없나요?" : cols.includes("debts") ? "등록된 자산·부채가 없어요. 등록해 두면 잔액이 자동으로 바뀌어요." : "등록된 자산이 없어요. 등록해 두면 잔액이 자동으로 바뀌어요.";
+  // 처음엔 고를 항목이 없어 저장이 안 되므로 '먼저 등록'을 분명히
+  const msg = has ? "찾는 항목이 없나요?"
+    : !cols.includes("assets") ? "아직 등록한 신용카드·부채가 없어요. 아래에서 먼저 등록해 주세요."
+    : cols.includes("debts") ? "아직 등록한 자산·부채가 없어요. 아래에서 먼저 등록해 주세요."
+    : "아직 등록한 통장·현금이 없어요. 아래에서 먼저 등록해 주세요. 등록하면 잔액이 내역에 따라 자동으로 바뀌어요.";
   return `<div class="holding-help${has ? "" : " no-holding"}"><span>${msg}</span>
     ${cols.map((col) => `<button class="reg-link" data-reg="${col}">+ ${col === "debts" ? "부채(신용카드 등)" : "자산"} 등록</button>`).join("")}</div>`;
 }

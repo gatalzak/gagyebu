@@ -5,6 +5,7 @@ import { $, DEBT_TYPES, EXPENSE_TYPES, S, debtType, esc, fmtAmount, liveTx, mont
 import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, dropTx, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, orphanTxs, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon, txBrief } from "./model.js";
 import { SUM_ICON, bindAmount, closeModal, homeLabel, openModal } from "./uikit.js";
 import { networthBody } from "./settle.js";
+import { isConfigured, isConnected } from "./sync.js";
 import { txRow } from "./list.js";
 import { openRepayDialog, openTxDialog } from "./entry.js";
 import { commit, main, render, scheduleSync } from "./app.js";
@@ -484,6 +485,28 @@ function moveCatTotals(list) {
   return Object.entries(by).sort((a, b) => b[1] - a[1]);
 }
 
+/** 처음 쓰는 사람용 '시작하기' 칸: 내역이 하나도 없을 때만 현황 맨 위에. 첫 내역을 저장하면 사라짐 */
+function startCard() {
+  if (liveTx().length) return "";
+  const hasAsset = Object.values(S.assets).some((a) => !a.deleted);
+  const drive = isConfigured() && isConnected();
+  const step = (n, done, title, desc, act, btn) => `
+    <li class="st-step${done ? " done" : ""}${act === "backup" ? " opt" : ""}">
+      <span class="st-no">${done ? "✓" : n}</span>
+      <span class="st-txt"><span class="st-title">${title}</span><span class="st-desc">${desc}</span></span>
+      <button class="st-btn" data-start="${act}">${btn}</button>
+    </li>`;
+  return `
+  <section class="card start-card">
+    <div class="card-head plain"><span>가탈작 가계부 시작하기</span></div>
+    <ol class="st-steps">
+      ${step(1, hasAsset, "통장·현금 등록", "돈이 들어오고 나가는 곳이에요. 지금 잔액을 넣어 두면 내역에 따라 저절로 바뀌어요.", "assets", hasAsset ? "더 등록" : "등록")}
+      ${step(2, false, "첫 내역 기록", "아래 + 버튼을 눌러 쓴 돈·받은 돈을 성격(수입·지출 등)부터 골라 적어요.", "add", "기록")}
+      ${step(3, drive, "드라이브 연결 <span class=\"muted\">(선택)</span>", "구글 드라이브에 저장해 두면 폰을 바꾸거나 여러 기기에서 써도 내역이 그대로예요.", "backup", drive ? "보기" : "연결")}
+    </ol>
+  </section>`;
+}
+
 export function homeView(part = "summary") {
   const tx = monthTx();
   const inc = tx.filter((t) => t.kind === "수입");
@@ -607,6 +630,7 @@ export function homeView(part = "summary") {
     ${body}
   </section>`;
   const summary = `
+  ${startCard()}
   ${orphanBar()}
   ${netWorthLine()}
   <section class="card">

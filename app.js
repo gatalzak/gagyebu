@@ -9,7 +9,7 @@ import { budgetSection, homeTabs, homeView, openBudgetDialog, openCardDialog, op
 import { catTrendSection, exportSettlement, networthBody, settleView } from "./settle.js";
 import { bindSearch, calendarView, listView, monthlyView, openFilterDialog } from "./list.js";
 import { openKindPicker, openRepayDialog, openTxDialog } from "./entry.js";
-import { fillVersion, footerHTML, openFooterLink, openHoldingsDialog, openSettingsMenu, renderBackupBar, renderSyncBar } from "./manage.js";
+import { fillVersion, footerHTML, openBackupDialog, openFooterLink, openHoldingsDialog, openSettingsMenu, renderBackupBar, renderSyncBar } from "./manage.js";
 export async function commit() {
   await saveState(S);
   render();
@@ -119,6 +119,13 @@ export function bindEvents() {
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
     if (e.target.closest("[data-orphans]")) return openOrphanDialog();
+    const st = e.target.closest("[data-start]"); // 시작하기 칸
+    if (st) {
+      const k = st.dataset.start;
+      if (k === "assets") return openHoldingsDialog("assets", { startAdd: !Object.values(S.assets).some((x) => !x.deleted), onDone: () => { closeModal(); render(); } });
+      if (k === "add") return openKindPicker();
+      return openBackupDialog();
+    }
     if (e.target.closest("[data-filter-open]")) return openFilterDialog();
     if (e.target.closest("[data-filter-reset]")) { ui.filter = emptyFilter(); render(); return; }
     const off = e.target.closest("[data-chip-off]");

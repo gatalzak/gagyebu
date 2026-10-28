@@ -203,15 +203,18 @@ export function renderSyncBar() {
   if (show) bar.textContent = SYNC_TEXT[sync.status];
 }
 
-// 백업 알림: 마지막 백업 파일 저장 후 BACKUP_DAYS일이 지나면(한 번도 안 했으면 바로) 위에 알림줄.
+// 백업 알림: 마지막 백업 파일 저장 후 BACKUP_DAYS일이 지나면(한 번도 안 했으면 첫 내역 BACKUP_FIRST_DAYS일 뒤) 위에 알림줄.
 // '나중에'를 누르면 BACKUP_SNOOZE_DAYS일 뒤에 다시. 기록은 기기별(meta)이다.
-export const BACKUP_DAYS = 30, BACKUP_SNOOZE_DAYS = 7, DAY_MS = 86400000;
+export const BACKUP_DAYS = 30, BACKUP_SNOOZE_DAYS = 7, BACKUP_FIRST_DAYS = 7, DAY_MS = 86400000;
 export function renderBackupBar() {
   const bar = $("#backup-bar");
   const now = Date.now();
   const last = S.meta.lastBackup ? Date.parse(S.meta.lastBackup) : null;
   const snoozed = S.meta.backupSnooze && Date.parse(S.meta.backupSnooze) > now;
-  const due = liveTx().length > 0 && !snoozed && (!last || now - last >= BACKUP_DAYS * DAY_MS);
+  // 한 번도 백업 안 했으면 첫 내역을 기록하고 BACKUP_FIRST_DAYS일 뒤부터(첫날부터 알림이 뜨지 않게)
+  const first = liveTx().reduce((m, x) => (x.createdAt && x.createdAt < m ? x.createdAt : m), "9999");
+  const firstOld = first !== "9999" && now - Date.parse(first) >= BACKUP_FIRST_DAYS * DAY_MS;
+  const due = liveTx().length > 0 && !snoozed && (last ? now - last >= BACKUP_DAYS * DAY_MS : firstOld);
   bar.hidden = !due;
   if (!due) return;
   bar.innerHTML = `
@@ -601,9 +604,9 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
           <input class="input" name="card" placeholder="예: KB체크카드">
           <p class="note" style="margin-top:6px">지출할 때 이 계좌가 '국민763 | KB체크카드'처럼 함께 보이고, 내역에 결제수단으로 남아요.</p></div>` : ""}
         <div class="field"><label>통화</label><select class="input" name="currency">${currencyOptions("KRW")}</select></div>
-        <div class="field"><label data-amt-label>금액</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
+        <div class="field"><label data-amt-label>${col === "debts" ? "지금 남은 금액" : "지금 잔액"}</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
           <div class="fx-hint" data-hint></div>
-          ${col === "debts" ? `<p class="note start-bal-note" data-amt-note hidden></p>` : ""}</div>
+          ${col === "debts" ? `<p class="note start-bal-note" data-amt-note hidden></p>` : `<p class="note start-bal-note">통장 앱이나 지갑에 지금 있는 금액을 넣으세요. 앞으로 내역을 기록하면 잔액이 저절로 바뀌어요.</p>`}</div>
         ${col === "debts" ? `<div class="field" data-loan-field><label>받은 돈 입금 자산 <span class="muted">(선택)</span></label>
           <select class="input" name="loanAsset">${holdingOptions(["assets"], "", { balance: false })}</select>
           <p class="note" style="margin-top:6px">새로 대출을 받아 통장에 들어왔다면 고르세요. 부채와 입금 자산이 같이 늘고 '부채 발생' 내역이 남아요(수입 아님). 예전부터 있던 빚이면 비워 두세요.</p>
@@ -629,7 +632,7 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
       };
       const toggleStart = () => {
         const t = START_LABEL[typeSel.value];
-        panel.querySelector("[data-amt-label]").textContent = t ? t[0] : "금액";
+        panel.querySelector("[data-amt-label]").textContent = t ? t[0] : "지금 남은 금액";
         amtNote.hidden = !t;
         amtNote.textContent = t ? t[1] : "";
         panel.querySelector("[data-loan-field]").hidden = !!t; // 카드·마통은 '받은 돈'이 없음
