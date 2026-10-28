@@ -291,12 +291,10 @@ const ICONS = {
   stats: ico('<path d="M4 20h16"/><path d="M7 16v-5"/><path d="M12 16V6"/><path d="M17 16v-8"/>'), // 막대그래프(통계)
   networth: ico('<path d="M3.5 17l5.5-5.5 4 4 7.5-7.5"/><path d="M15 8h5.5v5.5"/>'), // 오르는 선(순자산)
 };
-/** 모든 탭 맨 아래: 통계 · 순자산 창 지름길 + 앱 버전 */
+/** 모든 탭 맨 아래: 앱 버전 · 개인정보처리방침 · 이용약관 (통계·순자산은 홈 위 메뉴에) */
 export function footerHTML() {
-  const links = [["stats", `${ICONS.stats}통계`], ["networth", `${ICONS.networth}순자산`]];
   return `
   <footer class="app-footer">
-    <nav class="ft-links"><div class="ft-row">${links.map(([k, t]) => `<button class="ft-link ft-main" data-ft="${k}">${t}</button>`).join("")}</div></nav>
     <div class="ft-meta">가탈작 가계부 <span data-app-ver></span> · <a href="privacy.html">개인정보처리방침</a> · <a href="terms.html">이용약관</a></div>
   </footer>`;
 }
