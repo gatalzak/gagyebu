@@ -890,3 +890,4 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .nw-notes li + li { margin-top: 4px; }
 .nw-notes li::before { content: "•"; position: absolute; left: 2px; top: 0; }
 .app-footer .ft-meta { margin-top: 0; }
+.set-list + .set-list { border-top: 0; } /* 묶음 사이 줄은 하나만 */
