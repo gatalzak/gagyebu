@@ -197,7 +197,8 @@ export function catTrendSection() {
       <div class="row-sub ct-avg-row"><span><i class="ct-avg-sw" aria-hidden="true"></i>${avgIdx.length < months.length ? `${avgIdx.length}개월` : "6개월"} 평균 (점선)</span><span>${won(Math.round(avg))}</span></div>
     </div>
     <ul class="note nw-notes ct-notes">
-      <li>평균과 비교 <span class="${!avg || Math.abs(diff) < 1 ? "muted" : diff > 0 ? "exp" : "inc"}">${!avg ? "-" : Math.abs(diff) < 1 ? "평균과 같아요" : `${diff > 0 ? "▲" : "▼"} ${won(Math.abs(Math.round(diff)))} ${diff > 0 ? "더 씀" : "덜 씀"}`}</span></li>
+      <li>${avg && Math.abs(diff) < 1 ? "평균 지출 금액과 이번 달 지출 금액이 같아요"
+        : `평균 지출 금액에 비해: <span class="${!avg ? "muted" : diff > 0 ? "exp" : "inc"}">${!avg ? "-" : `${diff > 0 ? "▲" : "▼"} ${won(Math.abs(Math.round(diff)))} ${diff > 0 ? "더 씀" : "덜 씀"}`}</span>`}</li>
       <li>막대를 누르면 그 달 결산으로 바뀌어요.</li>
       ${used.length < 3 ? "<li>기록이 쌓일수록 추이가 정확해져요.</li>" : ""}
     </ul>
