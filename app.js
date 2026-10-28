@@ -97,9 +97,7 @@ export function bindEvents() {
   document.querySelectorAll("nav.tabs button").forEach((b) => (b.onclick = () => goTab(b.dataset.tab)));
   bindBackButton();
   $("#fab").onclick = () => openKindPicker(ui.tab === "calendar" && ui.day ? ui.day : undefined);
-  $("#open-assets").onclick = () => openHoldingsDialog("assets");
-  $("#open-debts").onclick = () => openHoldingsDialog("debts");
-  $("#open-settings").onclick = openSettingsMenu;
+  $("#open-menu").onclick = openSettingsMenu;
   $("#sync-bar").onclick = () => (sync.status === "need-login" ? connect() : runSync());
   // 앱으로 돌아왔을 때: 토큰이 끝났으면(창이 열려 있지 않을 때) 조용히 재로그인, 아니면 바로 동기화
   const idle = () => !SELFTEST && document.visibilityState === "visible" && !$("#modal-root").children.length; // 테스트 모드에선 로그인·동기화 안 함

@@ -860,3 +860,16 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .text-clear-wrap { position: relative; display: block; flex: 1; min-width: 0; }
 .text-clear-wrap .input { display: block; width: 100%; padding-right: 40px; }
 .amount-clear.text-clear { left: auto; right: 7px; }
+
+/* 홈 위 햄버거 메뉴: 달(‹ 2026년 10월 ›) 오른쪽, 금액 보기 눈은 왼쪽으로 */
+.menu-btn { position: absolute; right: 0; top: 3px; padding: 6px; color: var(--text); display: inline-flex; border-radius: 3px; }
+.menu-btn:active { background: var(--row); }
+.topbar .eye-btn { right: auto; left: 0; }
+/* 메뉴 창: 나의 자산(초록)·나의 부채(레드)는 색을 살린 칸, 나머지는 묶음별 목록 */
+.set-tones { display: flex; flex-direction: column; gap: 8px; }
+.set-item.set-tone { border: 1px solid; border-radius: 4px; padding: 14px 12px; }
+.set-item.set-tone.asset-tone { background: var(--green-bg); border-color: var(--green-line); color: var(--green-text); }
+.set-item.set-tone.debt-tone { background: #3a1d24; border-color: #5e2a35; color: #ffc9d2; }
+.set-item.set-tone .set-ico, .set-item.set-tone .set-desc, .set-item.set-tone .set-go { color: inherit; }
+.set-item.set-tone .set-desc { opacity: 0.75; }
+.set-tones + .set-list, .set-list + .set-list { margin-top: 18px; }

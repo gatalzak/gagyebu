@@ -300,25 +300,40 @@ export function footerHTML() {
     <div class="ft-meta">가탈작 가계부 <span data-app-ver></span> · <a href="privacy.html">개인정보처리방침</a> · <a href="terms.html">이용약관</a></div>
   </footer>`;
 }
-// 홈 위 '설정' 창: 가끔 들어가는 관리 창 모음
-const SETTING_ITEMS = [
-  ["settings", LOCK_ICON, "보안 설정", "앱 잠금(PIN·지문), 금액 가리기"],
-  ["budget", ICONS.budget, "예산 설정", "카테고리별·전체 한 달 예산"],
-  ["recur", ICONS.recur, "반복 내역 설정", "월세·구독료처럼 매달 나가는 내역"],
-  ["cats", ICONS.cats, "카테고리 설정", "카테고리·하위 카테고리 추가, 이름·순서 바꾸기"],
-  ["backup", ICONS.backup, "백업/복원", "드라이브 동기화, 백업 파일·엑셀 저장, 불러오기"],
+// 홈 위 햄버거 '메뉴' 창: 나의 자산·부채(색 그대로) / 순자산·통계 / 설정 모음
+const WALLET = ico('<path d="M4 7a2 2 0 0 1 2-2h11v4"/><path d="M4 7v10a2 2 0 0 0 2 2h13V9H6a2 2 0 0 1-2-2z"/><circle cx="15.5" cy="14" r="1"/>');
+const CARD = ico('<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>');
+const MENU_GROUPS = [
+  [
+    ["assets", WALLET, "나의 자산", "통장·현금·증권 등 잔액", "asset-tone"],
+    ["debts", CARD, "나의 부채", "신용카드·대출·미납금 등 남은 빚", "debt-tone"],
+  ],
+  [
+    ["networth", ICONS.networth, "순자산", "자산 − 부채, 달마다 추이"],
+    ["stats", ICONS.stats, "통계", "많이 쓴 카테고리, 카테고리 추이"],
+  ],
+  [
+    ["settings", LOCK_ICON, "보안 설정", "앱 잠금(PIN·지문), 금액 가리기"],
+    ["budget", ICONS.budget, "예산 설정", "카테고리별·전체 한 달 예산"],
+    ["recur", ICONS.recur, "반복 내역 설정", "월세·구독료처럼 매달 나가는 내역"],
+    ["cats", ICONS.cats, "카테고리 설정", "카테고리·하위 카테고리 추가, 이름·순서 바꾸기"],
+    ["backup", ICONS.backup, "백업/복원", "드라이브 동기화, 백업 파일·엑셀 저장, 불러오기"],
+  ],
 ];
 export function openSettingsMenu() {
   setMenuBack(null);
-  const panel = openModal({
-    title: "설정",
-    center: true,
-    body: `<div class="set-list">${SETTING_ITEMS.map(([k, icon, name, desc]) => `
-      <button class="set-item" data-set="${k}">
+  const item = ([k, icon, name, desc, tone]) => `
+      <button class="set-item${tone ? ` set-tone ${tone}` : ""}" data-set="${k}">
         <span class="set-ico">${icon}</span>
         <span class="set-txt"><span class="set-name">${name}</span><span class="set-desc">${desc}</span></span>
         <span class="set-go">›</span>
-      </button>`).join("")}</div>`,
+      </button>`;
+  const panel = openModal({
+    title: "메뉴",
+    center: true,
+    body: `
+      <div class="set-tones">${MENU_GROUPS[0].map(item).join("")}</div>
+      ${MENU_GROUPS.slice(1).map((g) => `<div class="set-list">${g.map(item).join("")}</div>`).join("")}`,
   });
   panel.querySelectorAll("[data-set]").forEach((b) => (b.onclick = () => { setMenuBack(openSettingsMenu); openFooterLink(b.dataset.set); }));
 }
@@ -333,6 +348,7 @@ export function fillVersion() {
   }).catch(() => {});
 }
 export function openFooterLink(k) {
+  if (k === "assets" || k === "debts") return openHoldingsDialog(k);
   if (k === "stats") return openStatsDialog();
   if (k === "networth") return openNetworthDialog();
   if (k === "settings") return openSettingsDialog();
@@ -346,7 +362,7 @@ export function openSettingsDialog() {
   const panel = openModal({
     title: "보안 설정",
     body: `${lockSection()}
-      <p class="note" style="margin-top:18px">예산·반복 내역·카테고리·백업/복원은 홈 위 '설정'에서 바꿀 수 있어요.</p>`,
+      <p class="note" style="margin-top:18px">예산·반복 내역·카테고리·백업/복원은 홈 위 메뉴(≡)에서 바꿀 수 있어요.</p>`,
   });
   bindLockSection(panel, { reopen: openSettingsDialog, onHideChange: (on) => { globalThis.__hideAmt = on; updateEye(); render(); } });
 }
@@ -363,7 +379,7 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
   const sortedAssets = () => liveList().sort(order);
 
   // 환율을 새로 받으면 목록의 원화 환산을 다시 그린다
-  refreshRates().then((updated) => { if (updated && mode === null && $("#modal-root").children.length) draw(); });
+  refreshRates().then((updated) => { if (updated && mode === null && $(`#modal-root .theme-${col}`)) draw(); }); // 아직 이 창이 열려 있을 때만
 
   // 목록(보기 전용): 종류별 한 덩어리, 안쪽은 줄로만 구분
   const draw = () => {
@@ -419,6 +435,7 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
     const panel = openModal({
       cls: `theme-${col}`,
       title: `${cfg.unit} 편집`,
+      onBack: () => { mode = null; drafts = null; linkedAsk = null; draw(); }, // ← 는 목록으로
       body: groups.map((t) => `
         <section class="asset-group">
           <div class="asset-group-head"><span class="sector-badge">${t}</span></div>
@@ -576,6 +593,7 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
     const panel = openModal({
       cls: `theme-${col}`,
       title: `${cfg.unit} 등록`,
+      onBack: startAdd ? null : () => { mode = null; draw(); }, // 목록에서 연 등록은 ← 로 목록으로
       body: `
         <div class="field" style="margin-top:4px"><label>종류</label>
           <select class="input" name="type">${cfg.types.map((t) => `<option>${t}</option>`).join("")}</select>
