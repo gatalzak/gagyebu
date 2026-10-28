@@ -883,3 +883,9 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .topbar .month-nav { grid-column: 2; grid-row: 1; }
 .topbar .menu-btn { position: static; grid-column: 3; grid-row: 1; justify-self: end; margin-left: 6px; }
 .topbar .menu-btn { display: inline-flex; white-space: nowrap; flex-shrink: 0; }
+
+/* 순자산 아래 안내: 왼쪽 정렬, 줄마다 • 표시 */
+.nw-notes { list-style: none; margin: 8px 0 0; padding: 0; text-align: left; }
+.nw-notes li { position: relative; padding-left: 14px; word-break: keep-all; }
+.nw-notes li + li { margin-top: 4px; }
+.nw-notes li::before { content: "•"; position: absolute; left: 2px; top: 0; }

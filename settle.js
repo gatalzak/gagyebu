@@ -97,8 +97,8 @@ export function networthBody({ withChg = true } = {}) {
         <line x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" class="nw-zero"/>
         ${bars}
       </svg>
-      <p class="note nw-hint">${months.length > 1 ? "막대를 누르면 그 달로 이동해요." : "다음 달부터 달마다 막대가 늘어나 추이를 볼 수 있어요."}</p>
     </div>`;
+  const trendHint = months.length > 1 ? "막대를 누르면 그 달로 이동해요." : "다음 달부터 달마다 막대가 늘어나 추이를 볼 수 있어요.";
 
   // 이번 달 바뀐 이유: 내역이 자산·부채에 준 변화를 성격별로
   let inc = 0, expCash = 0, expDebt = 0, moves = 0, anyMove = false;
@@ -137,7 +137,7 @@ export function networthBody({ withChg = true } = {}) {
       ${comp(end.debts, DEBT_TYPES, "")}
     </div>
     ${chart}
-    <p class="note">외화는 오늘 환율로, 앱을 쓰기 전 기간은 처음 등록한 잔액으로 계산해요.</p>`;
+    <ul class="note nw-notes"><li>${trendHint}</li><li>외화는 오늘 환율로, 앱을 쓰기 전 기간은 처음 등록한 잔액으로 계산해요.</li></ul>`;
 }
 
 // ---------------- 카테고리 추이 ----------------
