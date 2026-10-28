@@ -914,3 +914,11 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .ct-avg-sw { border-top-color: #f3dc94; }
 .ct-chart .ct-avg { stroke: #f3dc94; opacity: 0.85; }
 .ct-notes { margin-top: 10px; }
+
+/* 많이 쓴 카테고리 원형 그래프 */
+.pie-wrap { display: flex; justify-content: center; margin: 4px 0 10px; }
+.pie { width: 170px; height: 170px; display: block; }
+.pie-seg { fill: none; stroke-width: 18; }
+.pie-seg:hover { stroke-width: 21; }
+.pie-cap { fill: var(--muted); font-size: 8px; }
+.pie-total { fill: var(--text); font-size: 10.5px; }

@@ -197,7 +197,7 @@ export function catTrendSection() {
       <div class="row-sub ct-avg-row"><span><i class="ct-avg-sw" aria-hidden="true"></i>${avgIdx.length < months.length ? `${avgIdx.length}개월` : "6개월"} 평균 (점선)</span><span>${won(Math.round(avg))}</span></div>
     </div>
     <ul class="note nw-notes ct-notes">
-      <li>${avg && Math.abs(diff) < 1 ? "평균 지출 금액과 이번 달 지출 금액이 같아요"
+      <li>${avg && Math.abs(diff) < 1 ? `평균 지출 금액과 ${Number(ui.month.slice(5))}월 지출 금액이 같아요`
         : `평균 지출 금액에 비해: <span class="${!avg ? "muted" : diff > 0 ? "exp" : "inc"}">${!avg ? "-" : `${diff > 0 ? "▲" : "▼"} ${won(Math.abs(Math.round(diff)))} ${diff > 0 ? "더 씀" : "덜 씀"}`}</span>`}</li>
       <li>막대를 누르면 그 달 결산으로 바뀌어요.</li>
       ${used.length < 3 ? "<li>기록이 쌓일수록 추이가 정확해져요.</li>" : ""}
@@ -206,15 +206,39 @@ export function catTrendSection() {
 }
 
 /** 많이 쓴 카테고리(결산 탭·통계 창) */
+// TOP 5 색(어두운 바탕에서 색약까지 검사한 순서) · 6위부터는 '그 외' 회색
+const PIE_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"], PIE_REST = "#55555d";
+/** 많이 쓴 카테고리 원형(도넛) 그래프: TOP 5 + 그 외, 가운데 총 지출. 아래 목록 막대 색이 범례 */
+function rankDonut(cats, catTotal) {
+  const segs = cats.slice(0, 5).map(([c, v], i) => [c, v, PIE_COLORS[i]]);
+  const rest = catTotal - segs.reduce((a, x) => a + x[1], 0);
+  if (rest > 0.5) segs.push([`그 외 ${cats.length - 5}개`, rest, PIE_REST]);
+  const r = 46, C = 2 * Math.PI * r, gap = segs.length > 1 ? 1.5 : 0;
+  let acc = 0;
+  const arcs = segs.map(([c, v, col]) => {
+    const len = (v / catTotal) * C;
+    const arc = `<circle class="pie-seg" cx="60" cy="60" r="${r}" stroke="${col}" stroke-dasharray="${Math.max(len - gap, 0.6)} ${C}" stroke-dashoffset="${-acc}"><title>${esc(c)} ${won(v)} (${Math.round((v / catTotal) * 100)}%)</title></circle>`;
+    acc += len;
+    return arc;
+  }).join("");
+  return `
+    <div class="pie-wrap">
+      <svg class="pie" viewBox="0 0 120 120" role="img" aria-label="많이 쓴 카테고리 비율">
+        <g transform="rotate(-90 60 60)">${arcs}</g>
+        <text x="60" y="55" text-anchor="middle" class="pie-cap">총 지출</text>
+        <text x="60" y="71" text-anchor="middle" class="pie-total">${won(catTotal)}</text>
+      </svg>
+    </div>`;
+}
 export function rankSection(cats, catTotal) {
   const top = ui.rankAll ? cats : cats.slice(0, 5);
   return `
   <section class="card home-sec">
     <div class="card-head"><span>많이 쓴 카테고리</span><span class="muted settle-note">카드·마통 사용 포함</span></div>
-    ${top.length ? `<div class="row">${top.map(([c, v], i) => `
+    ${top.length ? `${rankDonut(cats, catTotal)}<div class="row">${top.map(([c, v], i) => `
       <div class="rank-row" data-stat-pick="${esc(c)}">
         <div class="rank-top"><span><span class="rank-no">${i + 1}</span>${esc(c)}</span><span>${won(v)} <span class="muted">${Math.round((v / catTotal) * 100)}%</span></span></div>
-        <div class="rank-bar"><span style="width:${(v / top[0][1]) * 100}%"></span></div>
+        <div class="rank-bar"><span style="width:${(v / top[0][1]) * 100}%;background:${PIE_COLORS[i] || PIE_REST};opacity:1"></span></div>
       </div>`).join("")}</div>
       ${cats.length > 5 ? `<button class="fold-line" data-fold="rankAll"><span>${ui.rankAll ? `전체 ${cats.length}개` : `나머지 ${cats.length - 5}개 카테고리`}</span><span class="fold-go">${ui.rankAll ? "접기 ⌃" : "전체 보기 ⌄"}</span></button>` : ""}
       <p class="note rank-hint">카테고리를 누르면 아래 '카테고리 추이'에서 몇 달 흐름을 볼 수 있어요.</p>` : `<div class="empty" style="padding:14px 0">지출 기록이 없어요.</div>`}
