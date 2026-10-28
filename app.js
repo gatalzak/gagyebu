@@ -51,6 +51,39 @@ export function render() {
 
 // ---------------- 푸터 · 설정 ----------------
 // 모든 탭 맨 아래: 가끔 들어가는 관리 창 지름길 + 앱 버전
+// ---------------- 휴대폰 뒤로 가기 ----------------
+// 탭을 옮길 때마다 방문 기록을 남겨 뒤로 가기로 이전 탭에 돌아간다. 창(입력·설정 등)이 열려 있으면 창부터 닫는다.
+// 맨 처음 기록(root) 위에 한 칸을 더 깔아 두어, 첫 화면에서 뒤로 가기를 누르면 바로 닫히지 않고 '한 번 더' 안내
+export function goTab(tab) {
+  if (tab === ui.tab) return render();
+  ui.tab = tab;
+  history.pushState({ tab }, "");
+  render();
+}
+function bindBackButton() {
+  history.replaceState({ tab: "home", root: true }, "");
+  history.pushState({ tab: ui.tab }, "");
+  let rearm = null;
+  window.addEventListener("popstate", (e) => {
+    const st = e.state || {};
+    const sheet = document.getElementById("phrase-sheet");
+    if (sheet || $("#modal-root").children.length) {
+      if (sheet) sheet.remove(); else { closeModal(); render(); }
+      history.pushState({ tab: ui.tab }, ""); // 탭은 그대로
+      return;
+    }
+    if (st.root) {
+      if (ui.tab !== "home") { ui.tab = "home"; render(); }
+      toast("뒤로 가기를 한 번 더 누르면 앱이 닫혀요");
+      clearTimeout(rearm);
+      rearm = setTimeout(() => { if (history.state?.root) history.pushState({ tab: ui.tab }, ""); }, 2500); // 계속 쓰면 다시 깔아 둠
+      return;
+    }
+    ui.tab = st.tab || "home";
+    render();
+  });
+}
+
 export function bindEvents() {
   // 날짜·시간 칸: 작은 아이콘이 아니라 칸 어디를 눌러도 달력·시계가 열리게
   document.addEventListener("click", (e) => {
@@ -61,7 +94,8 @@ export function bindEvents() {
   $("#prev").onclick = () => { ui.month = shiftMonth(ui.month, -1); render(); };
   $("#next").onclick = () => { ui.month = shiftMonth(ui.month, 1); render(); };
   $("#month-title").onclick = openDatePicker;
-  document.querySelectorAll("nav.tabs button").forEach((b) => (b.onclick = () => { ui.tab = b.dataset.tab; render(); }));
+  document.querySelectorAll("nav.tabs button").forEach((b) => (b.onclick = () => goTab(b.dataset.tab)));
+  bindBackButton();
   $("#fab").onclick = () => openKindPicker(ui.tab === "calendar" && ui.day ? ui.day : undefined);
   $("#open-assets").onclick = () => openHoldingsDialog("assets");
   $("#open-debts").onclick = () => openHoldingsDialog("debts");
@@ -133,7 +167,7 @@ export function bindEvents() {
     const more = e.target.closest("[data-day-more],[data-day-less]");
     if (more) { ui.dayMore[more.dataset.dayMore || more.dataset.dayLess] = !!more.dataset.dayMore; render(); return; }
     const go = e.target.closest("[data-month-go]");
-    if (go) { ui.month = go.dataset.monthGo; ui.tab = "home"; render(); window.scrollTo(0, 0); return; }
+    if (go) { ui.month = go.dataset.monthGo; goTab("home"); window.scrollTo(0, 0); return; }
     const day = e.target.closest("[data-day]");
     if (day) { ui.day = day.dataset.day; render(); return; }
     const tx = e.target.closest("[data-tx]");
