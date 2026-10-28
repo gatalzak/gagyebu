@@ -873,3 +873,13 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .set-item.set-tone .set-ico, .set-item.set-tone .set-desc, .set-item.set-tone .set-go { color: inherit; }
 .set-item.set-tone .set-desc { opacity: 0.75; }
 .set-tones + .set-list, .set-list + .set-list { margin-top: 18px; }
+
+/* 메뉴 버튼: ≡ 아이콘 + '메뉴' 글자를 테두리로 감쌈 */
+.menu-btn { top: 6px; gap: 5px; align-items: center; padding: 5px 9px; border: 1px solid #3a3a42; border-radius: 4px; background: var(--row);
+  font-size: calc(0.85rem + var(--fs-up)); line-height: 1; }
+/* 맨 위 줄: [눈] [‹ 달 ›] [메뉴] — 가운데 달은 자리가 넉넉하면 정가운데, 좁으면 메뉴와 겹치지 않게 비켜 남 */
+.topbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.topbar .eye-btn { position: static; grid-column: 1; grid-row: 1; justify-self: start; }
+.topbar .month-nav { grid-column: 2; grid-row: 1; }
+.topbar .menu-btn { position: static; grid-column: 3; grid-row: 1; justify-self: end; margin-left: 6px; }
+.topbar .menu-btn { display: inline-flex; white-space: nowrap; flex-shrink: 0; }
