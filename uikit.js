@@ -47,10 +47,38 @@ export function openModal({ title, headExtra = "", body, cls = "", onBack = null
     </div>`;
   const root = $("#modal-root");
   addAmountClear(root);
+  addTextClear(root);
   root.querySelector("[data-close]").onclick = closeModal; // 창 밖 여백을 눌러도 닫히지 않고, ✕(또는 창 안의 닫기·취소)로만 닫힌다
   if (onBack) root.querySelector("[data-back]").onclick = onBack;
   if (keepScroll) root.querySelector(".overlay").scrollTop = prevScroll;
   return root.querySelector(".panel");
+}
+/** 내용·거래처·메모 칸 오른쪽의 작은 ✕: 누르면 칸을 비우고 바로 다시 입력(글자가 있을 때만 보임) */
+function addTextClear(root) {
+  root.querySelectorAll('input[name=content], input[name=party], input[name=memo]').forEach((input) => {
+    if (input.disabled || input.readOnly || input.parentElement.classList.contains("text-clear-wrap")) return;
+    const wrap = document.createElement("span");
+    wrap.className = "text-clear-wrap";
+    input.replaceWith(wrap);
+    wrap.appendChild(input);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "amount-clear text-clear";
+    btn.setAttribute("aria-label", "지우기");
+    btn.textContent = "✕";
+    const sync = () => (btn.hidden = !input.value);
+    btn.onclick = () => {
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      sync();
+      input.focus();
+    };
+    input.addEventListener("input", sync);
+    input.addEventListener("focus", sync);
+    wrap.appendChild(btn);
+    sync();
+  });
 }
 /** 금액 칸 왼쪽의 작은 ✕: 누르면 금액을 비우고 바로 다시 입력(숫자가 있을 때만 보임) */
 function addAmountClear(root) {

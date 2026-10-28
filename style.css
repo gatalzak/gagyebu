@@ -855,3 +855,8 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .btn.route-pick-btn { margin-top: 14px; display: flex; align-items: center; justify-content: center; gap: 7px; color: #ececef; }
 .route-item .rt-block { flex: 1; min-width: 0; }
 .route-n { flex: none; font-size: calc(0.8rem + var(--fs-up)); }
+
+/* 내용·거래처·메모 칸 지우기 ✕ (칸 오른쪽) */
+.text-clear-wrap { position: relative; display: block; flex: 1; min-width: 0; }
+.text-clear-wrap .input { display: block; width: 100%; padding-right: 40px; }
+.amount-clear.text-clear { left: auto; right: 7px; }
