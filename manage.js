@@ -604,9 +604,9 @@ export function openHoldingsDialog(col, { startAdd = false, onDone = null } = {}
           <input class="input" name="card" placeholder="예: KB체크카드">
           <p class="note" style="margin-top:6px">지출할 때 이 계좌가 '국민763 | KB체크카드'처럼 함께 보이고, 내역에 결제수단으로 남아요.</p></div>` : ""}
         <div class="field"><label>통화</label><select class="input" name="currency">${currencyOptions("KRW")}</select></div>
-        <div class="field"><label data-amt-label>${col === "debts" ? "지금 남은 금액" : "지금 잔액"}</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
+        <div class="field"><label data-amt-label>${col === "debts" ? "지금 남은 금액" : "보유 금액"}</label><input class="input amount-input" name="amount" inputmode="decimal" placeholder="0">
           <div class="fx-hint" data-hint></div>
-          ${col === "debts" ? `<p class="note start-bal-note" data-amt-note hidden></p>` : `<p class="note start-bal-note">통장 앱이나 지갑에 지금 있는 금액을 넣으세요. 앞으로 내역을 기록하면 잔액이 저절로 바뀌어요.</p>`}</div>
+          ${col === "debts" ? `<p class="note start-bal-note" data-amt-note hidden></p>` : `<p class="note start-bal-note">계좌나 현금 지갑에 지금 보유 중인 금액을 넣으세요. 앞으로 내역을 기록하면 잔액이 저절로 바뀌어요.</p>`}</div>
         ${col === "debts" ? `<div class="field" data-loan-field><label>받은 돈 입금 자산 <span class="muted">(선택)</span></label>
           <select class="input" name="loanAsset">${holdingOptions(["assets"], "", { balance: false })}</select>
           <p class="note" style="margin-top:6px">새로 대출을 받아 통장에 들어왔다면 고르세요. 부채와 입금 자산이 같이 늘고 '부채 발생' 내역이 남아요(수입 아님). 예전부터 있던 빚이면 비워 두세요.</p>
