@@ -908,3 +908,9 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .start-bal-note { margin-top: 6px; word-break: keep-all; }
 .st-step.opt:not(.done) .st-btn { border-color: #3a3a42; background: var(--row); color: var(--text); } /* 선택 단계는 회색 버튼 */
 .st-step.opt:not(.done) .st-no { background: var(--row); color: var(--muted); border: 1px solid #3a3a42; }
+
+/* 카테고리 추이: 평균(점선) 줄과 선은 옐로우, 아래 안내는 • 목록(왼쪽 정렬) */
+.ct-sum .ct-avg-row, .ct-sum .ct-avg-row span { color: #f3dc94; }
+.ct-avg-sw { border-top-color: #f3dc94; }
+.ct-chart .ct-avg { stroke: #f3dc94; opacity: 0.85; }
+.ct-notes { margin-top: 10px; }
