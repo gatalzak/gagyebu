@@ -321,6 +321,15 @@ const MENU_GROUPS = [
     ["backup", ICONS.backup, "백업/복원", "드라이브 동기화, 백업 파일·엑셀 저장, 불러오기"],
   ],
 ];
+// 화면 모드(다크·밝은): 기기마다 따로(localStorage). 처음 그릴 때는 index.html 머리의 짧은 스크립트가 먼저 적용해 깜빡임이 없음
+const THEME_KEY = "gagyebu-theme";
+const THEME_ICON = ico('<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5A6.5 6.5 0 0 1 12 3.5z"/>');
+export const currentTheme = () => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
+export function setTheme(t) {
+  if (t === "light") document.documentElement.dataset.theme = "light"; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem(THEME_KEY, t); } catch {}
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t === "light" ? "#f3f3f5" : "#131315");
+}
 export function openSettingsMenu() {
   setMenuBack(null);
   const item = ([k, icon, name, desc, tone]) => `
@@ -329,13 +338,20 @@ export function openSettingsMenu() {
         <span class="set-txt"><span class="set-name">${name}</span><span class="set-desc">${desc}</span></span>
         <span class="set-go">›</span>
       </button>`;
+  const light = currentTheme() === "light";
   const panel = openModal({
     title: "메뉴",
     center: true,
     body: `
       <div class="set-tones">${MENU_GROUPS[0].map(item).join("")}</div>
-      ${MENU_GROUPS.slice(1).map((g) => `<div class="set-list">${g.map(item).join("")}</div>`).join("")}`,
+      ${MENU_GROUPS.slice(1).map((g) => `<div class="set-list">${g.map(item).join("")}</div>`).join("")}
+      <button class="theme-row" data-theme-toggle role="switch" aria-checked="${light}">
+        <span class="set-ico">${THEME_ICON}</span>
+        <span class="set-txt"><span class="set-name">밝은 모드</span><span class="set-desc">${light ? "지금 밝은 화면이에요 · 끄면 어두운 화면" : "지금 어두운 화면이에요 · 켜면 밝은 화면"}</span></span>
+        <span class="switch${light ? " on" : ""}" aria-hidden="true"></span>
+      </button>`,
   });
+  panel.querySelector("[data-theme-toggle]").onclick = () => { setTheme(light ? "dark" : "light"); openSettingsMenu(); };
   panel.querySelectorAll("[data-set]").forEach((b) => (b.onclick = () => { setMenuBack(openSettingsMenu); openFooterLink(b.dataset.set); }));
 }
 /** 버전: 설치된 화면 파일 캐시 이름(gagyebu-vNNN)에서 읽는다 — sw.js만 올리면 자동으로 맞음 */
@@ -735,7 +751,7 @@ export function openBackupDialog() {
         <button class="btn excel-btn" data-excel><svg class="excel-ico" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="#1d7a45"/><path d="M8.2 8l7.6 8M15.8 8l-7.6 8" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>엑셀 파일 저장</button>
       </div>
       <div class="section-title">가져오기</div>
-      <p class="note">백업 파일의 내역을 지금 데이터에 <b style="font-weight:400;color:#fff">합쳐요</b>. 같은 내역은 최신 것으로 바뀌고, 지금 데이터는 지워지지 않아요.</p>
+      <p class="note">백업 파일의 내역을 지금 데이터에 <b style="font-weight:400;color:var(--strong)">합쳐요</b>. 같은 내역은 최신 것으로 바뀌고, 지금 데이터는 지워지지 않아요.</p>
       <input type="file" accept=".json,application/json" data-file hidden>
       <button class="btn" data-import style="margin-top:10px">백업 파일 불러오기</button>
       <div class="section-title">초기화</div>

@@ -207,7 +207,7 @@ export function catTrendSection() {
 
 /** 많이 쓴 카테고리(결산 탭·통계 창) */
 // TOP 5 색(어두운 바탕에서 색약까지 검사한 순서) · 6위부터는 '그 외' 회색
-const PIE_COLORS = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181"], PIE_REST = "#55555d";
+const PIE_COLORS = ["var(--pie1)", "var(--pie2)", "var(--pie3)", "var(--pie4)", "var(--pie5)"], PIE_REST = "var(--pie-rest)"; // 다크·밝은 모드별 값은 style.css
 /** 많이 쓴 카테고리 원형(도넛) 그래프: TOP 5 + 그 외, 가운데 총 지출. 아래 목록 막대 색이 범례 */
 function rankDonut(cats, catTotal) {
   const segs = cats.slice(0, 5).map(([c, v], i) => [c, v, PIE_COLORS[i]]);
@@ -217,7 +217,7 @@ function rankDonut(cats, catTotal) {
   let acc = 0;
   const arcs = segs.map(([c, v, col]) => {
     const len = (v / catTotal) * C;
-    const arc = `<circle class="pie-seg" cx="60" cy="60" r="${r}" stroke="${col}" stroke-dasharray="${Math.max(len - gap, 0.6)} ${C}" stroke-dashoffset="${-acc}"><title>${esc(c)} ${won(v)} (${Math.round((v / catTotal) * 100)}%)</title></circle>`;
+    const arc = `<circle class="pie-seg" cx="60" cy="60" r="${r}" style="stroke:${col}" stroke-dasharray="${Math.max(len - gap, 0.6)} ${C}" stroke-dashoffset="${-acc}"><title>${esc(c)} ${won(v)} (${Math.round((v / catTotal) * 100)}%)</title></circle>`;
     acc += len;
     return arc;
   }).join("");
