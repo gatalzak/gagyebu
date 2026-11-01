@@ -29,11 +29,13 @@
   --r-bg: #3a1d24;  --r-line: #5e2a35;  --r-text: #ffc9d2;  --r-text2: #ff9fae;
   --g-text2: #9fe0b5;
   --sun: #ff8a9b;  --sat: #7cc4f5;  --blue: #8fc7ff;  --purple: #c7a8ff;  --danger: #ff5c7c;
+  --nospend: #2b2b31;  /* 달력: 지출 없는 날 음영 */
   --pie1: #3987e5; --pie2: #d95926; --pie3: #199e70; --pie4: #c98500; --pie5: #d55181; --pie-rest: #55555d;
   color-scheme: dark;
 }
 /* 밝은 모드(메뉴의 '화면 모드'에서 켬): 같은 뜻의 색을 밝은 바탕에 맞는 단계로 */
 :root[data-theme="light"] {
+  --nospend: #e7e7ec;
   --bg: #f3f3f5;  --card: #ffffff;  --row: #f1f1f4;  --line: #e2e2e7;  --line-soft: #ececf0;
   --text: #1c1c20;  --muted: #6b6b74;  --strong: #111114;  --text-2: #3a3a42;  --muted-2: #8a8a92;
   --inc: #138a4a;  --exp: #d93a3f;  --cred: #c92d7a;  --mov: #3a3a42;  --repay: #9a6b00;
@@ -971,3 +973,9 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .panel.theme-debts .head-left { flex-shrink: 0; }
 .panel.theme-debts .head-actions { gap: 5px; }
 .panel.theme-debts .head-actions .red-btn, .panel.theme-debts .head-actions .yellow-btn, .panel.theme-debts .head-actions .green-btn { padding: 6px 6px; }
+
+/* 달력: 지출 없는 날은 음영, 고른 날은 테두리(음영과 겹쳐도 보이게) */
+.cal-cell.nospend { background: var(--nospend); }
+.cal-cell.sel { box-shadow: inset 0 0 0 1px var(--border-strong); }
+.cal-legend { margin: 10px 0 0; display: flex; align-items: center; gap: 6px; }
+.cal-legend-sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: var(--nospend); }

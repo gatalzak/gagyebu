@@ -78,6 +78,9 @@ export function calendarView() {
   const byDay = {};
   monthTx().forEach((t) => (byDay[t.date] ||= []).push(t));
   const tx = monthTx();
+  // 지출 없는 날(음영): 가계부를 쓰기 시작한 날(첫 내역)부터 오늘까지만 — 앞으로 올 날·쓰기 전 날은 빼고
+  const firstDay = liveTx().reduce((a, t) => (t.date < a ? t.date : a), "9999-99-99");
+  let noSpendDays = 0;
 
   const cells = [];
   for (let i = 0; i < first; i++) cells.push(`<div class="cal-cell blank"></div>`);
@@ -88,8 +91,10 @@ export function calendarView() {
     const exp = sum(items.filter(isPlainExpense));
     const cred = sum(items.filter(isShortDebt));
     const dow = (first + d - 1) % 7;
+    const noSpend = date >= firstDay && date <= today && !items.some((t) => t.kind === "지출"); // 카드·마통으로 쓴 것도 지출로 봄
+    if (noSpend) noSpendDays++;
     cells.push(`
-      <button class="cal-cell${date === ui.day ? " sel" : ""}${date === today ? " today" : ""}${dow === 0 ? " sun" : dow === 6 ? " sat" : ""}" data-day="${date}">
+      <button class="cal-cell${noSpend ? " nospend" : ""}${date === ui.day ? " sel" : ""}${date === today ? " today" : ""}${dow === 0 ? " sun" : dow === 6 ? " sat" : ""}" data-day="${date}">
         <span class="cal-num">${d}</span>
         ${inc ? `<span class="cal-amt inc">+${compact(inc)}</span>` : ""}
         ${exp ? `<span class="cal-amt exp">-${compact(exp)}</span>` : ""}
@@ -103,6 +108,7 @@ export function calendarView() {
     <div class="card-head cal-head"><span class="month-badge">${m}월</span><div class="cal-sum">${monthCols(tx) || `<div class="muted">내역 없음</div>`}</div></div>
     <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
     <div class="cal-grid">${cells.join("")}</div>
+    ${noSpendDays ? `<p class="note cal-legend"><i class="cal-legend-sw" aria-hidden="true"></i>지출 없는 날 ${noSpendDays}일</p>` : ""}
   </section>
   ${ui.day ? `
   <section class="card day">
