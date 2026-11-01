@@ -96,6 +96,7 @@ export function calendarView() {
     cells.push(`
       <button class="cal-cell${noSpend ? " nospend" : ""}${date === ui.day ? " sel" : ""}${date === today ? " today" : ""}${dow === 0 ? " sun" : dow === 6 ? " sat" : ""}" data-day="${date}">
         <span class="cal-num">${d}</span>
+        ${noSpend ? `<span class="cal-smile" aria-label="지출 없는 날">😊</span>` : ""}
         ${inc ? `<span class="cal-amt inc">+${compact(inc)}</span>` : ""}
         ${exp ? `<span class="cal-amt exp">-${compact(exp)}</span>` : ""}
         ${cred ? `<span class="cal-amt cred">${compact(cred)}</span>` : ""}
@@ -108,7 +109,7 @@ export function calendarView() {
     <div class="card-head cal-head"><span class="month-badge">${m}월</span><div class="cal-sum">${monthCols(tx) || `<div class="muted">내역 없음</div>`}</div></div>
     <div class="cal-grid cal-week">${"일월화수목금토".split("").map((w, i) => `<span class="${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</span>`).join("")}</div>
     <div class="cal-grid">${cells.join("")}</div>
-    ${noSpendDays ? `<p class="note cal-legend"><i class="cal-legend-sw" aria-hidden="true"></i>지출 없는 날 ${noSpendDays}일</p>` : ""}
+    ${noSpendDays ? `<p class="note cal-legend"><i class="cal-legend-sw" aria-hidden="true"></i>지출 없는 날 ${noSpendDays}일 <span class="cal-smile-l" aria-hidden="true">😊</span></p>` : ""}
   </section>
   ${ui.day ? `
   <section class="card day">

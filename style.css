@@ -979,3 +979,5 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .cal-cell.sel { box-shadow: inset 0 0 0 1px var(--border-strong); }
 .cal-legend { margin: 10px 0 0; display: flex; align-items: center; gap: 6px; }
 .cal-legend-sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: var(--nospend); }
+.cal-smile { font-size: 0.85rem; line-height: 1.2; }
+.cal-smile-l { font-size: 0.95rem; line-height: 1; }
