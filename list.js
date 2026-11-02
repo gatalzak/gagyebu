@@ -192,7 +192,7 @@ export function listView() {
   <div class="search-row">
   <div class="search-bar">
     <svg class="search-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
-    <input class="search-input" type="search" name="q" placeholder="내역 검색 · 내용, 거래처, 카테고리, 금액" value="${esc(ui.q)}" autocomplete="off" enterkeyhint="search">
+    <input class="search-input" type="search" name="q" placeholder="내역 검색" aria-label="내역 검색 · 내용, 거래처, 카테고리, 금액" value="${esc(ui.q)}" autocomplete="off" enterkeyhint="search">
     <button class="search-clear" data-search-clear aria-label="검색어 지우기" ${ui.q ? "" : "hidden"}>✕</button>
   </div>
   <button class="filter-btn${n ? " on" : ""}" data-filter-open aria-label="필터">${FUNNEL}<span>필터${n ? ` ${n}` : ""}</span></button>

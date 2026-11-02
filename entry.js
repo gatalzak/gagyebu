@@ -138,6 +138,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
         </div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 10월 카드값" value="${esc(draft.memo)}"></div>
         ${existing && !S.transactions[existing.id]?.recurId && draft.amount > 0 ? `<button class="btn fav-add-btn rec-add-btn" data-act="add-recur">${HOME_ICONS.반복} 반복 내역으로 등록 <span class="muted">(매달 ${Number(existing.date.slice(8))}일)</span></button>` : ""}
+        ${!existing && !replaces && !recurNew && !preset?.recur ? `<button class="btn fav-add-btn rec-add-btn${draft.makeRecur ? " on" : ""}" data-act="toggle-recur" aria-pressed="${!!draft.makeRecur}">${HOME_ICONS.반복} ${draft.makeRecur ? "✓ 상환할 때 반복 내역으로 등록" : "반복 내역으로 등록"} <span class="muted" data-recur-day>(매달 ${Number((draft.date || "").slice(8)) || ""}일)</span></button>` : ""}
         ${deleteRecurNote(existing, confirmDelete)}
         <div class="btn-row">
           ${existing ? deleteButtons(existing, confirmDelete) : `<button class="btn" data-act="cancel">취소</button>`}
@@ -308,12 +309,16 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       if (replaces) dropTx(replaces, now);
       // 앱 쓰기 전 사용분: 기록된 부채보다 많이 갚은 만큼 시작 잔액(base)을 올려 0원에서 끝나게
       if (over > 0 && addStart) S.debts[d.id] = { ...S.debts[d.id], base: roundFor((S.debts[d.id].base || 0) + over, dcur), updatedAt: now };
+      // 새 상환: '반복 내역으로 등록'을 켜 두었으면 같이 등록
+      let recurMsg = "";
+      if (draft.makeRecur && !existing && draft.amount > 0 && await registerRecurring(rec, { nature: "repay", amount: draft.amount, currency: dcur, repay: { debt: draft.debt, asset: draft.asset, memo: draft.memo } }))
+        recurMsg = ` · 반복 내역 등록(매달 ${Number(rec.date.slice(8))}일)`;
       await saveState(S);
       scheduleSync();
       onDone();
       afterRepay(d.id, draft.amount > 0);
       toast(draft.amount > 0
-        ? `${d.name} ${formatMoney(draft.amount, dcur)} 상환했어요${draft.interest > 0 ? ` · 이자 ${formatMoney(draft.interest, dcur)} → 지출` : ""}`
+        ? `${d.name} ${formatMoney(draft.amount, dcur)} 상환했어요${draft.interest > 0 ? ` · 이자 ${formatMoney(draft.interest, dcur)} → 지출` : ""}${recurMsg}`
         : `${d.name} 이자 ${formatMoney(draft.interest, dcur)} 지출로 기록했어요${aRef ? "" : ` · ${d.name}에 더해짐`}`);
     };
     const delRepay = async (all) => {
@@ -332,6 +337,11 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
     if (del) del.onclick = () => { if (!confirmDelete) { read(); confirmDelete = true; return draw(); } delRepay(false); };
     const delAll = $p("[data-act=delete-recur]");
     if (delAll) delAll.onclick = () => delRepay(true);
+    const togRecur = $p("[data-act=toggle-recur]");
+    if (togRecur) {
+      togRecur.onclick = () => { read(); draft.makeRecur = !draft.makeRecur; draw(); };
+      $p("[name=date]")?.addEventListener("change", (e) => { const sp = $p("[data-recur-day]"); if (sp) sp.textContent = `(매달 ${Number(e.target.value.slice(8)) || ""}일)`; });
+    }
   };
   draw();
 }
