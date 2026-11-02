@@ -987,3 +987,8 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .amount-wrap .input.sm.amount-input ~ .amount-clear { left: 4px; width: 24px; height: 24px; }
 .amount-wrap .input.sm.amount-input ~ .amount-unit { right: 10px; }
 .btn.recur-new-btn { color: var(--purple); margin-top: 16px; }
+
+/* 새 내역의 '반복 내역으로 등록' 켬 표시 · 반복 내역 연결 내역 삭제 */
+.rec-add-btn.on { border-color: var(--purple); }
+.del-recur-note { margin-top: 14px; word-break: keep-all; }
+.btn.del-recur-btn { margin-top: 8px; }

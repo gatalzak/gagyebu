@@ -138,8 +138,9 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
         </div>
         <div class="field"><label>메모</label><input class="input" name="memo" placeholder="예: 10월 카드값" value="${esc(draft.memo)}"></div>
         ${existing && !S.transactions[existing.id]?.recurId && draft.amount > 0 ? `<button class="btn fav-add-btn rec-add-btn" data-act="add-recur">${HOME_ICONS.반복} 반복 내역으로 등록 <span class="muted">(매달 ${Number(existing.date.slice(8))}일)</span></button>` : ""}
+        ${deleteRecurNote(existing, confirmDelete)}
         <div class="btn-row">
-          ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : `<button class="btn" data-act="cancel">취소</button>`}
+          ${existing ? deleteButtons(existing, confirmDelete) : `<button class="btn" data-act="cancel">취소</button>`}
           <button class="btn primary" data-act="save" disabled>${recurNew ? "반복 내역 등록" : existing || replaces ? "저장" : "상환하기"}</button>
         </div>
         <p class="note req-left" data-req-left></p>`,
@@ -315,18 +316,22 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
         ? `${d.name} ${formatMoney(draft.amount, dcur)} 상환했어요${draft.interest > 0 ? ` · 이자 ${formatMoney(draft.interest, dcur)} → 지출` : ""}`
         : `${d.name} 이자 ${formatMoney(draft.interest, dcur)} 지출로 기록했어요${aRef ? "" : ` · ${d.name}에 더해짐`}`);
     };
-    const del = $p("[data-act=delete]");
-    if (del) del.onclick = async () => {
-      if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
+    const delRepay = async (all) => {
       const now = nowISO();
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
       if (liveInterest) S.transactions[liveInterest.id] = { ...liveInterest, deleted: true, updatedAt: now }; // 함께 낸 이자 기록도
+      const rmsg = dropRecurLink(existing, all, now);
       await saveState(S);
       scheduleSync();
       onDone();
+      render();
       afterRepay(prevDebt?.id, false);
-      toast(`상환 기록을 삭제했어요${liveInterest ? " · 이자 기록도" : ""} · 잔액도 되돌렸어요`);
+      toast(`상환 기록을 삭제했어요${liveInterest ? " · 이자 기록도" : ""}${rmsg || " · 잔액도 되돌렸어요"}`);
     };
+    const del = $p("[data-act=delete]");
+    if (del) del.onclick = () => { if (!confirmDelete) { read(); confirmDelete = true; return draw(); } delRepay(false); };
+    const delAll = $p("[data-act=delete-recur]");
+    if (delAll) delAll.onclick = () => delRepay(true);
   };
   draw();
 }
@@ -432,6 +437,28 @@ export function natureSelect(key, { recur = false } = {}) {
     <select class="input nature-sel ${cur?.cls || ""}" name="nature">${PICK_ITEMS.map((it, i) => recur && it.key === "borrow" ? "" : // 반복 등록엔 부채 발생 없음
       `<option value="${it.key}" ${it.key === key ? "selected" : ""}>${"①②③④⑤⑥⑦⑧"[i]} ${it.name}</option>`).join("")}</select></div>`;
 }
+/** 이 내역이 연결된(살아 있는) 반복 내역 */
+const recurOfTx = (t) => { const r = t?.recurId && S.recurring?.[t.recurId]; return r && !r.deleted ? r : null; };
+/** 반복 내역에서 나온 내역을 지울 때: all이면 반복 내역도 삭제, 아니면 그 달만 '건너뜀'(자동 기록이 다시 만들지 않게) */
+function dropRecurLink(t, all, now) {
+  const r = recurOfTx(t);
+  if (!r) return "";
+  if (all) { S.recurring[r.id] = { ...r, deleted: true, updatedAt: now }; return " · 반복 내역도 삭제했어요"; }
+  S.recurring[r.id] = { ...r, skips: [...new Set([...(r.skips || []), t.recurMonth])], updatedAt: now };
+  return ` · 반복 내역은 ${Number((t.recurMonth || "").slice(5))}월만 건너뜀`;
+}
+/** 삭제 버튼 줄: 반복 내역과 연결된 내역은 두 번째 누를 때 '이 내역만 / 반복 내역까지' 고르기 */
+function deleteButtons(existing, confirmDelete) {
+  if (!existing) return "";
+  if (confirmDelete && recurOfTx(existing)) return `<button class="btn danger" data-act="delete">이 내역만 삭제</button>`;
+  return `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>`;
+}
+function deleteRecurNote(existing, confirmDelete) {
+  if (!confirmDelete || !recurOfTx(existing)) return "";
+  return `<p class="note del-recur-note">반복 내역에서 기록된 내역이에요. '이 내역만 삭제'하면 이번 달만 건너뛰고, 반복 내역은 그대로 남아요.</p>
+    <button class="btn danger del-recur-btn" data-act="delete-recur">반복 내역까지 삭제</button>`;
+}
+
 /** 반복 내역 등록: 날짜 대신 '첫 날짜'(이날부터 매달 같은 날) */
 function recurDateField(date) {
   return `<div class="field"><label>첫 날짜 <span class="req">*</span></label>
@@ -723,8 +750,10 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
         </div>` : ""}
         ${recurNew ? "" : `<button class="btn fav-add-btn" data-act="add-fav">${STAR} 자주 쓰는 내역으로 등록</button>`}
         ${existing && !draft.recurId && !existing.interest ? `<button class="btn fav-add-btn rec-add-btn" data-act="add-recur">${HOME_ICONS.반복} 반복 내역으로 등록 <span class="muted">(매달 ${Number(existing.date.slice(8))}일)</span></button>` : ""}
+        ${!existing && !replaces && !recurNew && !draft.recurId ? `<button class="btn fav-add-btn rec-add-btn${draft.makeRecur ? " on" : ""}" data-act="toggle-recur" aria-pressed="${!!draft.makeRecur}">${HOME_ICONS.반복} ${draft.makeRecur ? "✓ 저장할 때 반복 내역으로 등록" : "반복 내역으로 등록"} <span class="muted" data-recur-day>(매달 ${Number((draft.date || "").slice(8)) || ""}일)</span></button>` : ""}
+        ${deleteRecurNote(existing, confirmDelete)}
         <div class="btn-row">
-          ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
+          ${deleteButtons(existing, confirmDelete)}
           <button class="btn primary" data-act="save">${recurNew ? "반복 내역 등록" : "저장"}</button>
         </div>`,
     });
@@ -990,24 +1019,40 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       for (const id of existing?.photos || []) if (!(rec.photos || []).includes(id)) await deletePhoto(id).catch(() => {});
       S.transactions[rec.id] = rec;
       if (replaces) dropTx(replaces, now); // 다른 성격(상환·부채 발생)에서 바꿔 온 내역
+      let recurMsg = "";
+      if (draft.makeRecur && !existing) {
+        const f = favFromDraft(draft);
+        f.debtMode = draft.kind === "지출" ? draft.debtMode || "" : "";
+        f.pay = draft.pay || "";
+        if (await registerRecurring(rec, { nature: natureOf(draft), amount: draft.amount, currency: draft.currency, fields: f })) recurMsg = ` · 반복 내역 등록(매달 ${Number(rec.date.slice(8))}일)`;
+      }
       closeModal();
       ui.month = rec.date.slice(0, 7);
       await commit();
       const target = delta && S[delta.col][delta.id];
       toast(`${rec.kind} ${formatMoney(rec.amount, rec.currency)} ${existing || replaces ? "수정" : "추가"}했어요` +
-        (target ? ` · ${target.name} ${delta.amount >= 0 ? "+" : "-"}${formatMoney(Math.abs(delta.amount), curOf(target))}` : ""));
+        (target ? ` · ${target.name} ${delta.amount >= 0 ? "+" : "-"}${formatMoney(Math.abs(delta.amount), curOf(target))}` : "") + recurMsg);
     };
-    const del = $p("[data-act=delete]");
-    if (del) del.onclick = async () => {
-      if (!confirmDelete) { read(); confirmDelete = true; return draw(); }
+    const delTx = async (all) => {
       const now = nowISO();
       const prev = deltaRef(existing.assetDelta);
       S.transactions[existing.id] = { ...existing, deleted: true, updatedAt: now };
+      const rmsg = dropRecurLink(existing, all, now); // 반복 내역 연결: 이번 달 건너뜀 또는 반복 내역도 삭제
       for (const id of existing.photos || []) await deletePhoto(id).catch(() => {});
       closeModal();
       await commit();
-      toast(prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : existing.deltas?.length ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요");
+      toast((prev ? `삭제했어요 · ${prev.col === "debts" ? "부채" : "자산 잔액"}도 되돌렸어요` : existing.deltas?.length ? "삭제했어요 · 자산 잔액도 되돌렸어요" : "삭제했어요") + rmsg);
     };
+    const del = $p("[data-act=delete]");
+    if (del) del.onclick = () => { if (!confirmDelete) { read(); confirmDelete = true; return draw(); } delTx(false); };
+    const delAll = $p("[data-act=delete-recur]");
+    if (delAll) delAll.onclick = () => delTx(true);
+    // 새 내역: '반복 내역으로 등록'을 켜 두면 저장할 때 같이 등록
+    const togRecur = $p("[data-act=toggle-recur]");
+    if (togRecur) {
+      togRecur.onclick = () => { read(); draft.makeRecur = !draft.makeRecur; draw(); };
+      $p("[name=date]")?.addEventListener("change", (e) => { const sp = $p("[data-recur-day]"); if (sp) sp.textContent = `(매달 ${Number(e.target.value.slice(8)) || ""}일)`; });
+    }
     // 카드 대금 등을 지출로 적으려 하면: 내용에 '카드값·대금·상환' 같은 말이 있으면 안내를 강조
     const tip = $p("[data-repay-tip]");
     if (tip) {
