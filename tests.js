@@ -160,6 +160,26 @@ test("반복 내역", "자동 기록: 지난 달만 한 번씩, 다시 돌려도
   eq(G.balanceOf("assets", G.S.assets.a), 66000, "통장(8월 + 10월 지출)");
 });
 
+test("반복 내역", "자동 기록: 금액 달라지는 건 지난 금액, 부채 상환도, '미확인' 표시, 끈 것·autoFrom 이전은 안 만듦", (G) => {
+  globalThis.__testWin.__fakeToday = "2026-11-02";
+  G.reset({ assets: byId([asset("a", "통장", 1000000)]), debts: byId([debt("c", "카드", 500000)]),
+    recurring: byId([
+      recur({ id: "v", day: 1, auto: true, variable: true, startMonth: "2026-10" }),
+      recur({ id: "p", nature: "repay", day: 1, auto: true, variable: true, startMonth: "2026-10", repay: { debt: "debts:c", asset: "assets:a" } }),
+      recur({ id: "off", day: 1, auto: false, startMonth: "2026-11" }),
+      recur({ id: "from", day: 1, auto: true, startMonth: "2026-08", autoFrom: "2026-11" }),
+    ]),
+    transactions: byId([
+      spend("v10", "2026-10-01", 61200, ["assets", "a"], { recurId: "v", recurMonth: "2026-10" }),
+      repay("p10", "2026-10-01", 420000, "c", "a"),
+    ]) });
+  G.S.transactions.p10 = { ...G.S.transactions.p10, recurId: "p", recurMonth: "2026-10" };
+  eq(G.autoRecur(), 3, "v·p·from 11월만");
+  const t = G.S.transactions;
+  eq([t["recur:v:2026-11"]?.amount, t["recur:p:2026-11"]?.amount, !!t["recur:off:2026-11"], !!t["recur:from:2026-10"], !!t["recur:from:2026-11"]], [61200, 420000, false, false, true]);
+  eq([t["recur:v:2026-11"].unconfirmed, G.isRepayTx(t["recur:p:2026-11"])], [true, true], "미확인 · 상환 내역");
+});
+
 // ---------------- 예산·통계 ----------------
 test("예산", "카드로 쓴 돈도 예산 사용액에 포함", (G) => {
   globalThis.__testWin.__fakeToday = "2026-10-12";

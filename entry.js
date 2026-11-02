@@ -604,7 +604,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       headExtra: existing || replaces ? "" : `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
       body: `
         ${natureSelect(natureOf(draft))}
-        ${draft.recurId && S.recurring?.[draft.recurId] ? `<p class="note rc-tag">${HOME_ICONS.반복} 반복 내역 · ${Number((draft.recurMonth || "").slice(5))}월분</p>` : ""}
+        ${draft.recurId && S.recurring?.[draft.recurId] ? `<p class="note rc-tag">${HOME_ICONS.반복} 반복 내역 · ${Number((draft.recurMonth || "").slice(5))}월분${existing?.unconfirmed ? " · 자동 기록됨 (저장하면 확인돼요)" : ""}</p>` : ""}
         <div class="field"><label>날짜 · 시간 <span class="req">*</span></label>
           <div class="money-line">
             <input class="input" type="date" name="date" value="${draft.date}">

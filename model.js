@@ -267,14 +267,15 @@ export function recurVia(r) {
   return h && !h.deleted ? h.name : "";
 }
 
-/** 현황: 이번 달 반복 내역 */
+/** 반복 내역 자동 기록: 날짜가 된 달을 내역으로 만들고 '미확인'으로 표시(현황에서 확인). auto를 끈 것·외화는 빼고.
+ *  금액이 달라지는 항목은 지난번 금액으로 기록 → 확인할 때 고침. autoFrom 이전 달은 채우지 않는다. 만든 개수를 돌려준다. */
 export function autoRecur() {
   let n = 0;
   const today = todayStr();
   const thisMonth = today.slice(0, 7);
   for (const r of liveRecurs()) {
-    if (!r.auto || r.variable || r.nature === "repay" || (r.currency || "KRW") !== "KRW" || !r.amount) continue;
-    let month = r.startMonth;
+    if (r.auto === false || (r.currency || "KRW") !== "KRW") continue;
+    let month = r.autoFrom && r.autoFrom > r.startMonth ? r.autoFrom : r.startMonth;
     for (let guard = 0; month <= thisMonth && guard < 60; guard++) {
       const id = `recur:${r.id}:${month}`;
       const date = recurDate(r, month);
@@ -291,22 +292,32 @@ export function autoRecur() {
 export function buildRecurTx(r, month, id, date) {
   const f = r.fields || {};
   const now = nowISO();
+  const amount = r.variable ? recurLastAmount(r) : r.amount;
+  if (!(amount > 0)) return null;
   const rec = {
     id, date, time: "", kind: f.kind, expenseType: f.kind === "지출" ? f.expenseType || "고정" : "",
     category: f.category || "", subcategory: f.subcategory || "",
-    currency: "KRW", amount: r.amount, content: f.content || "", party: f.party || "", memo: f.memo || "",
-    recurId: r.id, recurMonth: month, createdAt: now, updatedAt: now, deleted: false,
+    currency: "KRW", amount, content: f.content || "", party: f.party || "", memo: f.memo || "",
+    recurId: r.id, recurMonth: month, unconfirmed: true, // 자동 기록: 현황에서 확인하거나 열어서 저장하면 풀림
+    createdAt: now, updatedAt: now, deleted: false,
   };
   const holding = (key) => { const ref = key && parseLinkKey(key); const h = ref && S[ref.col]?.[ref.id]; return h && !h.deleted && curOf(h) === "KRW" ? [ref, h] : null; };
+  if (r.nature === "repay") {
+    const d = holding(r.repay?.debt), a = holding(r.repay?.asset);
+    if (!d || d[0].col !== "debts" || !a) return null;
+    Object.assign(rec, { kind: "자산이동", expenseType: "", category: "", subcategory: "", content: `${d[1].name} 상환`, party: "", memo: r.repay?.memo || "" });
+    rec.deltas = [{ col: "debts", id: d[1].id, amount: -amount }, { col: "assets", id: a[1].id, amount: -amount }];
+    return rec;
+  }
   if (f.kind === "자산이동") {
     const a = holding(f.fromAsset), b = holding(f.toAsset);
     if (!a || !b) return null;
-    rec.deltas = [{ col: "assets", id: a[1].id, amount: -r.amount }, { col: "assets", id: b[1].id, amount: r.amount }];
+    rec.deltas = [{ col: "assets", id: a[1].id, amount: -amount }, { col: "assets", id: b[1].id, amount }];
     return rec;
   }
   const h = holding(f.link);
   if (!h) return null;
-  rec.assetDelta = { col: h[0].col, id: h[1].id, amount: linkSign(f.kind, h[0].col) * r.amount };
+  rec.assetDelta = { col: h[0].col, id: h[1].id, amount: linkSign(f.kind, h[0].col) * amount };
   if (f.kind === "지출" && h[0].col === "assets" && h[1].type === "은행") {
     if (f.pay === "card" && h[1].card) rec.card = h[1].card;
     else if (f.pay === "transfer") rec.transfer = true;
@@ -765,4 +776,18 @@ export function frequentRoutes() {
     by.set(k, r);
   }
   return [...by.values()].sort((a, b) => b.count - a.count || b.last.localeCompare(a.last));
+}
+
+/** 자동 기록됐지만 아직 확인하지 않은 반복 내역(최근 것부터) */
+export const unconfirmedRecurTx = () => liveTx().filter((t) => t.unconfirmed && t.recurId).sort((a, b) => b.date.localeCompare(a.date));
+/** 2026-11 자동 기록을 기본으로: 예전에 등록한 반복 내역도 켜되, 이번 달부터만 채움(지난 달을 한꺼번에 만들지 않게). 바꿨으면 0보다 큼 */
+export function enableRecurAuto() {
+  if (S.meta.recurAutoAll) return 0;
+  const now = nowISO(), thisMonth = todayStr().slice(0, 7);
+  for (const r of liveRecurs()) {
+    if (r.auto === true) continue;
+    S.recurring[r.id] = { ...r, auto: true, autoFrom: thisMonth, updatedAt: now };
+  }
+  S.meta.recurAutoAll = true;
+  return 1;
 }

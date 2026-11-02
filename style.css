@@ -981,3 +981,8 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .cal-legend-sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; background: var(--nospend); }
 .cal-smile { font-size: 0.85rem; line-height: 1.2; }
 .cal-smile-l { font-size: 0.95rem; line-height: 1; }
+
+/* 반복 내역 설정: 좁은 금액 칸에서도 ✕·숫자·'원'이 겹치지 않게 */
+.amount-wrap .input.sm.amount-input { padding: 0 34px 0 34px; }
+.amount-wrap .input.sm.amount-input ~ .amount-clear { left: 4px; width: 24px; height: 24px; }
+.amount-wrap .input.sm.amount-input ~ .amount-unit { right: 10px; }

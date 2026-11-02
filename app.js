@@ -3,9 +3,9 @@ import { loadState, saveState, setMemoryMode, emptyState } from "./store.js";
 import { sync, isConfigured, isConnected, connect, handleRedirect, refreshIfNeeded, syncNow, syncDrivePhotos } from "./sync.js";
 import { initLock, hideAmounts } from "./lock.js";
 import { $, S, SELFTEST, liveTx, migrateDebtTypes, setS, shiftMonth, toast, ui } from "./core.js";
-import { activeInstallments, autoRecur, balanceOf, cardBill, cardCycle, cleanMoveCategories, clearLinkCache, emptyFilter, freezeCatEtypes, frequentRoutes, guessCategory, orphanTxs, holdingsAt, isLoanTx, isMoveTx, isRepayTx, liveBudgets, migrateBalances, monthFigures, natureDraft, natureOf, newTxDraft, nextPayMonth, payMonthOf, recurDate, recurLastAmount, recurStatus, repairLoanTxs, retireOldCats, saveLoanTx, seedCats, seedSubcats, shortDebtType, txNature, txPassesFilter } from "./model.js";
+import { activeInstallments, autoRecur, balanceOf, cardBill, cardCycle, cleanMoveCategories, clearLinkCache, emptyFilter, enableRecurAuto, freezeCatEtypes, frequentRoutes, guessCategory, orphanTxs, holdingsAt, isLoanTx, isMoveTx, isRepayTx, liveBudgets, migrateBalances, monthFigures, natureDraft, natureOf, newTxDraft, nextPayMonth, payMonthOf, recurDate, recurLastAmount, recurStatus, repairLoanTxs, retireOldCats, saveLoanTx, seedCats, seedSubcats, shortDebtType, txNature, txPassesFilter } from "./model.js";
 import { closeModal, openDatePicker } from "./uikit.js";
-import { budgetSection, homeTabs, homeView, openBudgetDialog, openCardDialog, openOrphanDialog, openRecurAction, openRecurringDialog } from "./home.js";
+import { budgetSection, homeTabs, homeView, openAutoCheckDialog, openBudgetDialog, openCardDialog, openOrphanDialog, openRecurAction, openRecurringDialog } from "./home.js";
 import { catTrendSection, exportSettlement, networthBody, settleView } from "./settle.js";
 import { bindSearch, calendarView, listView, monthlyView, openFilterDialog } from "./list.js";
 import { openKindPicker, openRepayDialog, openTxDialog } from "./entry.js";
@@ -119,6 +119,7 @@ export function bindEvents() {
     if (e.target.closest("[data-settle-excel]")) return exportSettlement();
     if (e.target.closest("[data-budget-edit]")) return openBudgetDialog();
     if (e.target.closest("[data-orphans]")) return openOrphanDialog();
+    if (e.target.closest("[data-auto-check]")) return openAutoCheckDialog();
     const st = e.target.closest("[data-start]"); // 시작하기 칸
     if (st) {
       const k = st.dataset.start;
@@ -212,7 +213,8 @@ export async function main() {
   if (!fresh && refreshIfNeeded()) return; // 토큰 만료 → 조용히 재로그인하러 이동
   setS(await loadState());
   if (seedCats() + retireOldCats() + seedSubcats() + migrateDebtTypes() + repairLoanTxs() + migrateBalances() + freezeCatEtypes()) await saveState(S);
-  const autoN = autoRecur(); // 자동 기록 켠 반복 내역
+  if (enableRecurAuto()) await saveState(S); // 예전 반복 내역도 자동 기록 켜기(한 번)
+  const autoN = autoRecur(); // 반복 내역 자동 기록
   if (autoN) await saveState(S);
   sync.onChange = renderSyncBar;
   globalThis.__hideAmt = hideAmounts();

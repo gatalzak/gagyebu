@@ -2,7 +2,7 @@
 import { saveState, uid, nowISO } from "./store.js";
 import { toKRW } from "./fx.js";
 import { $, DEBT_TYPES, EXPENSE_TYPES, S, debtType, esc, fmtAmount, liveTx, monthTx, nowTime, parseAmount, shiftMonth, signed, sum, toast, todayStr, txKRW, txNewestFirst, ui, won, ym } from "./core.js";
-import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, dropTx, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, orphanTxs, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon, txBrief } from "./model.js";
+import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, dropTx, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, orphanTxs, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon, txBrief, unconfirmedRecurTx } from "./model.js";
 import { SUM_ICON, bindAmount, closeModal, homeLabel, openModal } from "./uikit.js";
 import { networthBody } from "./settle.js";
 import { isConfigured, isConnected } from "./sync.js";
@@ -143,7 +143,7 @@ export function recurringSection() {
     // 미납으로 기록한 달: 기록은 됐지만 갚아야 함
     const unpaid = tx && tx.assetDelta?.col === "debts" && debtType(S.debts[tx.assetDelta.id]) === "미납금";
     const mark = unpaid ? "!" : { done: "✓", skip: "–", due: "!", plan: "○" }[x];
-    const state = unpaid ? "미납 · 상환 필요" : x === "done" ? `${Number(tx.date.slice(8))}일 기록` : x === "skip" ? "이번 달 건너뜀" : x === "due" ? (late ? `${late}일 지남` : "오늘") : "예정";
+    const state = unpaid ? "미납 · 상환 필요" : tx?.unconfirmed ? "자동 기록 · 확인 필요" : x === "done" ? `${Number(tx.date.slice(8))}일 기록` : x === "skip" ? "이번 달 건너뜀" : x === "due" ? (late ? `${late}일 지남` : "오늘") : "예정";
     const amount = x === "done" ? won(txKRW(tx)) : r.variable ? `<span class="muted">금액 확인</span>` : won(r.amount);
     const via = recurVia(r);
     return `
@@ -248,7 +248,7 @@ export async function registerRecurring(tx, src) {
   S.recurring ||= {};
   S.recurring[id] = {
     id, nature, day: Number(tx.date.slice(8)), amount: src.amount, currency: src.currency || "KRW",
-    variable: nature === "repay", auto: false, startMonth: month, skips: [],
+    variable: nature === "repay", auto: true, startMonth: month, skips: [],
     ...(src.fields ? { fields: src.fields } : {}), ...(src.repay ? { repay: src.repay } : {}),
     createdAt: now, updatedAt: now, deleted: false,
   };
@@ -270,7 +270,7 @@ export function openRecurringDialog() {
         <p class="note">기록된 내역을 열고 '반복 내역으로 등록'을 누르면 여기에 추가돼요. 내용·카테고리를 바꾸려면 삭제하고 다시 등록하세요.</p>
         ${rows.length ? rows.map((r, i) => {
           const it = recurItem(r);
-          const canAuto = !r.variable && r.nature !== "repay" && (r.currency || "KRW") === "KRW";
+          const canAuto = (r.currency || "KRW") === "KRW";
           return `
           <div class="rc-edit${r.del ? " del" : ""}" data-i="${i}">
             <div class="rc-edit-top"><span class="rc-name">${esc(recurName(r))}</span><span class="${it.cls} rc-nat">${it.name}</span>
@@ -278,8 +278,8 @@ export function openRecurringDialog() {
             <div class="rc-edit-line">매달
               <select class="input sm rc-day" name="day" ${r.del ? "disabled" : ""}>${Array.from({ length: 31 }, (_, k) => k + 1).map((dd) => `<option value="${dd}" ${dd === r.day ? "selected" : ""}>${dd === 31 ? "말일" : `${dd}일`}</option>`).join("")}</select>
               <div class="amount-wrap rc-amt-in"><input class="input sm amount-input" name="amount" inputmode="numeric" value="${fmtAmount(r.amount)}" ${r.del ? "disabled" : ""}><span class="amount-unit">원</span></div></div>
-            <label class="check-line"><input type="checkbox" name="variable" ${r.variable ? "checked" : ""} ${r.del ? "disabled" : ""}> 금액이 매달 달라요 (기록할 때 금액 확인)</label>
-            <label class="check-line ${canAuto ? "" : "off"}"><input type="checkbox" name="auto" ${r.auto && canAuto ? "checked" : ""} ${canAuto && !r.del ? "" : "disabled"}> 날짜가 되면 자동 기록 <span class="muted">(자동이체처럼 꼭 빠져나가는 것만)</span></label>
+            <label class="check-line ${canAuto ? "" : "off"}"><input type="checkbox" name="auto" ${r.auto !== false && canAuto ? "checked" : ""} ${canAuto && !r.del ? "" : "disabled"}> <span>날짜가 되면 자동 기록 <span class="muted">(현황에서 확인 · 끄면 직접 기록)</span></span></label>
+            <label class="check-line"><input type="checkbox" name="variable" ${r.variable ? "checked" : ""} ${r.del ? "disabled" : ""}> <span>금액이 매달 달라요 <span class="muted">(지난번 금액으로 기록 → 확인할 때 고치기)</span></span></label>
           </div>`;
         }).join("") : `<div class="empty">등록된 반복 내역이 없어요.</div>`}
         <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
@@ -290,7 +290,7 @@ export function openRecurringDialog() {
       r.day = Number(el.querySelector("[name=day]").value);
       r.amount = parseAmount(el.querySelector("[name=amount]").value);
       r.variable = el.querySelector("[name=variable]").checked;
-      r.auto = el.querySelector("[name=auto]").checked && !r.variable;
+      r.auto = el.querySelector("[name=auto]").checked;
     });
     panel.querySelectorAll("[name=amount]").forEach(bindAmount);
     panel.querySelectorAll("[name=variable]").forEach((c) => (c.onchange = () => { read(); draw(); }));
@@ -302,8 +302,11 @@ export function openRecurringDialog() {
       for (const r of rows) {
         const cur = S.recurring[r.id];
         if (r.del) { S.recurring[r.id] = { ...cur, deleted: true, updatedAt: now }; continue; }
-        if (cur.day !== r.day || cur.amount !== r.amount || !!cur.variable !== r.variable || !!cur.auto !== r.auto)
-          S.recurring[r.id] = { ...cur, day: r.day, amount: r.amount, variable: r.variable, auto: r.auto, updatedAt: now };
+        const wasAuto = cur.auto !== false;
+        if (cur.day !== r.day || cur.amount !== r.amount || !!cur.variable !== r.variable || wasAuto !== r.auto)
+          S.recurring[r.id] = { ...cur, day: r.day, amount: r.amount, variable: r.variable, auto: r.auto,
+            ...(r.auto && !wasAuto ? { autoFrom: todayStr().slice(0, 7) } : {}), // 새로 켜면 이번 달부터
+            updatedAt: now };
       }
       closeModal();
       const n = autoRecur();
@@ -485,6 +488,38 @@ function moveCatTotals(list) {
   return Object.entries(by).sort((a, b) => b[1] - a[1]);
 }
 
+/** 자동 기록된 반복 내역 중 확인 안 한 것: 현황 맨 위 알림줄(누르면 확인 창) */
+function autoCheckBar() {
+  const list = unconfirmedRecurTx();
+  if (!list.length) return "";
+  return `<button class="orphan-bar auto-bar" data-auto-check><span>반복 내역 <span class="la-n">${list.length}건</span>을 자동으로 기록했어요</span><span class="ob-go">확인하기 ›</span></button>`;
+}
+/** 자동 기록 확인 창: 눌러서 금액 등을 고치거나(저장하면 확인됨), '모두 확인'으로 한 번에 */
+export function openAutoCheckDialog() {
+  const list = unconfirmedRecurTx();
+  if (!list.length) return closeModal();
+  const panel = openModal({
+    title: "자동 기록 확인",
+    center: true,
+    body: `
+      <p class="note">날짜가 되어 반복 내역을 자동으로 기록했어요. 금액이 다르면 눌러서 고쳐 주세요(저장하면 확인돼요). 맞으면 '모두 확인'을 누르세요.</p>
+      <div class="detail-items repay-items">${list.map((t) => txRow(t, { withDate: true })).join("")}</div>
+      <div class="btn-row"><button class="btn primary" data-auto-ok>모두 확인</button></div>`,
+  });
+  panel.querySelectorAll("[data-tx]").forEach((b) => (b.onclick = () => {
+    const t = S.transactions[b.dataset.tx];
+    if (isRepayTx(t)) openRepayDialog({ existing: t, onDone: () => { closeModal(); render(); } });
+    else openTxDialog(t);
+  }));
+  panel.querySelector("[data-auto-ok]").onclick = async () => {
+    const now = nowISO();
+    list.forEach((t) => { const { unconfirmed, ...rest } = S.transactions[t.id]; S.transactions[t.id] = { ...rest, updatedAt: now }; });
+    closeModal();
+    await commit();
+    toast(`${list.length}건 확인했어요`);
+  };
+}
+
 /** 처음 쓰는 사람용 '시작하기' 칸: 내역이 하나도 없을 때만 현황 맨 위에. 첫 내역을 저장하면 사라짐 */
 function startCard() {
   if (liveTx().length) return "";
@@ -631,6 +666,7 @@ export function homeView(part = "summary") {
   </section>`;
   const summary = `
   ${startCard()}
+  ${autoCheckBar()}
   ${orphanBar()}
   ${netWorthLine()}
   <section class="card">
