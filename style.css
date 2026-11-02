@@ -986,3 +986,4 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .amount-wrap .input.sm.amount-input { padding: 0 34px 0 34px; }
 .amount-wrap .input.sm.amount-input ~ .amount-clear { left: 4px; width: 24px; height: 24px; }
 .amount-wrap .input.sm.amount-input ~ .amount-unit { right: 10px; }
+.btn.recur-new-btn { color: var(--purple); margin-top: 16px; }

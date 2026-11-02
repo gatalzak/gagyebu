@@ -7,7 +7,7 @@ import { SUM_ICON, bindAmount, closeModal, homeLabel, openModal } from "./uikit.
 import { networthBody } from "./settle.js";
 import { isConfigured, isConnected } from "./sync.js";
 import { txRow } from "./list.js";
-import { openRepayDialog, openTxDialog } from "./entry.js";
+import { openRecurKindPicker, openRepayDialog, openTxDialog } from "./entry.js";
 import { commit, main, render, scheduleSync } from "./app.js";
 export const budgetBar = (spent, budget) => {
   const pct = budget ? spent / budget : 0;
@@ -267,7 +267,7 @@ export function openRecurringDialog() {
     const panel = openModal({
       title: "반복 내역 설정",
       body: `
-        <p class="note">기록된 내역을 열고 '반복 내역으로 등록'을 누르면 여기에 추가돼요. 내용·카테고리를 바꾸려면 삭제하고 다시 등록하세요.</p>
+        <p class="note">아래 '+ 반복 내역 등록'으로 새로 만들거나, 기록된 내역을 열고 '반복 내역으로 등록'을 누르면 여기에 추가돼요. 내용·카테고리를 바꾸려면 삭제하고 다시 등록하세요.</p>
         ${rows.length ? rows.map((r, i) => {
           const it = recurItem(r);
           const canAuto = (r.currency || "KRW") === "KRW";
@@ -282,8 +282,10 @@ export function openRecurringDialog() {
             <label class="check-line"><input type="checkbox" name="variable" ${r.variable ? "checked" : ""} ${r.del ? "disabled" : ""}> <span>금액이 매달 달라요 <span class="muted">(지난번 금액으로 기록 → 확인할 때 고치기)</span></span></label>
           </div>`;
         }).join("") : `<div class="empty">등록된 반복 내역이 없어요.</div>`}
+        <button class="btn route-pick-btn recur-new-btn" data-recur-new>+ 반복 내역 등록</button>
         <div class="btn-row"><button class="btn" data-cancel>취소</button><button class="btn primary" data-save>저장</button></div>`,
     });
+    panel.querySelector("[data-recur-new]").onclick = openRecurKindPicker;
     const read = () => panel.querySelectorAll("[data-i]").forEach((el) => {
       const r = rows[el.dataset.i];
       if (r.del) return;

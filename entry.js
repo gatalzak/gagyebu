@@ -3,9 +3,9 @@ import { saveState, uid, nowISO } from "./store.js";
 import { CURRENCIES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateKRW, refreshRates } from "./fx.js";
 import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
 import { $, EXPENSE_TYPES, KIND_CLASS, KIND_SIGN, S, debtType, esc, fmtAmount, nowTime, parseAmount, signed, toast, todayStr, ui } from "./core.js";
-import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addPhrase, addSubcat, amountInCurrency, applyFav, balanceOf, catsFor, clearLinkCache, curOf, deltaRef, dropTx, favFromDraft, favKey, frequentRoutes, guessCategory, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, livePhrases, natureDraft, natureOf, newTxDraft, parseLinkKey, removePhrase, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
+import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addPhrase, addSubcat, amountInCurrency, applyFav, autoRecur, balanceOf, catsFor, clearLinkCache, curOf, deltaRef, dropTx, favFromDraft, favKey, frequentRoutes, guessCategory, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, livePhrases, natureDraft, natureOf, newTxDraft, parseLinkKey, removePhrase, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
 import { CAMERA, HOME_ICONS, PENCIL, STAR, bindAmount, closeModal, holdingHelp, holdingOptions, openModal } from "./uikit.js";
-import { registerRecurring } from "./home.js";
+import { openRecurringDialog, registerRecurring } from "./home.js";
 import { openCategoryEditor, openHoldingsDialog } from "./manage.js";
 import { commit, render, scheduleSync } from "./app.js";
 export const pendingPhotos = new Map(); // 저장 전(내역 창에서 막 고른) 사진 id → Blob
@@ -64,7 +64,7 @@ async function afterRepay(debtId, paid) {
   }, 0);
 }
 
-export function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal, preset = null, replaces = null, onBack = null } = {}) {
+export function openRepayDialog({ existing = null, presetDebt = "", onDone = closeModal, preset = null, replaces = null, onBack = null, recurNew = false } = {}) {
   const prevDebt = existing?.deltas?.find((d) => d.col === "debts");
   const prevAsset = existing?.deltas?.find((d) => d.col === "assets");
   // 이자: 상환과 같이 낸 이자는 '금융/이자' 고정지출로 따로 기록하고 상환 내역에 연결해 둔다
@@ -102,7 +102,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       cls: "theme-debts",
       onBack,
       center: true,
-      title: existing ? "부채 상환 수정" : replaces ? "내역 수정" : "부채 상환",
+      title: recurNew ? "반복 내역 등록" : existing ? "부채 상환 수정" : replaces ? "내역 수정" : "부채 상환",
       body: `
         ${natureSelect("repay")}
         <div class="field"><label>상환할 부채 <span class="req">*</span></label>
@@ -117,12 +117,12 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
           <select class="input" name="asset">${holdingOptions(["assets"], draft.asset).replace("선택 안 함", "출금 자산을 골라 주세요")}</select>
           <div class="fx-hint" data-asset-hint></div>
         </div>
-        <div class="field"><label>날짜 · 시간 <span class="req">*</span></label>
+        ${recurNew ? recurDateField(draft.date) : `<div class="field"><label>날짜 · 시간 <span class="req">*</span></label>
           <div class="money-line">
             <input class="input" type="date" name="date" value="${draft.date}">
             <input class="input time-input" type="time" name="time" value="${draft.time}">
           </div>
-        </div>
+        </div>`}
         <div class="field"><label>상환 금액 <span class="muted">(원금)</span> <span class="req">*</span></label>
           <div class="amount-wrap" data-long="${cur !== "KRW"}">
             <input class="input amount-input" name="amount" inputmode="decimal" autocomplete="off" placeholder="0" value="${toInput(draft.amount, cur)}">
@@ -140,7 +140,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
         ${existing && !S.transactions[existing.id]?.recurId && draft.amount > 0 ? `<button class="btn fav-add-btn rec-add-btn" data-act="add-recur">${HOME_ICONS.반복} 반복 내역으로 등록 <span class="muted">(매달 ${Number(existing.date.slice(8))}일)</span></button>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : `<button class="btn" data-act="cancel">취소</button>`}
-          <button class="btn primary" data-act="save" disabled>${existing || replaces ? "저장" : "상환하기"}</button>
+          <button class="btn primary" data-act="save" disabled>${recurNew ? "반복 내역 등록" : existing || replaces ? "저장" : "상환하기"}</button>
         </div>
         <p class="note req-left" data-req-left></p>`,
     });
@@ -151,7 +151,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       draft.amount = parseMoney($p("[name=amount]").value, cur);
       draft.interest = parseMoney($p("[name=interest]").value, cur);
       draft.date = $p("[name=date]").value;
-      draft.time = $p("[name=time]").value;
+      draft.time = $p("[name=time]")?.value || "";
       draft.memo = $p("[name=memo]").value;
     };
     const amt = $p("[name=amount]");
@@ -179,7 +179,7 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
     amt.addEventListener("input", () => { amt.value = formatInput(amt.value, cur); amountTouched = true; hints(); });
     $p("[name=nature]").onchange = (e) => {
       read();
-      goNature(e.target.value, { amount: draft.amount, date: draft.date, time: draft.time, text: draft.memo, asset: draft.asset }, existing || replaces, { onBack });
+      goNature(e.target.value, { amount: draft.amount, date: draft.date, time: draft.time, text: draft.memo, asset: draft.asset }, existing || replaces, { onBack, recurNew });
     };
     const intIn = $p("[name=interest]");
     intIn.addEventListener("input", () => { intIn.value = formatInput(intIn.value, cur); hints(); });
@@ -225,6 +225,10 @@ export function openRepayDialog({ existing = null, presetDebt = "", onDone = clo
       if (draft.amount > 0 && !draft.asset) return toast("출금 자산을 골라 주세요.");
       if (draft.amount < 0) return toast("상환 금액을 확인해 주세요.");
       if (!draft.date) return toast("날짜를 입력해 주세요.");
+      if (recurNew) {
+        if (!(draft.amount > 0)) return toast("상환 금액을 입력해 주세요.");
+        return saveNewRecur({ nature: "repay", amount: draft.amount, currency: cur, repay: { debt: draft.debt, asset: draft.asset, memo: draft.memo } }, draft.date);
+      }
       const now = nowISO();
       const dcur = curOf(d);
       const over = roundFor(draft.amount - debtBalance(ref), dcur); // 저장 전에 계산(이 상환이 반영되기 전 잔액 기준)
@@ -422,18 +426,54 @@ export function openLoanDialog({ existing = null, presetDate = "", onBack = null
 // 외화 내역은 원래 금액(amount, currency)과 입력 당시 원화 금액(krw)을 함께 저장한다.
 // 원화 금액은 환율로 자동 계산되지만, 실제 입금·결제된 원화로 직접 고칠 수 있다.
 /** 새 내역의 기본값 (kind·expenseType 등을 덮어쓸 수 있음) */
-export function natureSelect(key) {
+export function natureSelect(key, { recur = false } = {}) {
   const cur = PICK_ITEMS.find((it) => it.key === key);
   return `<div class="field nature-field"><label>내역 성격</label>
-    <select class="input nature-sel ${cur?.cls || ""}" name="nature">${PICK_ITEMS.map((it, i) =>
+    <select class="input nature-sel ${cur?.cls || ""}" name="nature">${PICK_ITEMS.map((it, i) => recur && it.key === "borrow" ? "" : // 반복 등록엔 부채 발생 없음
       `<option value="${it.key}" ${it.key === key ? "selected" : ""}>${"①②③④⑤⑥⑦⑧"[i]} ${it.name}</option>`).join("")}</select></div>`;
 }
+/** 반복 내역 등록: 날짜 대신 '첫 날짜'(이날부터 매달 같은 날) */
+function recurDateField(date) {
+  return `<div class="field"><label>첫 날짜 <span class="req">*</span></label>
+    <input class="input" type="date" name="date" value="${date}">
+    <p class="note" style="margin-top:6px">이날부터 매달 같은 날에 자동으로 기록돼요(말일이 짧은 달은 그달 말일). 이미 지난 날이면 이번 달 것도 바로 기록돼요.</p></div>`;
+}
+/** 반복 내역 설정 창의 '반복 내역 등록': 내역은 만들지 않고 반복 내역만 등록한 뒤, 날짜가 된 달은 자동 기록 */
+async function saveNewRecur(src, date) {
+  const res = await registerRecurring({ id: null, date }, src);
+  if (!res) return;
+  const n = autoRecur();
+  await commit();
+  openRecurringDialog();
+  if (n) toast(`반복 내역을 등록했어요 · ${n}건 자동 기록(현황에서 확인)`);
+}
+/** 반복 내역 등록용 성격 고르기(부채 발생 제외) */
+export function openRecurKindPicker() {
+  const items = PICK_ITEMS.filter((it) => it.key !== "borrow");
+  const panel = openModal({
+    cls: "kind-picker",
+    center: true,
+    title: "반복 내역 등록",
+    onBack: openRecurringDialog,
+    body: `
+      <p class="kp-intro">매달 반복되는 내역인가요?<br>먼저 <span class="kp-em">내역 성격</span>을 골라 주세요.</p>
+      <div class="kp-list">${items.map((it) => `
+        <button class="kp-item" data-pick="${it.key}">
+          <span class="kp-num">${"①②③④⑤⑥⑦⑧"[PICK_ITEMS.indexOf(it)]}</span>
+          <span class="kp-ico ${it.cls}">${HOME_ICONS[it.icon]}</span>
+          <span class="kp-text"><span class="kp-name ${it.cls}">${it.name}</span><span class="kp-desc">${it.desc}</span></span>
+          <span class="kp-go">›</span>
+        </button>`).join("")}</div>`,
+  });
+  panel.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () =>
+    goNature(b.dataset.pick, { date: todayStr(), time: "", amount: 0, text: "" }, null, { onBack: openRecurKindPicker, recurNew: true })));
+}
 /** 다른 성격의 창으로 넘어가기. c: 이어받을 값 {date, time, amount, text, asset}, replaces: 저장하면 지울 원래 내역 */
-export function goNature(key, c, replaces = null, { onBack = null } = {}) {
+export function goNature(key, c, replaces = null, { onBack = null, recurNew = false } = {}) {
   const done = () => { closeModal(); render(); };
-  if (key === "repay") return openRepayDialog({ preset: { amount: c.amount, date: c.date, time: c.time, memo: c.text, asset: c.asset || "" }, replaces, onDone: done, onBack });
+  if (key === "repay") return openRepayDialog({ preset: { amount: c.amount, date: c.date, time: c.time, memo: c.text, asset: c.asset || "" }, replaces, onDone: recurNew ? openRecurringDialog : done, onBack, recurNew });
   if (key === "borrow") return openLoanDialog({ preset: { amount: c.amount, date: c.date, time: c.time, memo: c.text, asset: c.asset || "" }, replaces, onBack });
-  openTxDialog(null, null, newTxDraft(c.date, { ...natureDraft(key, c.asset || ""), amount: c.amount || 0, time: c.time || nowTime(), content: c.text || "" }), { replaces, onBack });
+  openTxDialog(null, null, newTxDraft(c.date, { ...natureDraft(key, c.asset || ""), amount: c.amount || 0, time: c.time || nowTime(), content: c.text || "" }), { replaces, onBack, recurNew });
 }
 /** 성격을 바꿔 다른 창에서 저장할 때 원래 내역(과 연결된 이자 기록)을 지운다 */
 export function openKindPicker(presetDate) {
@@ -548,7 +588,7 @@ function openPhraseSheet({ field, kind, current, onPick, onChange }) {
   draw();
 }
 
-export function openTxDialog(existing, presetDate, preset = null, { replaces = null, onBack = null } = {}) {
+export function openTxDialog(existing, presetDate, preset = null, { replaces = null, onBack = null, recurNew = false } = {}) {
   if (existing && isRepayTx(existing)) return openRepayDialog({ existing }); // 상환 기록은 상환 창에서 고친다
   if (existing && isLoanTx(existing)) return openLoanDialog({ existing }); // 대출 실행 기록은 대출 창에서
   const draft = preset ? { ...preset } : existing ? { currency: "KRW", ...existing } : newTxDraft(presetDate);
@@ -600,17 +640,17 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       keepScroll: keepPos, // 다시 그릴 때(카테고리 고르기 등) 화면 위치 유지
       onBack: existing ? null : onBack, // 내역 성격 고르기에서 왔으면 뒤로 가기
       center: true, // 제목 가운데
-      title: existing || replaces ? "내역 수정" : debtMode ? `${SHORT_DEBT[debtMode].title}` : "내역 추가",
-      headExtra: existing || replaces ? "" : `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
+      title: recurNew ? "반복 내역 등록" : existing || replaces ? "내역 수정" : debtMode ? `${SHORT_DEBT[debtMode].title}` : "내역 추가",
+      headExtra: existing || replaces || recurNew ? "" : `<button class="icon-only star-btn" data-act="favs" aria-label="자주 쓰는 내역">${STAR}</button>`,
       body: `
-        ${natureSelect(natureOf(draft))}
+        ${natureSelect(natureOf(draft), { recur: recurNew })}
         ${draft.recurId && S.recurring?.[draft.recurId] ? `<p class="note rc-tag">${HOME_ICONS.반복} 반복 내역 · ${Number((draft.recurMonth || "").slice(5))}월분${existing?.unconfirmed ? " · 자동 기록됨 (저장하면 확인돼요)" : ""}</p>` : ""}
-        <div class="field"><label>날짜 · 시간 <span class="req">*</span></label>
+        ${recurNew ? recurDateField(draft.date) : `<div class="field"><label>날짜 · 시간 <span class="req">*</span></label>
           <div class="money-line">
             <input class="input" type="date" name="date" value="${draft.date}">
             <input class="input time-input" type="time" name="time" value="${draft.time || ""}">
           </div>
-        </div>
+        </div>`}
         <div class="field"><label>금액 <span class="req">*</span></label>
           <div class="money-line">
             <div class="amount-wrap">
@@ -681,11 +721,11 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
           ${draft.photos?.length ? `<div class="photo-strip">${draft.photos.map((id) => `
             <div class="photo-thumb" data-photo="${id}"><span class="pt-wait">사진</span><img alt="영수증 사진" hidden><button class="photo-del" data-photo-del="${id}" aria-label="사진 빼기">✕</button></div>`).join("")}</div>` : ""}
         </div>` : ""}
-        <button class="btn fav-add-btn" data-act="add-fav">${STAR} 자주 쓰는 내역으로 등록</button>
+        ${recurNew ? "" : `<button class="btn fav-add-btn" data-act="add-fav">${STAR} 자주 쓰는 내역으로 등록</button>`}
         ${existing && !draft.recurId && !existing.interest ? `<button class="btn fav-add-btn rec-add-btn" data-act="add-recur">${HOME_ICONS.반복} 반복 내역으로 등록 <span class="muted">(매달 ${Number(existing.date.slice(8))}일)</span></button>` : ""}
         <div class="btn-row">
           ${existing ? `<button class="btn danger" data-act="delete">${confirmDelete ? "한 번 더 누르면 삭제" : "삭제"}</button>` : ""}
-          <button class="btn primary" data-act="save">저장</button>
+          <button class="btn primary" data-act="save">${recurNew ? "반복 내역 등록" : "저장"}</button>
         </div>`,
     });
     const $p = (sel) => panel.querySelector(sel);
@@ -713,7 +753,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       draft.amount = parseMoney(amt.value, draft.currency);
       draft.krw = parseAmount(krwIn.value);
       draft.date = $p("[name=date]").value;
-      draft.time = $p("[name=time]").value;
+      draft.time = $p("[name=time]")?.value || "";
       if ($p("[name=category]")) draft.category = $p("[name=category]").value;
       // 카드·마통 사용: 고른 카테고리가 고정인지 변동인지를 따라감
       if (draft.kind === "지출" && CARD_MODES.includes(draft.debtMode) && draft.category) draft.expenseType = catsFor("지출", "고정").includes(draft.category) ? "고정" : "변동";
@@ -777,7 +817,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       if (key === "repay" || key === "borrow") {
         const ref = parseLinkKey(draft.link);
         return goNature(key, { amount: draft.amount, date: draft.date, time: draft.time, text: draft.content,
-          asset: draft.kind === "자산이동" ? draft.fromAsset : ref?.col === "assets" ? draft.link : "" }, existing || replaces, { onBack });
+          asset: draft.kind === "자산이동" ? draft.fromAsset : ref?.col === "assets" ? draft.link : "" }, existing || replaces, { onBack, recurNew });
       }
       Object.assign(draft, natureDraft(key, draft.kind === "자산이동" ? draft.fromAsset : draft.link));
       draft.subcategory = "";
@@ -877,6 +917,13 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       if (draft.kind === "지출" && $p("[data-pay-field]") && !$p("[data-pay-field]").hidden && !draft.pay) return bad("[name=pay]", "결제 수단을 골라 주세요.");
       if (!(draft.content || "").trim()) return bad("[name=content]", "내용을 입력해 주세요.");
       if (!draft.category) return bad("[name=category]", "카테고리를 골라 주세요.");
+      if (recurNew) {
+        if (foreignNow) return toast("반복 내역 자동 기록은 원화만 돼요.");
+        const f = favFromDraft(draft);
+        f.debtMode = draft.kind === "지출" ? draft.debtMode || "" : "";
+        f.pay = draft.pay || "";
+        return saveNewRecur({ nature: natureOf(draft), amount: draft.amount, currency: draft.currency, fields: f }, draft.date);
+      }
       const now = nowISO();
       const isMove = draft.kind === "자산이동";
       let deltas = null;
@@ -972,7 +1019,7 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
         read();
         const ref = parseLinkKey(draft.link);
         goNature("repay", { amount: draft.amount, date: draft.date, time: draft.time, text: draft.content,
-          asset: ref?.col === "assets" ? draft.link : "" }, existing || replaces, { onBack });
+          asset: ref?.col === "assets" ? draft.link : "" }, existing || replaces, { onBack, recurNew });
       };
     }
     panel.querySelectorAll("[data-reg]").forEach((b) => (b.onclick = () => {
