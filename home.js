@@ -2,7 +2,7 @@
 import { saveState, uid, nowISO } from "./store.js";
 import { toKRW } from "./fx.js";
 import { $, DEBT_TYPES, EXPENSE_TYPES, S, debtType, esc, fmtAmount, liveTx, monthTx, nowTime, parseAmount, shiftMonth, signed, sum, toast, todayStr, txKRW, txNewestFirst, ui, won, ym } from "./core.js";
-import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, dropTx, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, orphanTxs, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon, txBrief, unconfirmedRecurTx } from "./model.js";
+import { BUDGET_TOTAL, MOVE_NONE, SHORT_DEBT, activeInstallments, applyFav, autoRecur, balanceOf, budgetId, cardBill, cardCycle, catsFor, curOf, dday, deltaRef, dropTx, expenseCats, hasBilling, hasHoldings, holdingsAt, isLoanTx, isMoveTx, isPlainExpense, isRepayTx, isShortDebt, linkKey, liveBudgets, liveLink, liveRecurs, loanTotals, md, monthEnd, monthLast, moveRoute, netStartMonth, newTxDraft, nextPayMonth, orphanTxs, parseLinkKey, recurDate, recurItem, recurLastAmount, recurName, recurStatus, recurTx, recurVia, repayTotals, routeTotals, shortDebtType, signedWon, txBrief, unconfirmedRecurTx, viewPayMonth } from "./model.js";
 import { SUM_ICON, bindAmount, closeModal, homeLabel, openModal } from "./uikit.js";
 import { networthBody } from "./settle.js";
 import { isConfigured, isConnected } from "./sync.js";
@@ -337,13 +337,13 @@ export function creditCardSection(shortDebt) {
       <span class="rc-text"><span class="rc-name">${esc(d.name)}</span><span class="rc-sub">이번 달 사용 · <span class="cb-set">결제일 설정 ›</span></span></span>
       <span class="rc-right">${used}<span class="rc-state">사용</span></span>
     </button>`;
-    const b = cardBill(d, nextPayMonth(d));
+    const b = cardBill(d, viewPayMonth(d, ui.month)); // 보고 있는 달 기준(지난달을 보면 그때의 결제분)
     const done = b.total > 0 && b.paid >= b.total;
     const inst = activeInstallments(d).length;
     return `
     <button class="rc-row cb-row" data-card="${d.id}">
       <span class="rc-text"><span class="rc-name">${esc(d.name)}</span>
-        <span class="rc-sub">${md(b.payDate)} 결제 <span class="cred">${won(b.total)}</span> · <span class="${done ? "cb-done" : ""}">${done ? "상환 완료" : dday(b.payDate)}</span>${inst ? ` · 할부 ${inst}건` : ""}</span></span>
+        <span class="rc-sub">${md(b.payDate)} 결제 <span class="cred">${won(b.total)}</span> · <span class="${done ? "cb-done" : ""}">${done ? "상환 완료" : !b.total ? "청구 없음" : dday(b.payDate)}</span>${inst ? ` · 할부 ${inst}건` : ""}</span></span>
       <span class="rc-right">${used}<span class="rc-state">사용</span></span>
     </button>`;
   }).join("");
@@ -363,7 +363,7 @@ export function openCardDialog(id) {
   const fit = { open: false, amount: 0 };
   const draw = () => {
     const cfg = { ...d, ...form };
-    const pm = hasBilling(d) ? nextPayMonth(d) : null;
+    const pm = hasBilling(d) ? viewPayMonth(d, ui.month) : null;
     const b = pm && cardBill(d, pm);
     const after = pm && cardBill(d, shiftMonth(pm, 1));
     const insts = hasBilling(d) ? activeInstallments(d) : [];
@@ -376,7 +376,7 @@ export function openCardDialog(id) {
       body: `
         ${b ? `
         <div class="cb-head">
-          <div class="row-main"><span>${Number(b.payDate.slice(5, 7))}월 ${Number(b.payDate.slice(8))}일 청구 예정 <span class="muted">${dday(b.payDate)}</span></span><span class="cred">${won(b.total)}</span></div>
+          <div class="row-main"><span>${Number(b.payDate.slice(5, 7))}월 ${Number(b.payDate.slice(8))}일 ${b.payDate < todayStr() ? "결제분" : "청구 예정"} <span class="muted">${b.paid >= b.total && b.total ? "상환 완료" : !b.total ? "청구 없음" : dday(b.payDate)}</span></span><span class="cred">${won(b.total)}</span></div>
           <div class="cb-period">사용 기간 ${md(b.start)} ~ ${md(b.end)}${b.paid > 0 ? ` · 상환 ${won(b.paid)}${b.paid >= b.total && b.total ? " (완료)" : ""}` : ""}</div>
           ${b.items.length ? b.items.map(itemRow).join("") : `<div class="row-sub"><span>이 기간 사용 내역이 없어요</span><span></span></div>`}
           ${b.total > b.paid ? `<button class="btn primary cb-pay" data-cb-pay>${won(b.total - b.paid)} 대금 상환 기록하기</button>` : ""}
@@ -389,7 +389,7 @@ export function openCardDialog(id) {
           </div>` : `<button class="btn cb-fit-btn" data-fit-open>카드사 금액으로 맞추기</button>`}
         </div>
         <div class="cb-head">
-          <div class="row-main"><span>다음 결제분 <span class="muted">지금까지</span></span><span>${won(after.total)}</span></div>
+          <div class="row-main"><span>다음 결제분${after.end >= todayStr() ? ` <span class="muted">지금까지</span>` : ""}</span><span>${won(after.total)}</span></div>
           <div class="cb-period">${Number(after.payDate.slice(5, 7))}월 ${Number(after.payDate.slice(8))}일 결제 · 사용 기간 ${md(after.start)} ~ ${md(after.end)}</div>
         </div>
         ${insts.length ? `<div class="section-title">진행 중인 할부</div>

@@ -365,6 +365,8 @@ export function cardBill(d, payMonth) {
 }
 /** 다음 결제 달: 이번 달 결제일이 안 지났으면 이번 달, 지났으면 다음 달 */
 export const nextPayMonth = (d) => { const m = todayStr().slice(0, 7); return todayStr() <= dayIn(m, d.payDay) ? m : shiftMonth(m, 1); };
+/** 고른 달(현황에서 보는 달)에 맞춘 결제 달: 이번 달이면 다음 결제 달, 다른 달이면 같은 간격만큼 옮김(11월에 12/5 → 10월엔 11/5) */
+export const viewPayMonth = (d, month) => shiftMonth(nextPayMonth(d), monthDiff(todayStr().slice(0, 7), month));
 /** 진행 중인 할부: 다음 결제분부터 남은 회차·금액 */
 export function activeInstallments(d) {
   const pm = nextPayMonth(d);
