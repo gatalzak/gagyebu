@@ -998,3 +998,8 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .rc-row.unconf + .rc-row, .rc-row + .rc-row.unconf, .tx.unconf + .tx, .tx + .tx.unconf { border-top-color: transparent; }
 .rc-row.unconf .rc-state { color: var(--yellow); }
 .cat-badge.b-auto { background: transparent; color: var(--yellow); box-shadow: inset 0 0 0 1px var(--y-line); }
+
+/* 반복 내역 섹션 안의 '확인하기' 줄 · 자동 기록 확인 창의 내역 수정 */
+.card .auto-bar { margin: 10px 0 4px; }
+.btn.auto-edit-btn { margin-top: 14px; }
+[data-auto-list].picking .tx { box-shadow: inset 0 0 0 1px var(--y-line); border-radius: 4px; }

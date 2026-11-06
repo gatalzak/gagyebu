@@ -157,9 +157,10 @@ export function recurringSection() {
   // 현황에는 처리할 것(날짜 지남·미납)만 펼치고, 나머지는 개수 한 줄 + 전체 보기
   const isUnpaid = ([r, x]) => { const tx = x === "done" && recurTx(r, ui.month); return tx && tx.assetDelta?.col === "debts" && debtType(S.debts[tx.assetDelta.id]) === "미납금"; };
   const isUnconf = ([r, x]) => x === "done" && !!recurTx(r, ui.month)?.unconfirmed; // 자동 기록 · 확인 필요
-  const urgent = st.filter((e) => e[1] === "due" || isUnpaid(e) || isUnconf(e));
-  const rest = st.filter((e) => !urgent.includes(e));
-  const cnt = (k) => rest.filter(([, x]) => x === k).length;
+  // 자동 기록·확인 필요 항목은 위 '확인하기' 줄로 모아 보여 주므로 목록에서는 뺀다(중복 방지)
+  const urgent = st.filter((e) => !isUnconf(e) && (e[1] === "due" || isUnpaid(e)));
+  const rest = st.filter((e) => !isUnconf(e) && !urgent.includes(e));
+  const cnt = (k) => st.filter((e) => !urgent.includes(e) && e[1] === k).length; // 자동 기록(확인 전)도 '기록'에 셈
   const next = st.find(([, x]) => x === "plan");
   const summary = urgent.length
     ? [`✓ 기록 ${cnt("done")}`, `○ 예정 ${cnt("plan")}`, cnt("skip") ? `– 건너뜀 ${cnt("skip")}` : ""].filter(Boolean).join(" · ")
@@ -172,6 +173,7 @@ export function recurringSection() {
   return `
   <section class="card home-sec">
     ${head(`<span class="rec">${done}/${list.length} 기록</span>`)}
+    ${autoCheckBar()}
     ${rows}
     <div class="bud-foot"><button class="reg-link rec-link" data-recur-manage>반복 내역 관리 ›</button></div>
   </section>`;
@@ -506,9 +508,16 @@ export function openAutoCheckDialog() {
     center: true,
     body: `
       <p class="note">날짜가 되어 반복 내역을 자동으로 기록했어요. 금액이 다르면 눌러서 고쳐 주세요(저장하면 확인돼요). 맞으면 '모두 확인'을 누르세요.</p>
-      <div class="detail-items repay-items">${list.map((t) => txRow(t, { withDate: true })).join("")}</div>
+      <div class="detail-items repay-items" data-auto-list>${list.map((t) => txRow(t, { withDate: true })).join("")}</div>
+      <button class="btn auto-edit-btn" data-auto-edit>내역 수정</button>
       <div class="btn-row"><button class="btn primary" data-auto-ok>모두 확인</button></div>`,
   });
+  // 내역 수정: 1건이면 바로 열고, 여러 건이면 고칠 내역을 누르도록 표시
+  panel.querySelector("[data-auto-edit]").onclick = () => {
+    if (list.length === 1) return panel.querySelector("[data-tx]").click();
+    panel.querySelector("[data-auto-list]").classList.add("picking");
+    toast("고칠 내역을 눌러 주세요");
+  };
   panel.querySelectorAll("[data-tx]").forEach((b) => (b.onclick = () => {
     const t = S.transactions[b.dataset.tx];
     if (isRepayTx(t)) openRepayDialog({ existing: t, onDone: () => { closeModal(); render(); } });
@@ -669,7 +678,6 @@ export function homeView(part = "summary") {
   </section>`;
   const summary = `
   ${startCard()}
-  ${autoCheckBar()}
   ${orphanBar()}
   ${netWorthLine()}
   <section class="card">
