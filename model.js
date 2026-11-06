@@ -345,8 +345,7 @@ export function payMonthOf(d, date) {
   const closeM = date <= dayIn(m, d.closeDay) ? m : shiftMonth(m, 1);
   return d.closeMonth === "this" ? closeM : shiftMonth(closeM, 1);
 }
-// 카드에 청구되는 것: 카드로 쓴 지출 + 카드에 붙은 수수료·이자(interest, 지출로 세지만 대금에는 들어감)
-export const cardUses = (d) => liveTx().filter((t) => t.kind === "지출" && t.assetDelta?.col === "debts" && t.assetDelta.id === d.id);
+export const cardUses = (d) => liveTx().filter((t) => t.kind === "지출" && !t.interest && t.assetDelta?.col === "debts" && t.assetDelta.id === d.id);
 export const instPortion = (amt, n, k) => (k === n - 1 ? amt - Math.floor(amt / n) * (n - 1) : Math.floor(amt / n));
 /** payMonth 결제분: 기간·청구 금액·항목(할부는 그 회차 금액) */
 export function cardBill(d, payMonth) {
