@@ -343,8 +343,8 @@ export function creditCardSection(shortDebt) {
     return `
     <button class="rc-row cb-row" data-card="${d.id}">
       <span class="rc-text"><span class="rc-name">${esc(d.name)}</span>
-        <span class="rc-sub">${md(b.payDate)} 신용카드 대금 청구 · <span class="${done ? "cb-done" : ""}">${done ? "상환 완료" : !b.total ? "청구 없음" : dday(b.payDate)}</span>${inst ? ` · 할부 ${inst}건` : ""}</span>
-        <span class="rc-sub">${Number(b.end.slice(5, 7))}월분 신용카드 사용 금액: <span class="cred">${won(b.total)}</span></span></span>
+        <span class="rc-sub">${md(b.payDate)} ${b.payDate < todayStr() ? "결제일" : "결제 예정일"} · <span class="${done ? "cb-done" : ""}">${done ? "상환 완료" : !b.total ? "청구 없음" : dday(b.payDate)}</span>${inst ? ` · 할부 ${inst}건` : ""}</span>
+        <span class="rc-sub">${Number(b.end.slice(5, 7))}월분 신용카드 사용 금액 (할부 포함): <span class="cred">${won(b.total)}</span></span></span>
       <span class="rc-right">${used}<span class="rc-state">사용</span></span>
     </button>`;
   }).join("");
