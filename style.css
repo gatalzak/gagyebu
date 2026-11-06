@@ -992,3 +992,9 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .rec-add-btn.on { border-color: var(--purple); }
 .del-recur-note { margin-top: 14px; word-break: keep-all; }
 .btn.del-recur-btn { margin-top: 8px; }
+
+/* 자동 기록됐지만 확인 안 한 반복 내역: 옐로우 음영으로 눈에 띄게(현황 반복 내역 줄·내역 목록) */
+.rc-row.unconf, .tx.unconf { background: var(--y-bg); box-shadow: inset 3px 0 0 var(--yellow); border-radius: 4px; padding-left: 10px; padding-right: 8px; }
+.rc-row.unconf + .rc-row, .rc-row + .rc-row.unconf, .tx.unconf + .tx, .tx + .tx.unconf { border-top-color: transparent; }
+.rc-row.unconf .rc-state { color: var(--yellow); }
+.cat-badge.b-auto { background: transparent; color: var(--yellow); box-shadow: inset 0 0 0 1px var(--y-line); }

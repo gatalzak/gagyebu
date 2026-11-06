@@ -147,7 +147,7 @@ export function recurringSection() {
     const amount = x === "done" ? won(txKRW(tx)) : r.variable ? `<span class="muted">금액 확인</span>` : won(r.amount);
     const via = recurVia(r);
     return `
-    <button class="rc-row ${x}${unpaid ? " unpaid" : ""}" data-recur="${r.id}">
+    <button class="rc-row ${x}${unpaid ? " unpaid" : ""}${tx?.unconfirmed ? " unconf" : ""}" data-recur="${r.id}">
       <span class="rc-mark">${mark}</span>
       <span class="rc-text"><span class="rc-name">${esc(recurName(r))}</span>
         <span class="rc-sub">매달 ${r.day >= 31 ? "말일" : `${r.day}일`} · <span class="${it.cls}">${it.name}</span>${via ? ` · ${esc(via)}` : ""}</span></span>
@@ -156,7 +156,8 @@ export function recurringSection() {
   };
   // 현황에는 처리할 것(날짜 지남·미납)만 펼치고, 나머지는 개수 한 줄 + 전체 보기
   const isUnpaid = ([r, x]) => { const tx = x === "done" && recurTx(r, ui.month); return tx && tx.assetDelta?.col === "debts" && debtType(S.debts[tx.assetDelta.id]) === "미납금"; };
-  const urgent = st.filter((e) => e[1] === "due" || isUnpaid(e));
+  const isUnconf = ([r, x]) => x === "done" && !!recurTx(r, ui.month)?.unconfirmed; // 자동 기록 · 확인 필요
+  const urgent = st.filter((e) => e[1] === "due" || isUnpaid(e) || isUnconf(e));
   const rest = st.filter((e) => !urgent.includes(e));
   const cnt = (k) => rest.filter(([, x]) => x === k).length;
   const next = st.find(([, x]) => x === "plan");
