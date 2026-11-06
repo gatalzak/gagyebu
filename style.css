@@ -1010,10 +1010,3 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 /* 내역 목록의 자동 기록 줄도 옐로우 음영만(왼쪽 선 없음), 이어지면 작은 틈 */
 .tx.unconf { box-shadow: none; }
 .tx.unconf + .tx.unconf { margin-top: 6px; }
-
-/* 카드 창: 카드사 금액으로 맞추기 */
-.btn.cb-fit-btn { width: 100%; margin-top: 8px; color: var(--text-2); }
-.cb-fit { margin-top: 12px; }
-.cb-fit .field:first-child { margin-top: 0; }
-.cb-fit-msg { margin-top: 8px; word-break: keep-all; line-height: 1.6; }
-.cb-fit [data-fit-save] { white-space: nowrap; }

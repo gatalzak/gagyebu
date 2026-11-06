@@ -358,9 +358,6 @@ export function creditCardSection(shortDebt) {
 export function openCardDialog(id) {
   const d = S.debts[id];
   const form = { payDay: d.payDay || 25, closeDay: d.closeDay || 31, closeMonth: d.closeMonth || "prev" };
-  // 카드사 금액으로 맞추기: 카드사가 알려 준 결제 예정 금액을 넣으면 앱 계산과의 차이를 보여 주고,
-  // 카드사 금액이 더 많으면(보통 수수료) 그 차액으로 변동지출 '신용카드 수수료' 입력 창을 연다(출금 자산은 직접 고름)
-  const fit = { open: false, amount: 0 };
   const draw = () => {
     const cfg = { ...d, ...form };
     const pm = hasBilling(d) ? viewPayMonth(d, ui.month) : null;
@@ -379,14 +376,7 @@ export function openCardDialog(id) {
           <div class="row-main"><span>${Number(b.payDate.slice(5, 7))}월 ${Number(b.payDate.slice(8))}일 ${b.payDate < todayStr() ? "결제분" : "청구 예정"} <span class="muted">${b.paid >= b.total && b.total ? "상환 완료" : !b.total ? "청구 없음" : dday(b.payDate)}</span></span><span class="cred">${won(b.total)}</span></div>
           <div class="cb-period">사용 기간 ${md(b.start)} ~ ${md(b.end)}${b.paid > 0 ? ` · 상환 ${won(b.paid)}${b.paid >= b.total && b.total ? " (완료)" : ""}` : ""}</div>
           ${b.items.length ? b.items.map(itemRow).join("") : `<div class="row-sub"><span>이 기간 사용 내역이 없어요</span><span></span></div>`}
-          ${b.total > b.paid ? `<button class="btn primary cb-pay" data-cb-pay>${won(b.total - b.paid)} 대금 상환 기록하기</button>` : ""}
-          ${fit.open ? `
-          <div class="cb-fit">
-            <div class="field"><label>카드사 결제 예정 금액 <span class="muted">(${Number(b.payDate.slice(5, 7))}월 ${Number(b.payDate.slice(8))}일 결제분)</span></label>
-              <div class="amount-wrap"><input class="input amount-input" name="fitAmt" inputmode="numeric" placeholder="카드사 앱·문자의 금액" value="${fit.amount ? fmtAmount(fit.amount) : ""}"><span class="amount-unit">원</span></div></div>
-            <p class="note cb-fit-msg" data-fit-msg></p>
-            <div class="btn-row"><button class="btn" data-fit-cancel>취소</button><button class="btn primary" data-fit-save disabled>수수료 기록하기</button></div>
-          </div>` : `<button class="btn cb-fit-btn" data-fit-open>카드사 금액으로 맞추기</button>`}
+          ${b.total > b.paid ? `<button class="btn primary cb-pay" data-cb-pay>신용카드 대금 상환하기</button>` : ""}
         </div>
         <div class="cb-head">
           <div class="row-main"><span>다음 결제분${after.end >= todayStr() ? ` <span class="muted">지금까지</span>` : ""}</span><span>${won(after.total)}</span></div>
@@ -420,43 +410,6 @@ export function openCardDialog(id) {
       toast(`${d.name} 결제일을 저장했어요`);
       draw();
     };
-    // ---- 카드사 금액으로 맞추기 ----
-    q("[data-fit-open]")?.addEventListener("click", () => { fit.open = true; draw(); q("[name=fitAmt]")?.focus(); });
-    const fitIn = q("[name=fitAmt]");
-    if (fitIn) {
-      const msg = q("[data-fit-msg]"), save = q("[data-fit-save]");
-      const update = () => {
-        fit.amount = parseAmount(fitIn.value);
-        const diff = fit.amount - b.total;
-        save.disabled = !(fit.amount > 0 && diff > 0);
-        save.textContent = fit.amount > 0 && diff > 0 ? `수수료 ${won(diff)} 기록하기` : "수수료 기록하기";
-        msg.innerHTML = !fit.amount ? `앱 계산은 <span class="cred">${won(b.total)}</span>이에요. 카드사에서 받은 결제 예정 금액을 넣어 주세요.`
-          : diff > 0 ? `카드사 금액이 앱 계산(${won(b.total)})보다 <span class="cred">${won(diff)}</span> 많아요. 빠진 사용이 없다면 이 차액은 보통 <span class="cred">신용카드 수수료</span>예요. 아래 버튼을 누르면 차액만큼 <span class="exp">변동지출</span> 입력 창이 열려요. 출금 자산을 골라 저장하세요.`
-          : diff < 0 ? `앱 계산(${won(b.total)})이 <span class="cred">${won(-diff)}</span> 더 많아요. 위 목록에서 취소·환불된 내역이나 다음 결제분으로 넘어가야 할 내역이 있는지 확인해 주세요.`
-          : "앱 계산과 카드사 금액이 같아요.";
-      };
-      bindAmount(fitIn);
-      fitIn.addEventListener("input", update);
-      update();
-      q("[data-fit-cancel]").onclick = () => { fit.open = false; fit.amount = 0; draw(); };
-      q("[data-fit-save]").onclick = async () => {
-        const diff = fit.amount - b.total;
-        if (!(diff > 0)) return;
-        // '신용카드 수수료' 카테고리(변동지출)가 없으면 만든다(기기끼리 겹치지 않게 이름으로 id)
-        if (!catsFor("지출").includes("신용카드 수수료")) {
-          const now = nowISO(), cid = "cat:지출:신용카드 수수료";
-          S.cats[cid] = { id: cid, kind: "지출", name: "신용카드 수수료", order: 999, etype: "변동", createdAt: now, updatedAt: now, deleted: false };
-          await saveState(S);
-          scheduleSync();
-        }
-        const draft = newTxDraft(todayStr(), { kind: "지출", expenseType: "변동", debtMode: "", link: "", amount: diff,
-          content: "신용카드 수수료", memo: `${d.name} ${Number(b.payDate.slice(5, 7))}월 결제분 · 카드사 금액 ${won(fit.amount)}에 맞춤` });
-        draft.category = "신용카드 수수료";
-        draft.catTouched = true;
-        fit.open = false; fit.amount = 0;
-        openTxDialog(null, null, draft, { onBack: () => openCardDialog(id) });
-      };
-    }
     q("[data-cb-pay]")?.addEventListener("click", () => openRepayDialog({
       presetDebt: id,
       preset: { amount: b.total - b.paid, date: todayStr(), time: nowTime(), memo: `${Number(b.payDate.slice(5, 7))}월 카드 대금` },
