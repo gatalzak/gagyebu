@@ -1007,3 +1007,6 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 [data-auto-list] .tx.unconf { box-shadow: none; }
 [data-auto-list].picking .tx.unconf { box-shadow: inset 0 0 0 1px var(--y-line); }
 [data-auto-list] .tx.unconf + .tx.unconf { margin-top: 6px; }
+/* 내역 목록의 자동 기록 줄도 옐로우 음영만(왼쪽 선 없음), 이어지면 작은 틈 */
+.tx.unconf { box-shadow: none; }
+.tx.unconf + .tx.unconf { margin-top: 6px; }
