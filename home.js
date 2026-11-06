@@ -436,7 +436,7 @@ export function openCardDialog(id) {
         save.disabled = !(fit.amount > 0 && diff > 0);
         save.textContent = diff > 0 && fit.amount > 0 ? `${won(diff)} 기록하기` : "차이 기록하기";
         msg.innerHTML = !fit.amount ? `앱 계산은 <span class="cred">${won(b.total)}</span>이에요. 카드사에서 받은 결제 예정 금액을 넣어 주세요.`
-          : diff > 0 ? `카드사 금액이 앱 계산(${won(b.total)})보다 <span class="cred">${won(diff)}</span> 많아요. 빠진 사용이 없다면 수수료·연회비 같은 차이로 보고 아래처럼 한 줄 기록해 맞출 수 있어요.`
+          : diff > 0 ? `카드사 금액이 앱 계산(${won(b.total)})보다 <span class="cred">${won(diff)}</span> 많아요. 빠진 사용이 없다면 수수료·연회비 같은 차이로 보고 지출로 한 줄 기록해 맞출 수 있어요(카드 대금에도 더해져요).`
           : diff < 0 ? `앱 계산(${won(b.total)})이 <span class="cred">${won(-diff)}</span> 더 많아요. 위 목록에서 취소·환불된 내역이나 다음 결제분으로 넘어가야 할 내역이 있는지 확인해 주세요.`
           : "앱 계산과 카드사 금액이 같아요.";
       };
@@ -457,6 +457,7 @@ export function openCardDialog(id) {
           id: tid, date, time: "", kind: "지출", expenseType: catsFor("지출", "고정").includes(fit.cat) ? "고정" : "변동",
           category: fit.cat, subcategory: "", currency: "KRW", amount: diff, content: fit.content, party: "",
           memo: `카드사 결제 예정 ${won(fit.amount)}에 맞춤`, assetDelta: { col: "debts", id: d.id, amount: diff },
+          interest: true, // 수수료·연회비는 물건을 산 게 아니라 비용이라 이자처럼 지출로 센다(카드 대금에는 더해짐)
           createdAt: now, updatedAt: now, deleted: false,
         };
         fit.open = false; fit.amount = 0;
