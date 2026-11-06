@@ -331,21 +331,23 @@ export function creditCardSection(shortDebt) {
   const usedBy = {};
   cardTx.forEach((t) => { const id = deltaRef(t.assetDelta).id; usedBy[id] = (usedBy[id] || 0) + txKRW(t); });
   const rows = cards.sort((a, b) => (usedBy[b.id] || 0) - (usedBy[a.id] || 0)).map((d) => {
-    const used = `<span class="rc-amt">${usedBy[d.id] ? won(usedBy[d.id]) : "0원"}</span>`;
+    // 맨 윗줄: 카드 이름 ··· (보는 달) 사용 금액, 그 아래 줄들은 결제 정보(같은 줄에 섞이지 않게)
+    const top = `<span class="cb-top"><span class="rc-name">${esc(d.name)}</span><span class="cb-used"><span class="muted">${Number(ui.month.slice(5))}월 사용</span> <span class="rc-amt">${won(usedBy[d.id] || 0)}</span></span></span>`;
     if (!hasBilling(d)) return `
-    <button class="rc-row cb-row" data-card="${d.id}">
-      <span class="rc-text"><span class="rc-name">${esc(d.name)}</span><span class="rc-sub">이번 달 사용 · <span class="cb-set">결제일 설정 ›</span></span></span>
-      <span class="rc-right">${used}<span class="rc-state">사용</span></span>
+    <button class="rc-row cb-row cb-stack" data-card="${d.id}">
+      ${top}
+      <span class="rc-sub"><span class="cb-set">결제일 설정 ›</span> 결제일을 정하면 결제 예정 금액을 보여 드려요</span>
     </button>`;
-    const b = cardBill(d, viewPayMonth(d, ui.month)); // 보고 있는 달 기준(지난달을 보면 그때의 결제분)
-    const done = b.total > 0 && b.paid >= b.total;
+    const bill = cardBill(d, viewPayMonth(d, ui.month)); // 보고 있는 달 기준(지난달을 보면 그때의 결제분)
+    const done = bill.total > 0 && bill.paid >= bill.total;
     const inst = activeInstallments(d).length;
     return `
-    <button class="rc-row cb-row" data-card="${d.id}">
-      <span class="rc-text"><span class="rc-name">${esc(d.name)}</span>
-        <span class="rc-sub">${md(b.payDate)} ${b.payDate < todayStr() ? "결제일" : "결제 예정일"} · <span class="${done ? "cb-done" : ""}">${done ? "상환 완료" : !b.total ? "청구 없음" : dday(b.payDate)}</span>${inst ? ` · 할부 ${inst}건` : ""}</span>
-        <span class="rc-sub">${Number(b.end.slice(5, 7))}월분 신용카드 사용 금액 (할부 포함): <span class="cred">${won(b.total)}</span></span></span>
-      <span class="rc-right">${used}<span class="rc-state">사용</span></span>
+    <button class="rc-row cb-row cb-stack" data-card="${d.id}">
+      ${top}
+      <span class="cb-bill">
+        <span class="rc-sub">${md(bill.payDate)} ${bill.payDate < todayStr() ? "결제일" : "결제 예정일"} · <span class="${done ? "cb-done" : ""}">${done ? "상환 완료" : !bill.total ? "청구 없음" : dday(bill.payDate)}</span>${inst ? ` · 할부 ${inst}건` : ""}</span>
+        <span class="rc-sub">${Number(bill.end.slice(5, 7))}월분 신용카드 사용 금액 (할부 포함): <span class="cred">${won(bill.total)}</span></span>
+      </span>
     </button>`;
   }).join("");
   return `
