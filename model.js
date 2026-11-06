@@ -431,12 +431,12 @@ export function netStartMonth() {
 
 /** 현황 맨 위 한 줄: 순자산 + 지난달 말 대비 (누르면 결산의 순자산) */
 export const PERIODS = { month: "고른 달", "3m": "최근 3개월", "6m": "최근 6개월", year: "올해", all: "전체 기간", custom: "직접 지정" };
-export const emptyFilter = () => ({ period: "month", from: "", to: "", natures: [], cats: [], holding: "", min: 0, max: 0 });
+export const emptyFilter = () => ({ period: "all", from: "", to: "", natures: [], cats: [], holding: "", min: 0, max: 0 });
 ui.filter = emptyFilter();
-/** 기본값과 다른 조건 수 (기간은 검색할 때 전체가 기본이라 '고른 달'이어도 다른 조건이 있을 때만 셈) */
+/** 기본값과 다른 조건 수 (기간 기본은 '전체 기간' — '고른 달'을 고르면 그 달만 검색되도록 조건으로 셈) */
 export function filterCount() {
   const f = ui.filter;
-  return (f.period !== "month" ? 1 : 0) + (f.natures.length ? 1 : 0) + (f.cats.length ? 1 : 0) + (f.holding ? 1 : 0) + (f.min || f.max ? 1 : 0);
+  return (f.period !== "all" ? 1 : 0) + (f.natures.length ? 1 : 0) + (f.cats.length ? 1 : 0) + (f.holding ? 1 : 0) + (f.min || f.max ? 1 : 0);
 }
 /** 내역 하나의 성격 키 (입력 창의 8가지와 같음) */
 export function txNature(t) {

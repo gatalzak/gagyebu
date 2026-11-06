@@ -212,7 +212,7 @@ export function filterChips() {
   const chip = (key, text) => `<button class="chip on" data-chip-off="${key}">${esc(text)} <span aria-hidden="true">✕</span></button>`;
   const holdingName = () => { const r = parseLinkKey(f.holding); return S[r?.col]?.[r?.id]?.name || "자산"; };
   return [
-    chip("period", periodLabel()),
+    f.period !== "all" ? chip("period", periodLabel()) : "",
     f.natures.length ? chip("natures", f.natures.map((k) => PICK_ITEMS.find((it) => it.key === k)?.name).join(", ")) : "",
     f.cats.length ? chip("cats", f.cats.join(", ")) : "",
     f.holding ? chip("holding", holdingName()) : "",

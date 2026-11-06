@@ -132,7 +132,7 @@ export function bindEvents() {
     const off = e.target.closest("[data-chip-off]");
     if (off) {
       const k = off.dataset.chipOff, f = ui.filter;
-      if (k === "period") { f.period = "month"; f.from = f.to = ""; }
+      if (k === "period") { f.period = "all"; f.from = f.to = ""; }
       else if (k === "amount") { f.min = 0; f.max = 0; }
       else if (k === "holding") f.holding = "";
       else f[k] = [];
