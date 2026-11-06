@@ -1017,3 +1017,7 @@ input[type="date"], input[type="time"] { cursor: pointer; }
 .cb-used { white-space: nowrap; font-size: calc(0.85rem + var(--fs-up)); }
 .cb-used .rc-amt { color: var(--text); }
 .cb-bill { display: flex; flex-direction: column; gap: 3px; padding-left: 10px; border-left: 2px solid var(--line); }
+
+/* 자주 쓰는 내역: 끌어서 순서 바꾸기 */
+.fav-row.edit-item { padding: 0; gap: 6px; }
+.fav-row.edit-item .grip { margin-left: -4px; }

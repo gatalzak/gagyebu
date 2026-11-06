@@ -659,7 +659,13 @@ export function dropTx(t, now = nowISO()) {
 }
 
 export const FAV_FIELDS = ["kind", "expenseType", "category", "subcategory", "currency", "amount", "krw", "content", "party", "memo", "link", "fromAsset", "toAsset"];
-export const liveFavs = () => Object.values(S.favorites || {}).filter((f) => !f.deleted).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+// 순서: 끌어서 정한 order(작을수록 위). order가 없는 것(예전·다른 기기에서 새로 등록)은 맨 위, 그끼리는 최근 등록 순
+export const liveFavs = () => Object.values(S.favorites || {}).filter((f) => !f.deleted).sort((a, b) => {
+  const ao = Number.isFinite(a.order), bo = Number.isFinite(b.order);
+  if (ao && bo) return a.order - b.order || b.createdAt.localeCompare(a.createdAt);
+  if (ao !== bo) return ao ? 1 : -1;
+  return b.createdAt.localeCompare(a.createdAt);
+});
 export function favFromDraft(d) {
   const f = {};
   for (const k of FAV_FIELDS) f[k] = d[k] ?? "";

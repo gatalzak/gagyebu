@@ -4,7 +4,7 @@ import { CURRENCIES, parseMoney, formatInput, toInput, formatMoney, toKRW, rateK
 import { getPhoto, putPhoto, deletePhoto, shrinkImage } from "./photos.js";
 import { $, EXPENSE_TYPES, KIND_CLASS, KIND_SIGN, S, debtType, esc, fmtAmount, nowTime, parseAmount, signed, toast, todayStr, ui } from "./core.js";
 import { ASSET_LINK, CARD_MODES, INTEREST_CAT, PICK_ITEMS, SHORT_DEBT, addPhrase, addSubcat, amountInCurrency, applyFav, autoRecur, balanceOf, catsFor, clearLinkCache, curOf, deltaRef, dropTx, favFromDraft, favKey, frequentRoutes, guessCategory, isLoanTx, isRepayTx, linkCfgOf, linkKey, linkSign, liveFavs, livePhrases, natureDraft, natureOf, newTxDraft, parseLinkKey, removePhrase, roundFor, saveLoanTx, shortDebtType, subcatsFor, unitLabel } from "./model.js";
-import { CAMERA, HOME_ICONS, PENCIL, STAR, bindAmount, closeModal, holdingHelp, holdingOptions, openModal } from "./uikit.js";
+import { CAMERA, GRIP, HOME_ICONS, PENCIL, STAR, bindAmount, closeModal, enableReorder, holdingHelp, holdingOptions, openModal } from "./uikit.js";
 import { openRecurringDialog, registerRecurring } from "./home.js";
 import { openCategoryEditor, openHoldingsDialog } from "./manage.js";
 import { commit, render, scheduleSync } from "./app.js";
@@ -1151,7 +1151,8 @@ export function openTxDialog(existing, presetDate, preset = null, { replaces = n
       if (same) return toast("이미 자주 쓰는 내역에 있어요.");
       const now = nowISO();
       const id = uid();
-      S.favorites[id] = { id, ...f, createdAt: now, updatedAt: now, deleted: false };
+      const orders = liveFavs().map((x) => x.order).filter(Number.isFinite);
+      S.favorites[id] = { id, ...f, ...(orders.length ? { order: Math.min(...orders) - 1 } : {}), createdAt: now, updatedAt: now, deleted: false }; // 새로 등록하면 맨 위
       await saveState(S);
       scheduleSync();
       toast("자주 쓰는 내역으로 등록했어요");
@@ -1177,7 +1178,7 @@ export function favViaText(f) {
   return n ? `${f.kind === "수입" ? "입금" : parseLinkKey(f.link)?.col === "debts" ? "결제" : "출금"} ${n}` : "";
 }
 
-/** 자주 쓰는 내역 목록: 누르면 onPick, ✕는 onBack(내역 추가 창으로). 편집 아이콘으로 삭제 모드 */
+/** 자주 쓰는 내역 목록: 누르면 onPick, ✕는 onBack(내역 추가 창으로). 편집 아이콘으로 삭제 모드. 왼쪽 손잡이를 끌어 순서 바꾸기 */
 export function openFavorites({ onPick, onBack }) {
   let editing = false;
   const draw = () => {
@@ -1185,13 +1186,14 @@ export function openFavorites({ onPick, onBack }) {
     const panel = openModal({
       title: "자주 쓰는 내역",
       headExtra: favs.length ? `<button class="icon-only${editing ? " on" : ""}" data-act="edit" aria-label="편집">${PENCIL}</button>` : "",
-      body: favs.length ? favs.map((f) => {
+      body: favs.length ? `<div class="fav-list">` + favs.map((f) => {
         const badge = f.kind === "수입" ? "b-inc" : f.kind === "지출" ? "b-exp" : "b-mov";
         const cat = esc(f.category || "");
         const via = favViaText(f);
         const sd = shortDebtType({ kind: f.kind, assetDelta: parseLinkKey(f.link) });
         return `
-        <div class="fav-row">
+        <div class="fav-row edit-item" data-id="${f.id}">
+          <button class="grip" data-handle aria-label="끌어서 순서 바꾸기">${GRIP}</button>
           <button class="tx" data-fav="${f.id}">
             <div class="left">
               <div class="badges">${f.kind === "자산이동" ? `<span class="cat-badge b-mov">자산이동</span>` : ""}${cat && f.kind !== "자산이동" ? `<span class="cat-badge ${badge}">${cat}</span>` : ""}</div>
@@ -1202,13 +1204,25 @@ export function openFavorites({ onPick, onBack }) {
           </button>
           ${editing ? `<button class="btn danger fav-del" data-del="${f.id}">삭제</button>` : ""}
         </div>`;
-      }).join("") + `<p class="note fav-note">${editing ? "삭제할 내역의 '삭제'를 누르세요." : "누르면 내역 추가 창에 그대로 채워져요. 날짜·시간은 지금 값이 유지돼요."}</p>`
+      }).join("") + `</div><p class="note fav-note">${editing ? "삭제할 내역의 '삭제'를 누르세요." : "누르면 내역 추가 창에 그대로 채워져요. 날짜·시간은 지금 값이 유지돼요."}<br>왼쪽 ⋮⋮ 손잡이를 끌면 순서를 바꿀 수 있어요.</p>`
         : `<div class="empty">자주 쓰는 내역이 없어요.<br>내역을 연 뒤 '자주 쓰는 내역으로 등록'을 눌러 추가하세요.</div>`,
     });
     panel.querySelector("[data-close]").onclick = onBack;
     const edit = panel.querySelector("[data-act=edit]");
     if (edit) edit.onclick = () => { editing = !editing; draw(); };
     panel.querySelectorAll("[data-fav]").forEach((b) => (b.onclick = () => { if (!editing) onPick(S.favorites[b.dataset.fav]); }));
+    // 끌어서 순서 바꾸기: 놓으면 보이는 순서대로 order를 다시 매긴다
+    enableReorder(panel, async () => {
+      const now = nowISO();
+      let changed = 0;
+      [...panel.querySelectorAll(".fav-row")].forEach((el, i) => {
+        const f = S.favorites[el.dataset.id];
+        if (f && f.order !== i) { S.favorites[f.id] = { ...f, order: i, updatedAt: now }; changed++; }
+      });
+      if (!changed) return;
+      await saveState(S);
+      scheduleSync();
+    });
     panel.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => {
       const f = S.favorites[b.dataset.del];
       S.favorites[f.id] = { ...f, deleted: true, updatedAt: nowISO() };
